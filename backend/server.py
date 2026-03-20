@@ -100,10 +100,16 @@ class Order(BaseModel):
     created_by: str
     created_at: str
     synced: bool = True
+    status: str = "pending"
+    payment_method: Optional[str] = None
+    completed_at: Optional[str] = None
 
 class OrderCreate(BaseModel):
     items: List[OrderItem]
     total_amount: float
+
+class OrderComplete(BaseModel):
+    payment_method: str
 
 class SyncData(BaseModel):
     orders: List[OrderCreate]
@@ -275,10 +281,42 @@ async def create_order(order_data: OrderCreate, current_user: User = Depends(get
         "total_amount": order_data.total_amount,
         "created_by": current_user.username,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "synced": True
+        "synced": True,
+        "status": "pending",
+        "payment_method": None,
+        "completed_at": None
     }
     await db.orders.insert_one(order_dict)
     return Order(**order_dict)
+
+@api_router.put("/orders/{order_id}/complete", response_model=Order)
+async def complete_order(order_id: str, complete_data: OrderComplete, current_user: User = Depends(get_current_user)):
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    if order["status"] == "completed":
+        raise HTTPException(status_code=400, detail="Order already completed")
+    
+    result = await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "status": "completed",
+            "payment_method": complete_data.payment_method,
+            "completed_at": datetime.now(timezone.utc).isoformat()
+        }}
+    )
+    
+    updated = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return Order(**updated)
+
+@api_router.get("/orders/pending", response_model=List[Order])
+async def get_pending_orders(current_user: User = Depends(get_current_user)):
+    query = {"status": "pending"}
+    if current_user.role != "admin":
+        query["created_by"] = current_user.username
+    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return [Order(**order) for order in orders]
 
 @api_router.get("/orders", response_model=List[Order])
 async def get_orders(current_user: User = Depends(get_current_user)):
@@ -297,7 +335,10 @@ async def sync_offline_data(sync_data: SyncData, current_user: User = Depends(ge
             "total_amount": order_data.total_amount,
             "created_by": current_user.username,
             "created_at": datetime.now(timezone.utc).isoformat(),
-            "synced": True
+            "synced": True,
+            "status": "pending",
+            "payment_method": None,
+            "completed_at": None
         }
         await db.orders.insert_one(order_dict)
         synced_count += 1
@@ -373,6 +414,132 @@ async def generate_report(report_req: ReportRequest, current_user: User = Depend
         buffer,
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=sales_report_{datetime.now().strftime('%Y%m%d')}.pdf"}
+    )
+
+@api_router.post("/orders/{order_id}/print-kitchen-receipt")
+async def print_kitchen_receipt(order_id: str, current_user: User = Depends(get_current_user)):
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=40, bottomMargin=40)
+    styles = getSampleStyleSheet()
+    story = []
+    
+    title_style = ParagraphStyle(
+        'KitchenTitle',
+        parent=styles['Heading1'],
+        fontSize=28,
+        textColor=colors.HexColor('#0f172a'),
+        spaceAfter=20,
+        alignment=1
+    )
+    
+    story.append(Paragraph("KITCHEN ORDER", title_style))
+    story.append(Paragraph(f"Order #: {order['id'][:8].upper()}", styles['Heading2']))
+    story.append(Paragraph(f"Server: {order['created_by']}", styles['Normal']))
+    story.append(Paragraph(f"Time: {datetime.fromisoformat(order['created_at']).strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
+    story.append(Spacer(1, 20))
+    
+    story.append(Paragraph("ITEMS:", styles['Heading2']))
+    story.append(Spacer(1, 10))
+    
+    table_data = [["Item", "Qty"]]
+    for item in order['items']:
+        table_data.append([item['product_name'], str(item['quantity'])])
+    
+    table = Table(table_data, colWidths=[300, 100])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0f172a')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 14),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('FONTSIZE', (0, 1), (-1, -1), 12),
+        ('GRID', (0, 0), (-1, -1), 1, colors.grey)
+    ]))
+    story.append(table)
+    
+    doc.build(story)
+    buffer.seek(0)
+    
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=kitchen_receipt_{order['id'][:8]}.pdf"}
+    )
+
+@api_router.post("/orders/{order_id}/print-customer-receipt")
+async def print_customer_receipt(order_id: str, current_user: User = Depends(get_current_user)):
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    if order["status"] != "completed":
+        raise HTTPException(status_code=400, detail="Order must be completed first")
+    
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=40, bottomMargin=40)
+    styles = getSampleStyleSheet()
+    story = []
+    
+    title_style = ParagraphStyle(
+        'ReceiptTitle',
+        parent=styles['Heading1'],
+        fontSize=28,
+        textColor=colors.HexColor('#0f172a'),
+        spaceAfter=20,
+        alignment=1
+    )
+    
+    story.append(Paragraph("HevaPOS", title_style))
+    story.append(Paragraph("CUSTOMER RECEIPT", styles['Heading2']))
+    story.append(Spacer(1, 10))
+    story.append(Paragraph(f"Order #: {order['id'][:8].upper()}", styles['Normal']))
+    story.append(Paragraph(f"Server: {order['created_by']}", styles['Normal']))
+    story.append(Paragraph(f"Date: {datetime.fromisoformat(order['created_at']).strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
+    story.append(Paragraph(f"Payment: {order['payment_method'].upper()}", styles['Normal']))
+    story.append(Spacer(1, 20))
+    
+    table_data = [["Item", "Qty", "Price", "Total"]]
+    for item in order['items']:
+        table_data.append([
+            item['product_name'],
+            str(item['quantity']),
+            f"${item['unit_price']:.2f}",
+            f"${item['total']:.2f}"
+        ])
+    
+    table_data.append(["", "", "", ""])
+    table_data.append(["", "", "TOTAL:", f"${order['total_amount']:.2f}"])
+    
+    table = Table(table_data, colWidths=[200, 80, 80, 100])
+    table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0f172a')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('FONTSIZE', (0, 1), (-1, -1), 11),
+        ('GRID', (0, 0), (-1, -2), 1, colors.grey),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, -1), (-1, -1), 14),
+        ('TEXTCOLOR', (0, -1), (-1, -1), colors.HexColor('#10B981'))
+    ]))
+    story.append(table)
+    story.append(Spacer(1, 20))
+    story.append(Paragraph("Thank you for your visit!", styles['Normal']))
+    
+    doc.build(story)
+    buffer.seek(0)
+    
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=customer_receipt_{order['id'][:8]}.pdf"}
     )
 
 @api_router.get("/reports/stats")

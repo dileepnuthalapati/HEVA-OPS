@@ -5,8 +5,9 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { ScrollArea } from '../components/ui/scroll-area';
 import { Separator } from '../components/ui/separator';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, DollarSign, CreditCard } from 'lucide-react';
 
 const POSScreen = () => {
   const { user, logout } = useAuth();
@@ -15,9 +16,14 @@ const POSScreen = () => {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [pendingOrders, setPendingOrders] = useState([]);
+  const [showPendingOrders, setShowPendingOrders] = useState(false);
+  const [showPaymentDialog, setShowPaymentDialog] = useState(false);
+  const [selectedOrderToComplete, setSelectedOrderToComplete] = useState(null);
 
   useEffect(() => {
     loadData();
+    loadPendingOrders();
   }, []);
 
   useEffect(() => {
@@ -49,6 +55,15 @@ const POSScreen = () => {
       setProducts(prods);
     } catch (error) {
       console.error('Failed to load products:', error);
+    }
+  };
+
+  const loadPendingOrders = async () => {
+    try {
+      const orders = await orderAPI.getPending();
+      setPendingOrders(orders);
+    } catch (error) {
+      console.error('Failed to load pending orders:', error);
     }
   };
 
@@ -106,7 +121,7 @@ const POSScreen = () => {
     toast.info('Cart cleared');
   };
 
-  const checkout = async () => {
+  const placeOrder = async () => {
     if (cart.length === 0) {
       toast.error('Cart is empty');
       return;
@@ -115,12 +130,56 @@ const POSScreen = () => {
     const total = cart.reduce((sum, item) => sum + item.total, 0);
 
     try {
-      await orderAPI.create({
+      const order = await orderAPI.create({
         items: cart,
         total_amount: total,
       });
-      toast.success('Order completed successfully!');
+      
+      // Print kitchen receipt
+      const kitchenReceipt = await orderAPI.printKitchenReceipt(order.id);
+      const url = window.URL.createObjectURL(kitchenReceipt);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `kitchen_${order.id.slice(0, 8)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast.success('Order placed! Kitchen receipt downloaded.');
       setCart([]);
+      loadPendingOrders();
+    } catch (error) {
+      toast.error('Failed to place order');
+    }
+  };
+
+  const openCompleteDialog = (order) => {
+    setSelectedOrderToComplete(order);
+    setShowPaymentDialog(true);
+  };
+
+  const completeOrder = async (paymentMethod) => {
+    if (!selectedOrderToComplete) return;
+
+    try {
+      await orderAPI.complete(selectedOrderToComplete.id, paymentMethod);
+      
+      // Print customer receipt
+      const customerReceipt = await orderAPI.printCustomerReceipt(selectedOrderToComplete.id);
+      const url = window.URL.createObjectURL(customerReceipt);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `receipt_${selectedOrderToComplete.id.slice(0, 8)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+      
+      toast.success(`Order completed with ${paymentMethod}! Customer receipt downloaded.`);
+      setShowPaymentDialog(false);
+      setSelectedOrderToComplete(null);
+      loadPendingOrders();
     } catch (error) {
       toast.error('Failed to complete order');
     }
@@ -143,13 +202,23 @@ const POSScreen = () => {
         {/* Top Bar */}
         <div className="bg-card border-b px-6 py-4 flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">SwiftPOS</h1>
+            <h1 className="text-2xl font-bold tracking-tight">HevaPOS</h1>
             <p className="text-sm text-muted-foreground">Welcome, {user?.username}</p>
           </div>
-          <Button variant="outline" data-testid="pos-logout-button" onClick={logout}>
-            <LogOut className="w-4 h-4 mr-2" />
-            Logout
-          </Button>
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              data-testid="pending-orders-button"
+              onClick={() => setShowPendingOrders(!showPendingOrders)}
+            >
+              <Receipt className="w-4 h-4 mr-2" />
+              Pending Orders ({pendingOrders.length})
+            </Button>
+            <Button variant="outline" data-testid="pos-logout-button" onClick={logout}>
+              <LogOut className="w-4 h-4 mr-2" />
+              Logout
+            </Button>
+          </div>
         </div>
 
         {/* Categories */}
@@ -177,12 +246,55 @@ const POSScreen = () => {
           </div>
         </div>
 
-        {/* Products Grid */}
+        {/* Products Grid or Pending Orders */}
         <ScrollArea className="flex-1 p-6">
-          {products.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              No products available
+          {showPendingOrders ? (
+            <div className="space-y-4">
+              <h2 className="text-2xl font-bold mb-4">Pending Orders</h2>
+              {pendingOrders.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground">No pending orders</div>
+              ) : (
+                pendingOrders.map((order) => (
+                  <Card key={order.id} data-testid={`pending-order-${order.id}`}>
+                    <CardContent className="p-6">
+                      <div className="flex justify-between items-start mb-4">
+                        <div>
+                          <div className="text-lg font-bold">Order #{order.id.slice(0, 8).toUpperCase()}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {new Date(order.created_at).toLocaleString()}
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <div className="text-2xl font-bold font-mono text-emerald-600">
+                            ${order.total_amount.toFixed(2)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="space-y-2 mb-4">
+                        {order.items.map((item, idx) => (
+                          <div key={idx} className="flex justify-between text-sm">
+                            <span>
+                              {item.product_name} x {item.quantity}
+                            </span>
+                            <span className="font-mono">${item.total.toFixed(2)}</span>
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        className="w-full btn-success"
+                        data-testid={`complete-order-${order.id}`}
+                        onClick={() => openCompleteDialog(order)}
+                      >
+                        <DollarSign className="w-4 h-4 mr-2" />
+                        Complete Payment
+                      </Button>
+                    </CardContent>
+                  </Card>
+                ))
+              )}
             </div>
+          ) : products.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">No products available</div>
           ) : (
             <div className="pos-grid">
               {products.map((product) => (
@@ -203,9 +315,7 @@ const POSScreen = () => {
                     <div className="font-semibold text-sm mb-1 line-clamp-1">{product.name}</div>
                     <div className="text-xs text-muted-foreground mb-2">{product.category_name}</div>
                     <div className="price text-emerald-600">${product.price.toFixed(2)}</div>
-                    {!product.in_stock && (
-                      <div className="text-xs text-red-500 mt-1">Out of stock</div>
-                    )}
+                    {!product.in_stock && <div className="text-xs text-red-500 mt-1">Out of stock</div>}
                   </CardContent>
                 </Card>
               ))}
@@ -220,15 +330,10 @@ const POSScreen = () => {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <ShoppingCart className="w-6 h-6" />
-              <h2 className="text-xl font-bold">Cart</h2>
+              <h2 className="text-xl font-bold">Current Order</h2>
             </div>
             {cart.length > 0 && (
-              <Button
-                variant="ghost"
-                size="sm"
-                data-testid="clear-cart-button"
-                onClick={clearCart}
-              >
+              <Button variant="ghost" size="sm" data-testid="clear-cart-button" onClick={clearCart}>
                 <X className="w-4 h-4" />
               </Button>
             )}
@@ -284,9 +389,7 @@ const POSScreen = () => {
                           <Plus className="w-4 h-4" />
                         </Button>
                       </div>
-                      <div className="font-bold font-mono text-lg">
-                        ${item.total.toFixed(2)}
-                      </div>
+                      <div className="font-bold font-mono text-lg">${item.total.toFixed(2)}</div>
                     </div>
                   </CardContent>
                 </Card>
@@ -308,16 +411,47 @@ const POSScreen = () => {
             </div>
           </div>
           <Button
-            className="w-full h-14 text-lg btn-success"
-            data-testid="checkout-button"
-            onClick={checkout}
+            className="w-full h-14 text-lg bg-amber-500 hover:bg-amber-600 text-white"
+            data-testid="place-order-button"
+            onClick={placeOrder}
             disabled={cart.length === 0}
           >
-            <Receipt className="w-5 h-5 mr-2" />
-            Complete Order
+            <Printer className="w-5 h-5 mr-2" />
+            Place Order (Send to Kitchen)
           </Button>
         </div>
       </div>
+
+      {/* Payment Method Dialog */}
+      <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Select Payment Method</DialogTitle>
+            <DialogDescription>
+              Choose how the customer will pay for order #{selectedOrderToComplete?.id.slice(0, 8).toUpperCase()}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 mt-4">
+            <Button
+              className="h-24 flex flex-col gap-2"
+              data-testid="payment-cash-button"
+              onClick={() => completeOrder('cash')}
+            >
+              <DollarSign className="w-8 h-8" />
+              <span className="text-lg font-bold">Cash</span>
+            </Button>
+            <Button
+              className="h-24 flex flex-col gap-2"
+              variant="secondary"
+              data-testid="payment-card-button"
+              onClick={() => completeOrder('card')}
+            >
+              <CreditCard className="w-8 h-8" />
+              <span className="text-lg font-bold">Card</span>
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -117,6 +117,18 @@ export const orderAPI = {
       throw error;
     }
   },
+  getPending: async () => {
+    try {
+      const response = await api.get('/orders/pending');
+      return response.data;
+    } catch (error) {
+      if (!navigator.onLine) {
+        const allOrders = await getAllFromIndexedDB('orders');
+        return allOrders.filter(o => o.status === 'pending');
+      }
+      throw error;
+    }
+  },
   create: async (data) => {
     try {
       const response = await api.post('/orders', data);
@@ -129,12 +141,28 @@ export const orderAPI = {
           ...data,
           created_at: new Date().toISOString(),
           synced: false,
+          status: 'pending',
+          payment_method: null,
+          completed_at: null
         };
         await saveToIndexedDB('orders', offlineOrder);
         return offlineOrder;
       }
       throw error;
     }
+  },
+  complete: async (orderId, paymentMethod) => {
+    const response = await api.put(`/orders/${orderId}/complete`, { payment_method: paymentMethod });
+    await saveToIndexedDB('orders', response.data);
+    return response.data;
+  },
+  printKitchenReceipt: async (orderId) => {
+    const response = await api.post(`/orders/${orderId}/print-kitchen-receipt`, {}, { responseType: 'blob' });
+    return response.data;
+  },
+  printCustomerReceipt: async (orderId) => {
+    const response = await api.post(`/orders/${orderId}/print-customer-receipt`, {}, { responseType: 'blob' });
+    return response.data;
   },
   sync: async () => {
     const unsyncedOrders = await getUnsyncedOrders();

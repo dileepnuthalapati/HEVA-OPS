@@ -21,7 +21,7 @@ const Sidebar = ({ active }) => {
   return (
     <div className="sidebar">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight">SwiftPOS</h1>
+        <h1 className="text-2xl font-bold tracking-tight">HevaPOS</h1>
         <p className="text-sm text-muted-foreground mt-1">Admin Panel</p>
       </div>
       <nav className="space-y-2">

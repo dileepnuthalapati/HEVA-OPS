@@ -29,7 +29,7 @@ const Sidebar = ({ active }) => {
   return (
     <div className="sidebar">
       <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight">SwiftPOS</h1>
+        <h1 className="text-2xl font-bold tracking-tight">HevaPOS</h1>
         <p className="text-sm text-muted-foreground mt-1">{isAdmin ? 'Admin Panel' : 'User Panel'}</p>
       </div>
       <nav className="space-y-2">
@@ -101,9 +101,19 @@ const OrderHistory = () => {
                       <div className="space-y-1">
                         <div className="flex items-center gap-3">
                           <div className="text-lg font-bold">Order #{order.id.slice(0, 8)}</div>
-                          {!order.synced && (
+                          {order.status === 'pending' && (
                             <div className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700">
-                              Pending Sync
+                              Pending Payment
+                            </div>
+                          )}
+                          {order.status === 'completed' && (
+                            <div className="text-xs px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                              Completed - {order.payment_method?.toUpperCase()}
+                            </div>
+                          )}
+                          {!order.synced && (
+                            <div className="text-xs px-2 py-1 rounded-full bg-slate-100 text-slate-700">
+                              Offline
                             </div>
                           )}
                         </div>

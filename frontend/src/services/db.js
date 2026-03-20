@@ -1,6 +1,6 @@
 import { openDB } from 'idb';
 
-const DB_NAME = 'swiftpos-db';
+const DB_NAME = 'hevapos-db';
 const DB_VERSION = 1;
 
 export const initDB = async () => {

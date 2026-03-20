@@ -42,7 +42,7 @@ const Login = () => {
           <div className="mx-auto w-16 h-16 bg-primary rounded-xl flex items-center justify-center">
             <LogIn className="w-8 h-8 text-primary-foreground" />
           </div>
-          <CardTitle className="text-4xl font-bold tracking-tight">SwiftPOS</CardTitle>
+          <CardTitle className="text-4xl font-bold tracking-tight">HevaPOS</CardTitle>
           <CardDescription className="text-base">Sign in to your account</CardDescription>
         </CardHeader>
         <CardContent>

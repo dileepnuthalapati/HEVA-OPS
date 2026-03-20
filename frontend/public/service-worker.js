@@ -1,4 +1,4 @@
-const CACHE_NAME = 'swiftpos-v1';
+const CACHE_NAME = 'hevapos-v1';
 const urlsToCache = [
   '/',
   '/index.html',
