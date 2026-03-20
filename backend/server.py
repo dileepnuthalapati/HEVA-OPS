@@ -95,6 +95,7 @@ class OrderItem(BaseModel):
 class Order(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
+    order_number: int
     items: List[OrderItem]
     subtotal: float
     tip_amount: float = 0.0
@@ -303,9 +304,26 @@ async def delete_product(product_id: str, current_user: User = Depends(require_a
 
 @api_router.post("/orders", response_model=Order)
 async def create_order(order_data: OrderCreate, current_user: User = Depends(get_current_user)):
+    # Get today's date for order number sequencing
+    today = datetime.now(timezone.utc).date().isoformat()
+    
+    # Get the last order number for today
+    last_order = await db.orders.find_one(
+        {"created_at": {"$gte": f"{today}T00:00:00"}},
+        {"_id": 0, "order_number": 1},
+        sort=[("order_number", -1)]
+    )
+    
+    # Generate sequential order number
+    if last_order and "order_number" in last_order:
+        order_number = last_order["order_number"] + 1
+    else:
+        order_number = 1
+    
     order_id = f"order_{datetime.now(timezone.utc).timestamp()}"
     order_dict = {
         "id": order_id,
+        "order_number": order_number,
         "items": [item.model_dump() for item in order_data.items],
         "subtotal": order_data.total_amount,
         "tip_amount": 0.0,
@@ -479,7 +497,7 @@ async def print_kitchen_receipt(order_id: str, current_user: User = Depends(get_
     )
     
     story.append(Paragraph("KITCHEN ORDER", title_style))
-    story.append(Paragraph(f"Order #: {order['id'][:8].upper()}", styles['Heading2']))
+    story.append(Paragraph(f"Order #: {str(order['order_number']).zfill(3)}", styles['Heading2']))
     story.append(Paragraph(f"Server: {order['created_by']}", styles['Normal']))
     story.append(Paragraph(f"Time: {datetime.fromisoformat(order['created_at']).strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
     story.append(Spacer(1, 20))
@@ -539,7 +557,7 @@ async def print_customer_receipt(order_id: str, current_user: User = Depends(get
     story.append(Paragraph("HevaPOS", title_style))
     story.append(Paragraph("CUSTOMER RECEIPT", styles['Heading2']))
     story.append(Spacer(1, 10))
-    story.append(Paragraph(f"Order #: {order['id'][:8].upper()}", styles['Normal']))
+    story.append(Paragraph(f"Order #: {str(order['order_number']).zfill(3)}", styles['Normal']))
     story.append(Paragraph(f"Server: {order['created_by']}", styles['Normal']))
     story.append(Paragraph(f"Date: {datetime.fromisoformat(order['created_at']).strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
     story.append(Paragraph(f"Payment: {order['payment_method'].upper()}", styles['Normal']))

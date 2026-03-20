@@ -166,13 +166,13 @@ const POSScreen = () => {
           console.error('Thermal print failed:', error);
           // Fallback to PDF
           const kitchenReceipt = await orderAPI.printKitchenReceipt(order.id);
-          downloadPDF(kitchenReceipt, `kitchen_${order.id.slice(0, 8)}.pdf`);
+          downloadPDF(kitchenReceipt, `kitchen_${String(order.order_number).padStart(3, '0')}.pdf`);
           toast.success('Order placed! Kitchen receipt downloaded.');
         }
       } else {
         // Download PDF
         const kitchenReceipt = await orderAPI.printKitchenReceipt(order.id);
-        downloadPDF(kitchenReceipt, `kitchen_${order.id.slice(0, 8)}.pdf`);
+        downloadPDF(kitchenReceipt, `kitchen_${String(order.order_number).padStart(3, '0')}.pdf`);
         toast.success('Order placed! Kitchen receipt downloaded.');
       }
       
@@ -353,7 +353,7 @@ const POSScreen = () => {
                     <CardContent className="p-6">
                       <div className="flex justify-between items-start mb-4">
                         <div>
-                          <div className="text-lg font-bold">Order #{order.id.slice(0, 8).toUpperCase()}</div>
+                          <div className="text-lg font-bold">Order #{String(order.order_number).padStart(3, '0')}</div>
                           <div className="text-sm text-muted-foreground">
                             {new Date(order.created_at).toLocaleString()}
                           </div>

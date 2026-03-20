@@ -100,7 +100,7 @@ const OrderHistory = () => {
                     <CardTitle className="flex items-start justify-between">
                       <div className="space-y-1">
                         <div className="flex items-center gap-3">
-                          <div className="text-lg font-bold">Order #{order.id.slice(0, 8)}</div>
+                          <div className="text-lg font-bold">Order #{String(order.order_number).padStart(3, '0')}</div>
                           {order.status === 'pending' && (
                             <div className="text-xs px-2 py-1 rounded-full bg-amber-100 text-amber-700">
                               Pending Payment

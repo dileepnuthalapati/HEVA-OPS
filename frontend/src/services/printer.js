@@ -114,7 +114,7 @@ class ThermalPrinterService {
       // Order info
       await this.write(this.ALIGN_LEFT);
       await this.write(this.BOLD_ON);
-      await this.printText(`Order #${order.id.slice(0, 8).toUpperCase()}`);
+      await this.printText(`Order #${String(order.order_number).padStart(3, '0')}`);
       await this.write(this.BOLD_OFF);
       await this.printText(`Server: ${order.created_by}`);
       await this.printText(`Time: ${new Date(order.created_at).toLocaleTimeString()}`);
@@ -162,7 +162,7 @@ class ThermalPrinterService {
       
       // Order info
       await this.write(this.ALIGN_LEFT);
-      await this.printText(`Order #${order.id.slice(0, 8).toUpperCase()}`);
+      await this.printText(`Order #${String(order.order_number).padStart(3, '0')}`);
       await this.printText(`Server: ${order.created_by}`);
       await this.printText(`Date: ${new Date(order.created_at).toLocaleString()}`);
       await this.printText(`Payment: ${order.payment_method.toUpperCase()}`);
