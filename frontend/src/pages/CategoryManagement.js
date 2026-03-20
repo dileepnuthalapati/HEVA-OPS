@@ -9,7 +9,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { LayoutDashboard, Package, FolderTree, ShoppingCart, FileText, LogOut, Plus, Edit, Trash2 } from 'lucide-react';
+import { LayoutDashboard, Package, FolderTree, ShoppingCart, FileText, LogOut, Wallet, Plus, Edit, Trash2 } from 'lucide-react';
 
 const Sidebar = ({ active }) => {
   const { logout } = useAuth();
@@ -20,6 +20,7 @@ const Sidebar = ({ active }) => {
     { path: '/products', icon: Package, label: 'Products' },
     { path: '/orders', icon: ShoppingCart, label: 'Orders' },
     { path: '/reports', icon: FileText, label: 'Reports' },
+    { path: '/cash-drawer', icon: Wallet, label: 'Cash Drawer' },
   ];
 
   return (

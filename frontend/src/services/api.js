@@ -151,8 +151,13 @@ export const orderAPI = {
       throw error;
     }
   },
-  complete: async (orderId, paymentMethod) => {
-    const response = await api.put(`/orders/${orderId}/complete`, { payment_method: paymentMethod });
+  complete: async (orderId, paymentMethod, tipPercentage = 0, tipAmount = 0, splitCount = 1) => {
+    const response = await api.put(`/orders/${orderId}/complete`, { 
+      payment_method: paymentMethod,
+      tip_percentage: tipPercentage,
+      tip_amount: tipAmount,
+      split_count: splitCount
+    });
     await saveToIndexedDB('orders', response.data);
     return response.data;
   },
@@ -193,6 +198,25 @@ export const reportAPI = {
       { start_date: startDate, end_date: endDate },
       { responseType: 'blob' }
     );
+    return response.data;
+  },
+};
+
+export const cashDrawerAPI = {
+  open: async (openingBalance) => {
+    const response = await api.post('/cash-drawer/open', { opening_balance: openingBalance });
+    return response.data;
+  },
+  getCurrent: async () => {
+    const response = await api.get('/cash-drawer/current');
+    return response.data;
+  },
+  close: async (actualCash, notes = '') => {
+    const response = await api.put('/cash-drawer/close', { actual_cash: actualCash, notes });
+    return response.data;
+  },
+  getHistory: async () => {
+    const response = await api.get('/cash-drawer/history');
     return response.data;
   },
 };

@@ -96,12 +96,16 @@ class Order(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
     items: List[OrderItem]
+    subtotal: float
+    tip_amount: float = 0.0
+    tip_percentage: int = 0
     total_amount: float
     created_by: str
     created_at: str
     synced: bool = True
     status: str = "pending"
     payment_method: Optional[str] = None
+    split_count: int = 1
     completed_at: Optional[str] = None
 
 class OrderCreate(BaseModel):
@@ -110,6 +114,31 @@ class OrderCreate(BaseModel):
 
 class OrderComplete(BaseModel):
     payment_method: str
+    tip_percentage: int = 0
+    tip_amount: float = 0.0
+    split_count: int = 1
+
+class CashDrawer(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    date: str
+    opening_balance: float
+    expected_cash: float
+    actual_cash: float
+    difference: float
+    notes: Optional[str] = None
+    opened_by: str
+    closed_by: Optional[str] = None
+    opened_at: str
+    closed_at: Optional[str] = None
+    status: str = "open"
+
+class CashDrawerOpen(BaseModel):
+    opening_balance: float
+
+class CashDrawerClose(BaseModel):
+    actual_cash: float
+    notes: Optional[str] = None
 
 class SyncData(BaseModel):
     orders: List[OrderCreate]
@@ -278,12 +307,16 @@ async def create_order(order_data: OrderCreate, current_user: User = Depends(get
     order_dict = {
         "id": order_id,
         "items": [item.model_dump() for item in order_data.items],
+        "subtotal": order_data.total_amount,
+        "tip_amount": 0.0,
+        "tip_percentage": 0,
         "total_amount": order_data.total_amount,
         "created_by": current_user.username,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "synced": True,
         "status": "pending",
         "payment_method": None,
+        "split_count": 1,
         "completed_at": None
     }
     await db.orders.insert_one(order_dict)
@@ -298,11 +331,20 @@ async def complete_order(order_id: str, complete_data: OrderComplete, current_us
     if order["status"] == "completed":
         raise HTTPException(status_code=400, detail="Order already completed")
     
+    # Calculate new total with tip
+    subtotal = order["subtotal"]
+    tip_amount = complete_data.tip_amount
+    new_total = subtotal + tip_amount
+    
     result = await db.orders.update_one(
         {"id": order_id},
         {"$set": {
             "status": "completed",
             "payment_method": complete_data.payment_method,
+            "tip_amount": tip_amount,
+            "tip_percentage": complete_data.tip_percentage,
+            "total_amount": new_total,
+            "split_count": complete_data.split_count,
             "completed_at": datetime.now(timezone.utc).isoformat()
         }}
     )
@@ -513,6 +555,12 @@ async def print_customer_receipt(order_id: str, current_user: User = Depends(get
         ])
     
     table_data.append(["", "", "", ""])
+    table_data.append(["", "", "Subtotal:", f"${order['subtotal']:.2f}"])
+    
+    if order.get('tip_amount', 0) > 0:
+        tip_label = f"Tip ({order.get('tip_percentage', 0)}%)"
+        table_data.append(["", "", tip_label, f"${order['tip_amount']:.2f}"])
+    
     table_data.append(["", "", "TOTAL:", f"${order['total_amount']:.2f}"])
     
     table = Table(table_data, colWidths=[200, 80, 80, 100])
@@ -541,6 +589,96 @@ async def print_customer_receipt(order_id: str, current_user: User = Depends(get
         media_type="application/pdf",
         headers={"Content-Disposition": f"attachment; filename=customer_receipt_{order['id'][:8]}.pdf"}
     )
+
+@api_router.post("/cash-drawer/open", response_model=CashDrawer)
+async def open_cash_drawer(drawer_data: CashDrawerOpen, current_user: User = Depends(require_admin)):
+    # Check if there's already an open drawer for today
+    today = datetime.now(timezone.utc).date().isoformat()
+    existing = await db.cash_drawers.find_one({"date": today, "status": "open"}, {"_id": 0})
+    if existing:
+        raise HTTPException(status_code=400, detail="Cash drawer already open for today")
+    
+    drawer_id = f"drawer_{datetime.now(timezone.utc).timestamp()}"
+    drawer_dict = {
+        "id": drawer_id,
+        "date": today,
+        "opening_balance": drawer_data.opening_balance,
+        "expected_cash": drawer_data.opening_balance,
+        "actual_cash": 0.0,
+        "difference": 0.0,
+        "notes": None,
+        "opened_by": current_user.username,
+        "closed_by": None,
+        "opened_at": datetime.now(timezone.utc).isoformat(),
+        "closed_at": None,
+        "status": "open"
+    }
+    await db.cash_drawers.insert_one(drawer_dict)
+    return CashDrawer(**drawer_dict)
+
+@api_router.get("/cash-drawer/current", response_model=CashDrawer)
+async def get_current_cash_drawer(current_user: User = Depends(require_admin)):
+    today = datetime.now(timezone.utc).date().isoformat()
+    drawer = await db.cash_drawers.find_one({"date": today, "status": "open"}, {"_id": 0})
+    if not drawer:
+        raise HTTPException(status_code=404, detail="No open cash drawer for today")
+    
+    # Calculate expected cash from cash orders
+    cash_orders = await db.orders.find(
+        {
+            "status": "completed",
+            "payment_method": "cash",
+            "created_at": {"$gte": drawer["opened_at"]}
+        },
+        {"_id": 0}
+    ).to_list(10000)
+    
+    total_cash_sales = sum(order["total_amount"] for order in cash_orders)
+    drawer["expected_cash"] = drawer["opening_balance"] + total_cash_sales
+    
+    return CashDrawer(**drawer)
+
+@api_router.put("/cash-drawer/close", response_model=CashDrawer)
+async def close_cash_drawer(close_data: CashDrawerClose, current_user: User = Depends(require_admin)):
+    today = datetime.now(timezone.utc).date().isoformat()
+    drawer = await db.cash_drawers.find_one({"date": today, "status": "open"}, {"_id": 0})
+    if not drawer:
+        raise HTTPException(status_code=404, detail="No open cash drawer to close")
+    
+    # Calculate expected cash
+    cash_orders = await db.orders.find(
+        {
+            "status": "completed",
+            "payment_method": "cash",
+            "created_at": {"$gte": drawer["opened_at"]}
+        },
+        {"_id": 0}
+    ).to_list(10000)
+    
+    total_cash_sales = sum(order["total_amount"] for order in cash_orders)
+    expected_cash = drawer["opening_balance"] + total_cash_sales
+    difference = close_data.actual_cash - expected_cash
+    
+    result = await db.cash_drawers.update_one(
+        {"id": drawer["id"]},
+        {"$set": {
+            "actual_cash": close_data.actual_cash,
+            "expected_cash": expected_cash,
+            "difference": difference,
+            "notes": close_data.notes,
+            "closed_by": current_user.username,
+            "closed_at": datetime.now(timezone.utc).isoformat(),
+            "status": "closed"
+        }}
+    )
+    
+    updated = await db.cash_drawers.find_one({"id": drawer["id"]}, {"_id": 0})
+    return CashDrawer(**updated)
+
+@api_router.get("/cash-drawer/history")
+async def get_cash_drawer_history(current_user: User = Depends(require_admin)):
+    drawers = await db.cash_drawers.find({}, {"_id": 0}).sort("date", -1).limit(30).to_list(100)
+    return drawers
 
 @api_router.get("/reports/stats")
 async def get_report_stats(start_date: str, end_date: str, current_user: User = Depends(require_admin)):
