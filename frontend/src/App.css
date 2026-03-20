@@ -1,34 +1,150 @@
-.App-logo {
-    height: 40vmin;
-    pointer-events: none;
+.App {
+  min-height: 100vh;
+  background-color: #ffffff;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-    .App-logo {
-        animation: App-logo-spin infinite 20s linear;
-    }
+.pos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 0.75rem;
 }
 
-.App-header {
-    background-color: #0f0f10;
-    min-height: 100vh;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    font-size: calc(10px + 2vmin);
-    color: white;
+@media (min-width: 768px) {
+  .pos-grid {
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  }
 }
 
-.App-link {
-    color: #61dafb;
+@media (min-width: 1024px) {
+  .pos-grid {
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  }
 }
 
-@keyframes App-logo-spin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+.product-card {
+  position: relative;
+  overflow: hidden;
+  border-radius: 0.75rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card));
+  color: hsl(var(--card-foreground));
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05), 0 12px 24px rgba(0, 0, 0, 0.05);
+  transition: all 150ms ease;
+  cursor: pointer;
+  user-select: none;
+}
+
+.product-card:hover {
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1), 0 16px 32px rgba(0, 0, 0, 0.1);
+  transform: translateY(-2px);
+}
+
+.product-card:active {
+  transform: scale(0.95);
+}
+
+.product-card img {
+  width: 100%;
+  height: 120px;
+  object-fit: cover;
+}
+
+.btn-primary {
+  height: 3rem;
+  border-radius: 0.5rem;
+  font-weight: 700;
+  transition: all 150ms ease;
+  background-color: hsl(var(--primary));
+  color: hsl(var(--primary-foreground));
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.btn-primary:hover {
+  background-color: hsl(var(--primary) / 0.9);
+}
+
+.btn-primary:active {
+  transform: scale(0.95);
+}
+
+.btn-success {
+  height: 3rem;
+  border-radius: 0.5rem;
+  font-weight: 700;
+  transition: all 150ms ease;
+  background-color: rgb(16, 185, 129);
+  color: white;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.btn-success:hover {
+  background-color: rgb(5, 150, 105);
+}
+
+.btn-success:active {
+  transform: scale(0.95);
+}
+
+.metric-card {
+  padding: 1.5rem;
+  border-radius: 0.75rem;
+  border: 1px solid hsl(var(--border));
+  background: hsl(var(--card) / 0.5);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+}
+
+.sidebar {
+  width: 240px;
+  min-height: 100vh;
+  background: hsl(var(--card));
+  border-right: 1px solid hsl(var(--border));
+  padding: 1.5rem;
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  border-radius: 0.5rem;
+  font-weight: 500;
+  transition: all 150ms ease;
+  cursor: pointer;
+  text-decoration: none;
+  color: hsl(var(--foreground));
+}
+
+.sidebar-link:hover {
+  background: hsl(var(--accent) / 0.1);
+}
+
+.sidebar-link.active {
+  background: hsl(var(--accent));
+  color: hsl(var(--accent-foreground));
+}
+
+.offline-indicator {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  padding: 0.5rem 1rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  z-index: 50;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.cart-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem;
+  border-bottom: 1px solid hsl(var(--border));
+}
+
+.price {
+  font-family: 'JetBrains Mono', monospace;
+  font-weight: 700;
+  font-size: 1.125rem;
 }
