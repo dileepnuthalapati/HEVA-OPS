@@ -141,6 +141,43 @@ class CashDrawerClose(BaseModel):
     actual_cash: float
     notes: Optional[str] = None
 
+class Restaurant(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    owner_email: str
+    subscription_status: str = "trial"
+    subscription_plan: str = "standard_monthly"
+    price: float = 19.99
+    currency: str = "GBP"
+    business_info: dict
+    created_at: str
+    trial_ends_at: Optional[str] = None
+    next_billing_date: Optional[str] = None
+
+class RestaurantCreate(BaseModel):
+    name: str
+    address_line1: str
+    address_line2: Optional[str] = None
+    city: str
+    postcode: str
+    phone: str
+    email: str
+    website: Optional[str] = None
+    vat_number: Optional[str] = None
+    receipt_footer: Optional[str] = None
+
+class RestaurantUpdate(BaseModel):
+    name: Optional[str] = None
+    address_line1: Optional[str] = None
+    address_line2: Optional[str] = None
+    city: Optional[str] = None
+    postcode: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    website: Optional[str] = None
+    vat_number: Optional[str] = None
+    receipt_footer: Optional[str] = None
+
 class SyncData(BaseModel):
     orders: List[OrderCreate]
 
@@ -176,6 +213,13 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+async def get_current_restaurant(current_user: User = Depends(get_current_user)):
+    """Get the restaurant associated with the current user"""
+    restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurant not found for user")
+    return Restaurant(**restaurant)
 
 def require_admin(current_user: User = Depends(get_current_user)):
     if current_user.role != "admin":
@@ -213,6 +257,65 @@ async def login(credentials: UserLogin):
 @api_router.get("/auth/me", response_model=User)
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+@api_router.post("/restaurants", response_model=Restaurant)
+async def create_restaurant(restaurant_data: RestaurantCreate, current_user: User = Depends(require_admin)):
+    """Admin creates a new restaurant/tenant"""
+    restaurant_id = f"rest_{datetime.now(timezone.utc).timestamp()}"
+    
+    # Calculate trial end date (14 days from now)
+    trial_ends = datetime.now(timezone.utc) + timedelta(days=14)
+    
+    restaurant_dict = {
+        "id": restaurant_id,
+        "owner_email": current_user.username,
+        "subscription_status": "trial",
+        "subscription_plan": "standard_monthly",
+        "price": 19.99,
+        "currency": "GBP",
+        "business_info": restaurant_data.model_dump(),
+        "users": [current_user.username],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "trial_ends_at": trial_ends.isoformat(),
+        "next_billing_date": trial_ends.isoformat()
+    }
+    
+    await db.restaurants.insert_one(restaurant_dict)
+    return Restaurant(**restaurant_dict)
+
+@api_router.get("/restaurants/my", response_model=Restaurant)
+async def get_my_restaurant(current_user: User = Depends(get_current_user)):
+    """Get current user's restaurant"""
+    restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="No restaurant found for this user")
+    return Restaurant(**restaurant)
+
+@api_router.put("/restaurants/my/settings")
+async def update_restaurant_settings(settings: RestaurantUpdate, current_user: User = Depends(get_current_user)):
+    """Update restaurant business information"""
+    restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="No restaurant found")
+    
+    # Update only provided fields
+    update_data = {k: v for k, v in settings.model_dump().items() if v is not None}
+    
+    if update_data:
+        await db.restaurants.update_one(
+            {"id": restaurant["id"]},
+            {"$set": {f"business_info.{k}": v for k, v in update_data.items()}}
+        )
+    
+    updated = await db.restaurants.find_one({"id": restaurant["id"]}, {"_id": 0})
+    return {"message": "Settings updated successfully", "business_info": updated["business_info"]}
+
+@api_router.get("/restaurants")
+async def list_restaurants(current_user: User = Depends(require_admin)):
+    """Admin: List all restaurants"""
+    restaurants = await db.restaurants.find({}, {"_id": 0}).to_list(1000)
+    return restaurants
+
 
 @api_router.post("/categories", response_model=Category)
 async def create_category(category_data: CategoryCreate, current_user: User = Depends(require_admin)):
@@ -482,6 +585,10 @@ async def print_kitchen_receipt(order_id: str, current_user: User = Depends(get_
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
     
+    # Get restaurant info
+    restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
+    business_info = restaurant.get("business_info", {}) if restaurant else {}
+    
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=40, bottomMargin=40)
     styles = getSampleStyleSheet()
@@ -497,6 +604,20 @@ async def print_kitchen_receipt(order_id: str, current_user: User = Depends(get_
     )
     
     story.append(Paragraph("KITCHEN ORDER", title_style))
+    story.append(Spacer(1, 10))
+    
+    # Add restaurant info
+    if business_info.get('name'):
+        story.append(Paragraph(f"<b>{business_info['name']}</b>", styles['Normal']))
+    if business_info.get('address_line1'):
+        address_parts = [business_info['address_line1']]
+        if business_info.get('city'):
+            address_parts.append(business_info['city'])
+        story.append(Paragraph(", ".join(address_parts), styles['Normal']))
+    if business_info.get('phone'):
+        story.append(Paragraph(f"Tel: {business_info['phone']}", styles['Normal']))
+    
+    story.append(Spacer(1, 15))
     story.append(Paragraph(f"Order #: {str(order['order_number']).zfill(3)}", styles['Heading2']))
     story.append(Paragraph(f"Server: {order['created_by']}", styles['Normal']))
     story.append(Paragraph(f"Time: {datetime.fromisoformat(order['created_at']).strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
@@ -540,6 +661,10 @@ async def print_customer_receipt(order_id: str, current_user: User = Depends(get
     if order["status"] != "completed":
         raise HTTPException(status_code=400, detail="Order must be completed first")
     
+    # Get restaurant info
+    restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
+    business_info = restaurant.get("business_info", {}) if restaurant else {}
+    
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=40, bottomMargin=40)
     styles = getSampleStyleSheet()
@@ -556,7 +681,25 @@ async def print_customer_receipt(order_id: str, current_user: User = Depends(get
     
     story.append(Paragraph("HevaPOS", title_style))
     story.append(Paragraph("CUSTOMER RECEIPT", styles['Heading2']))
-    story.append(Spacer(1, 10))
+    story.append(Spacer(1, 15))
+    
+    # Restaurant business info
+    if business_info.get('name'):
+        story.append(Paragraph(f"<b>{business_info['name']}</b>", styles['Normal']))
+    if business_info.get('address_line1'):
+        story.append(Paragraph(business_info['address_line1'], styles['Normal']))
+    if business_info.get('address_line2'):
+        story.append(Paragraph(business_info['address_line2'], styles['Normal']))
+    if business_info.get('city') and business_info.get('postcode'):
+        story.append(Paragraph(f"{business_info['city']} {business_info['postcode']}", styles['Normal']))
+    if business_info.get('phone'):
+        story.append(Paragraph(f"Tel: {business_info['phone']}", styles['Normal']))
+    if business_info.get('email'):
+        story.append(Paragraph(f"Email: {business_info['email']}", styles['Normal']))
+    if business_info.get('vat_number'):
+        story.append(Paragraph(f"VAT No: {business_info['vat_number']}", styles['Normal']))
+    
+    story.append(Spacer(1, 15))
     story.append(Paragraph(f"Order #: {str(order['order_number']).zfill(3)}", styles['Normal']))
     story.append(Paragraph(f"Server: {order['created_by']}", styles['Normal']))
     story.append(Paragraph(f"Date: {datetime.fromisoformat(order['created_at']).strftime('%Y-%m-%d %H:%M:%S')}", styles['Normal']))
@@ -597,7 +740,29 @@ async def print_customer_receipt(order_id: str, current_user: User = Depends(get
     ]))
     story.append(table)
     story.append(Spacer(1, 20))
-    story.append(Paragraph("Thank you for your visit!", styles['Normal']))
+    
+    # Custom footer message if provided
+    if business_info.get('receipt_footer'):
+        story.append(Paragraph(business_info['receipt_footer'], styles['Normal']))
+    else:
+        story.append(Paragraph("Thank you for your visit!", styles['Normal']))
+    
+    # Website if provided
+    if business_info.get('website'):
+        story.append(Paragraph(f"Visit us at: {business_info['website']}", styles['Normal']))
+    
+    story.append(Spacer(1, 20))
+    
+    # Powered by HevaPOS footer
+    footer_style = ParagraphStyle(
+        'Footer',
+        parent=styles['Normal'],
+        fontSize=10,
+        textColor=colors.grey,
+        alignment=1
+    )
+    story.append(Paragraph("Powered by HevaPOS", footer_style))
+    story.append(Paragraph("www.hevapos.com", footer_style))
     
     doc.build(story)
     buffer.seek(0)

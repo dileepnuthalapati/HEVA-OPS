@@ -11,6 +11,7 @@ import CategoryManagement from './pages/CategoryManagement';
 import OrderHistory from './pages/OrderHistory';
 import Reports from './pages/Reports';
 import CashDrawer from './pages/CashDrawer';
+import RestaurantSettings from './pages/RestaurantSettings';
 import OfflineIndicator from './components/OfflineIndicator';
 import './App.css';
 import './index.css';
@@ -110,6 +111,14 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute adminOnly>
             <CashDrawer />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/settings"
+        element={
+          <ProtectedRoute>
+            <RestaurantSettings />
           </ProtectedRoute>
         }
       />

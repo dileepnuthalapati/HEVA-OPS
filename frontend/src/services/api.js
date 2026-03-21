@@ -221,4 +221,19 @@ export const cashDrawerAPI = {
   },
 };
 
+export const restaurantAPI = {
+  getMy: async () => {
+    const response = await api.get('/restaurants/my');
+    return response.data;
+  },
+  updateSettings: async (settings) => {
+    const response = await api.put('/restaurants/my/settings', settings);
+    return response.data;
+  },
+  getAll: async () => {
+    const response = await api.get('/restaurants');
+    return response.data;
+  },
+};
+
 export default api;

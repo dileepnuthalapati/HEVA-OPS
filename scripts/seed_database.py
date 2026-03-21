@@ -195,5 +195,36 @@ def seed_database():
     print("  Admin: admin / admin123")
     print("  User:  user / user123")
     
+    # Create default restaurant
+    print("\n📍 Creating default restaurant...")
+    default_restaurant = {
+        "id": "rest_default",
+        "owner_email": "admin",
+        "subscription_status": "active",
+        "subscription_plan": "standard_monthly",
+        "price": 19.99,
+        "currency": "GBP",
+        "business_info": {
+            "name": "Demo Restaurant",
+            "address_line1": "123 High Street",
+            "address_line2": "",
+            "city": "London",
+            "postcode": "SW1A 1AA",
+            "phone": "020 1234 5678",
+            "email": "info@demorestaurant.co.uk",
+            "website": "www.demorestaurant.co.uk",
+            "vat_number": "GB123456789",
+            "receipt_footer": "Thank you for visiting Demo Restaurant!"
+        },
+        "users": ["admin", "user"],
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "trial_ends_at": None,
+        "next_billing_date": None
+    }
+    
+    db.restaurants.delete_many({})
+    db.restaurants.insert_one(default_restaurant)
+    print("✓ Created default restaurant (Demo Restaurant)")
+    
 if __name__ == "__main__":
     seed_database()
