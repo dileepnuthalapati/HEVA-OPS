@@ -7,13 +7,14 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
-import { LayoutDashboard, Package, FolderTree, ShoppingCart, FileText, LogOut, Wallet, Download, Calendar, TrendingUp } from 'lucide-react';
+import { LayoutDashboard, Package, FolderTree, ShoppingCart, FileText, LogOut, Wallet, Store, Download, Calendar, TrendingUp } from 'lucide-react';
 
 const Sidebar = ({ active }) => {
   const { logout } = useAuth();
 
   const menuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { path: '/restaurants', icon: Store, label: 'Restaurants' },
     { path: '/categories', icon: FolderTree, label: 'Categories' },
     { path: '/products', icon: Package, label: 'Products' },
     { path: '/orders', icon: ShoppingCart, label: 'Orders' },

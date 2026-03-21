@@ -165,6 +165,8 @@ class RestaurantCreate(BaseModel):
     website: Optional[str] = None
     vat_number: Optional[str] = None
     receipt_footer: Optional[str] = None
+    subscription_price: float
+    currency: str = "GBP"
 
 class RestaurantUpdate(BaseModel):
     name: Optional[str] = None
@@ -260,7 +262,7 @@ async def get_me(current_user: User = Depends(get_current_user)):
 
 @api_router.post("/restaurants", response_model=Restaurant)
 async def create_restaurant(restaurant_data: RestaurantCreate, current_user: User = Depends(require_admin)):
-    """Admin creates a new restaurant/tenant"""
+    """Admin creates a new restaurant/tenant with custom pricing"""
     restaurant_id = f"rest_{datetime.now(timezone.utc).timestamp()}"
     
     # Calculate trial end date (14 days from now)
@@ -271,9 +273,10 @@ async def create_restaurant(restaurant_data: RestaurantCreate, current_user: Use
         "owner_email": current_user.username,
         "subscription_status": "trial",
         "subscription_plan": "standard_monthly",
-        "price": 19.99,
-        "currency": "GBP",
-        "business_info": restaurant_data.model_dump(),
+        "price": restaurant_data.subscription_price,
+        "currency": restaurant_data.currency,
+        "business_info": {k: v for k, v in restaurant_data.model_dump().items() 
+                         if k not in ['subscription_price', 'currency']},
         "users": [current_user.username],
         "created_at": datetime.now(timezone.utc).isoformat(),
         "trial_ends_at": trial_ends.isoformat(),
@@ -670,22 +673,31 @@ async def print_customer_receipt(order_id: str, current_user: User = Depends(get
     styles = getSampleStyleSheet()
     story = []
     
+    # Customer Receipt Title (without HevaPOS branding)
     title_style = ParagraphStyle(
         'ReceiptTitle',
         parent=styles['Heading1'],
-        fontSize=28,
+        fontSize=24,
         textColor=colors.HexColor('#0f172a'),
-        spaceAfter=20,
+        spaceAfter=15,
         alignment=1
     )
     
-    story.append(Paragraph("HevaPOS", title_style))
-    story.append(Paragraph("CUSTOMER RECEIPT", styles['Heading2']))
-    story.append(Spacer(1, 15))
+    story.append(Paragraph("CUSTOMER RECEIPT", title_style))
+    story.append(Spacer(1, 10))
     
-    # Restaurant business info
+    # Restaurant business info (prominently at top)
+    restaurant_name_style = ParagraphStyle(
+        'RestaurantName',
+        parent=styles['Heading2'],
+        fontSize=20,
+        textColor=colors.HexColor('#0f172a'),
+        spaceAfter=5,
+        alignment=1
+    )
+    
     if business_info.get('name'):
-        story.append(Paragraph(f"<b>{business_info['name']}</b>", styles['Normal']))
+        story.append(Paragraph(f"<b>{business_info['name']}</b>", restaurant_name_style))
     if business_info.get('address_line1'):
         story.append(Paragraph(business_info['address_line1'], styles['Normal']))
     if business_info.get('address_line2'):

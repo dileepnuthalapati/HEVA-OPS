@@ -12,6 +12,7 @@ import OrderHistory from './pages/OrderHistory';
 import Reports from './pages/Reports';
 import CashDrawer from './pages/CashDrawer';
 import RestaurantSettings from './pages/RestaurantSettings';
+import RestaurantManagement from './pages/RestaurantManagement';
 import OfflineIndicator from './components/OfflineIndicator';
 import './App.css';
 import './index.css';
@@ -119,6 +120,14 @@ const AppRoutes = () => {
         element={
           <ProtectedRoute>
             <RestaurantSettings />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/restaurants"
+        element={
+          <ProtectedRoute adminOnly>
+            <RestaurantManagement />
           </ProtectedRoute>
         }
       />

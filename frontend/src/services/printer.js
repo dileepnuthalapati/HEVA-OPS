@@ -153,12 +153,16 @@ class ThermalPrinterService {
       // Initialize
       await this.write(this.INIT);
       
-      // Header
+      // Receipt Title
       await this.write(this.ALIGN_CENTER + this.FONT_LARGE + this.BOLD_ON);
-      await this.printText('HevaPOS');
+      await this.printText('CUSTOMER RECEIPT');
       await this.write(this.BOLD_OFF + this.FONT_NORMAL);
-      await this.printText('Customer Receipt');
       await this.printSeparator('=');
+      
+      // Restaurant Name (prominently)
+      await this.write(this.FONT_DOUBLE + this.BOLD_ON);
+      await this.printText(order.restaurant_name || 'Restaurant');
+      await this.write(this.BOLD_OFF + this.FONT_NORMAL);
       
       // Order info
       await this.write(this.ALIGN_LEFT);

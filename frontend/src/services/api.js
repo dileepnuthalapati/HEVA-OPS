@@ -234,6 +234,10 @@ export const restaurantAPI = {
     const response = await api.get('/restaurants');
     return response.data;
   },
+  create: async (data) => {
+    const response = await api.post('/restaurants', data);
+    return response.data;
+  },
 };
 
 export default api;

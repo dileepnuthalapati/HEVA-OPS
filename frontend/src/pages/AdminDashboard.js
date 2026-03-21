@@ -12,6 +12,7 @@ const Sidebar = ({ active }) => {
 
   const menuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { path: '/restaurants', icon: Store, label: 'Restaurants' },
     { path: '/categories', icon: FolderTree, label: 'Categories' },
     { path: '/products', icon: Package, label: 'Products' },
     { path: '/orders', icon: ShoppingCart, label: 'Orders' },
