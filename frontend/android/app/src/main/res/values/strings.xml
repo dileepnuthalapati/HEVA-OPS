@@ -2,6 +2,6 @@
 <resources>
     <string name="app_name">HevaPOS</string>
     <string name="title_activity_main">HevaPOS</string>
-    <string name="package_name">com.hevapos.app</string>
-    <string name="custom_url_scheme">com.hevapos.app</string>
+    <string name="package_name">com.hetupathways.app</string>
+    <string name="custom_url_scheme">com.hetupathways.app</string>
 </resources>

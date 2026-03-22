@@ -1,8 +1,15 @@
 import axios from 'axios';
 import { saveToIndexedDB, getAllFromIndexedDB, getUnsyncedOrders } from './db';
 
-const API_URL = process.env.REACT_APP_BACKEND_URL;
+// For production APK, backend must be accessible
+// Option 1: Deploy backend to cloud (Heroku, AWS, Railway)
+// Option 2: Use ngrok/localtunnel for testing
+// Option 3: Ensure phone and computer on same WiFi, use computer's local IP
+
+const API_URL = process.env.REACT_APP_BACKEND_URL || 'https://your-backend-url.com';
 const API = `${API_URL}/api`;
+
+console.log('Connecting to API at:', API);
 
 let authToken = localStorage.getItem('auth_token');
 

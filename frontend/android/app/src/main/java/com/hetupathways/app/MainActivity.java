@@ -1,4 +1,4 @@
-package com.hevapos.app;
+package com.hetupathways.app;
 
 import com.getcapacitor.BridgeActivity;
 
