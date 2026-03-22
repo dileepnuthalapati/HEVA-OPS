@@ -1,14 +1,32 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import { authAPI, setAuthToken, getAuthToken } from '../services/api';
+import { authAPI } from '../services/api';
 
 const AuthContext = createContext();
 
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
-  return context;
+// DEMO MODE: Auto-login bypass for testing
+const DEMO_MODE = true;
+const DEMO_PLATFORM_OWNER = {
+  id: 'platform_owner_1',
+  username: 'admin',
+  role: 'platform_owner', // New role!
+  restaurant_id: null, // Platform owner has no specific restaurant
+  created_at: new Date().toISOString()
+};
+
+const DEMO_RESTAURANT_ADMIN = {
+  id: 'restaurant_admin_1',
+  username: 'restaurant_admin',
+  role: 'admin',
+  restaurant_id: 'restaurant_123', // Belongs to specific restaurant
+  created_at: new Date().toISOString()
+};
+
+const DEMO_RESTAURANT_USER = {
+  id: 'restaurant_user_1',
+  username: 'user',
+  role: 'user',
+  restaurant_id: 'restaurant_123',
+  created_at: new Date().toISOString()
 };
 
 export const AuthProvider = ({ children }) => {
@@ -16,44 +34,86 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const initAuth = async () => {
-      const token = getAuthToken();
-      if (token) {
-        try {
-          const userData = await authAPI.getMe();
-          setUser(userData);
-        } catch (error) {
-          console.error('Auth initialization failed:', error);
-          setAuthToken(null);
-        }
+    // DEMO MODE: Auto-login based on URL param or default
+    if (DEMO_MODE) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const role = urlParams.get('role');
+      
+      let demoUser;
+      if (role === 'restaurant_admin') {
+        demoUser = DEMO_RESTAURANT_ADMIN;
+      } else if (role === 'user') {
+        demoUser = DEMO_RESTAURANT_USER;
+      } else {
+        demoUser = DEMO_PLATFORM_OWNER; // Default: platform owner
       }
+      
+      console.log(`🎭 DEMO MODE: Auto-logged in as ${demoUser.role}`);
+      setUser(demoUser);
+      localStorage.setItem('demo_user', JSON.stringify(demoUser));
       setLoading(false);
-    };
-    initAuth();
+      return;
+    }
+    
+    // Normal auth check
+    const token = localStorage.getItem('auth_token');
+    const savedUser = localStorage.getItem('user');
+    if (token && savedUser) {
+      setUser(JSON.parse(savedUser));
+    }
+    setLoading(false);
   }, []);
 
   const login = async (username, password) => {
+    // DEMO MODE: Return different users based on username
+    if (DEMO_MODE) {
+      let demoUser;
+      if (username === 'restaurant_admin' || username === 'rest_admin') {
+        demoUser = DEMO_RESTAURANT_ADMIN;
+      } else if (username === 'user' || username === 'staff') {
+        demoUser = DEMO_RESTAURANT_USER;
+      } else {
+        demoUser = DEMO_PLATFORM_OWNER;
+      }
+      setUser(demoUser);
+      return { user: demoUser };
+    }
+    
+    // Normal login
     const response = await authAPI.login(username, password);
     setUser(response.user);
-    return response;
-  };
-
-  const register = async (username, password, role) => {
-    const response = await authAPI.register(username, password, role);
+    localStorage.setItem('user', JSON.stringify(response.user));
     return response;
   };
 
   const logout = () => {
-    setAuthToken(null);
     setUser(null);
-    window.location.href = '/login';
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('user');
+    localStorage.removeItem('demo_user');
   };
 
-  const isAdmin = user && user.role === 'admin';
+  // Role check helpers
+  const isPlatformOwner = user?.role === 'platform_owner';
+  const isRestaurantAdmin = user?.role === 'admin';
+  const isRestaurantUser = user?.role === 'user';
+  const canAccessRestaurants = isPlatformOwner; // Only platform owner
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, isAdmin }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      login, 
+      logout, 
+      loading, 
+      isPlatformOwner,
+      isRestaurantAdmin,
+      isRestaurantUser,
+      canAccessRestaurants,
+      isAdmin: isPlatformOwner || isRestaurantAdmin
+    }}>
       {children}
     </AuthContext.Provider>
   );
 };
+
+export const useAuth = () => useContext(AuthContext);
