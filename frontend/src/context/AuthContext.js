@@ -4,7 +4,7 @@ import { authAPI } from '../services/api';
 const AuthContext = createContext();
 
 // DEMO MODE: Auto-login bypass for testing
-const DEMO_MODE = true;
+const DEMO_MODE = false; // Disabled - using real auth now
 const DEMO_PLATFORM_OWNER = {
   id: 'platform_owner_1',
   username: 'admin',

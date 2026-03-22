@@ -1,7 +1,6 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
+from fastapi import FastAPI, APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from fastapi import FastAPI, APIRouter
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -18,9 +17,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from io import BytesIO
-from typing import List
 import uuid
-from datetime import datetime, timezone
 
 
 ROOT_DIR = Path(__file__).parent
@@ -44,6 +41,7 @@ class User(BaseModel):
     id: str
     username: str
     role: str
+    restaurant_id: Optional[str] = None
     created_at: str
 
 class UserCreate(BaseModel):
@@ -216,6 +214,9 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         user = await db.users.find_one({"username": username}, {"_id": 0})
         if user is None:
             raise HTTPException(status_code=401, detail="User not found")
+        # Ensure restaurant_id is present (may be None for platform_owner)
+        if "restaurant_id" not in user:
+            user["restaurant_id"] = None
         return User(**user)
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
@@ -230,8 +231,15 @@ async def get_current_restaurant(current_user: User = Depends(get_current_user))
     return Restaurant(**restaurant)
 
 def require_admin(current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
+    """Require admin or platform_owner role"""
+    if current_user.role not in ["admin", "platform_owner"]:
         raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+def require_platform_owner(current_user: User = Depends(get_current_user)):
+    """Require platform_owner role only"""
+    if current_user.role != "platform_owner":
+        raise HTTPException(status_code=403, detail="Platform owner access required")
     return current_user
 
 @api_router.post("/auth/register", response_model=User)
@@ -253,27 +261,25 @@ async def register(user_data: UserCreate):
     return User(id=user_id, username=user_data.username, role=user_data.role, created_at=user_dict["created_at"])
 
 @api_router.post("/auth/login", response_model=Token)
-
-# TEMPORARY: Test login bypass for preview testing
-@api_router.post("/auth/test-login", response_model=Token)
-async def test_login(credentials: UserLogin):
-    """Bypass password check for testing - REMOVE IN PRODUCTION"""
-    user = await db.users.find_one({"username": credentials.username})
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    
-    access_token = create_access_token(data={"sub": user["id"], "role": user["role"]})
-    user_data = User(**user)
-    
-    return Token(access_token=access_token, token_type="bearer", user=user_data)
-
 async def login(credentials: UserLogin):
     user = await db.users.find_one({"username": credentials.username})
-    if not user or not verify_password(credentials.password, user["password"]):
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+    
+    # Verify password
+    if not verify_password(credentials.password, user["password"]):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     access_token = create_access_token(data={"sub": user["username"]})
-    user_obj = User(id=user["id"], username=user["username"], role=user["role"], created_at=user["created_at"])
+    # Ensure restaurant_id is included
+    restaurant_id = user.get("restaurant_id", None)
+    user_obj = User(
+        id=user["id"], 
+        username=user["username"], 
+        role=user["role"], 
+        restaurant_id=restaurant_id,
+        created_at=user["created_at"]
+    )
     return Token(access_token=access_token, token_type="bearer", user=user_obj)
 
 @api_router.get("/auth/me", response_model=User)
@@ -281,8 +287,8 @@ async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
 
 @api_router.post("/restaurants", response_model=Restaurant)
-async def create_restaurant(restaurant_data: RestaurantCreate, current_user: User = Depends(require_admin)):
-    """Admin creates a new restaurant/tenant with custom pricing"""
+async def create_restaurant(restaurant_data: RestaurantCreate, current_user: User = Depends(require_platform_owner)):
+    """Platform Owner creates a new restaurant/tenant with custom pricing"""
     restaurant_id = f"rest_{datetime.now(timezone.utc).timestamp()}"
     
     # Calculate trial end date (14 days from now)
@@ -290,14 +296,14 @@ async def create_restaurant(restaurant_data: RestaurantCreate, current_user: Use
     
     restaurant_dict = {
         "id": restaurant_id,
-        "owner_email": current_user.username,
+        "owner_email": restaurant_data.email,
         "subscription_status": "trial",
         "subscription_plan": "standard_monthly",
         "price": restaurant_data.subscription_price,
         "currency": restaurant_data.currency,
         "business_info": {k: v for k, v in restaurant_data.model_dump().items() 
                          if k not in ['subscription_price', 'currency']},
-        "users": [current_user.username],
+        "users": [],  # Will be populated when users are added
         "created_at": datetime.now(timezone.utc).isoformat(),
         "trial_ends_at": trial_ends.isoformat(),
         "next_billing_date": trial_ends.isoformat()
@@ -334,8 +340,8 @@ async def update_restaurant_settings(settings: RestaurantUpdate, current_user: U
     return {"message": "Settings updated successfully", "business_info": updated["business_info"]}
 
 @api_router.get("/restaurants")
-async def list_restaurants(current_user: User = Depends(require_admin)):
-    """Admin: List all restaurants"""
+async def list_restaurants(current_user: User = Depends(require_platform_owner)):
+    """Platform Owner: List all restaurants"""
     restaurants = await db.restaurants.find({}, {"_id": 0}).to_list(1000)
     return restaurants
 

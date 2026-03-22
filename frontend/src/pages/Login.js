@@ -23,7 +23,10 @@ const Login = () => {
       const response = await login(username, password);
       toast.success(`Welcome back, ${response.user.username}!`);
       
-      if (response.user.role === 'admin') {
+      // Route based on role
+      if (response.user.role === 'platform_owner') {
+        navigate('/restaurants');
+      } else if (response.user.role === 'admin') {
         navigate('/dashboard');
       } else {
         navigate('/pos');
@@ -89,9 +92,11 @@ const Login = () => {
           <div className="mt-6 text-center text-sm text-muted-foreground">
             <p>Demo Accounts:</p>
             <p className="mt-2 font-mono text-xs">
-              Admin: admin / admin123
+              Platform Owner: platform_owner / admin123
               <br />
-              User: user / user123
+              Restaurant Admin: restaurant_admin / admin123
+              <br />
+              Staff: user / user123
             </p>
           </div>
         </CardContent>

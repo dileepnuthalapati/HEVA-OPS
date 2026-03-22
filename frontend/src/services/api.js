@@ -1,11 +1,8 @@
 import axios from 'axios';
 import { saveToIndexedDB, getAllFromIndexedDB, getUnsyncedOrders } from './db';
 
-// TEMPORARY: Using test-login endpoint for preview testing
+// API configuration
 const API_URL = process.env.REACT_APP_BACKEND_URL || 'https://your-backend-url.com';
-
-// Use test endpoint for now
-export const USE_TEST_LOGIN = true;
 const API = `${API_URL}/api`;
 
 console.log('Connecting to API at:', API);
@@ -43,8 +40,8 @@ export const authAPI = {
     return response.data;
   },
   login: async (username, password) => {
-    // TEMPORARY: Use test-login for preview testing
-    const response = await api.post('/auth/test-login', { username, password });
+    // Use the proper login endpoint
+    const response = await api.post('/auth/login', { username, password });
     if (response.data.access_token) {
       setAuthToken(response.data.access_token);
     }
