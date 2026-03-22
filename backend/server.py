@@ -354,8 +354,13 @@ async def create_category(category_data: CategoryCreate, current_user: User = De
     return Category(**category_dict)
 
 @api_router.get("/categories", response_model=List[Category])
-async def get_categories():
-    categories = await db.categories.find({}, {"_id": 0}).to_list(1000)
+async def get_categories(current_user: User = Depends(get_current_user)):
+    # Filter by restaurant_id for restaurant admins/users
+    query = {}
+    if current_user.role != 'platform_owner' and current_user.restaurant_id:
+        query["restaurant_id"] = current_user.restaurant_id
+    
+    categories = await db.categories.find(query, {"_id": 0}).to_list(1000)
     return [Category(**cat) for cat in categories]
 
 @api_router.put("/categories/{category_id}", response_model=Category)
@@ -398,8 +403,21 @@ async def create_product(product_data: ProductCreate, current_user: User = Depen
     return Product(**product_dict)
 
 @api_router.get("/products", response_model=List[Product])
-async def get_products(category_id: Optional[str] = None):
-    query = {"category_id": category_id} if category_id else {}
+async def get_products(
+    category_id: Optional[str] = None,
+    current_user: User = Depends(get_current_user)
+):
+    # Build query with restaurant filtering
+    query = {}
+    
+    # Filter by restaurant_id (only for restaurant admins/users)
+    if current_user.role != 'platform_owner' and current_user.restaurant_id:
+        query["restaurant_id"] = current_user.restaurant_id
+    
+    # Additional category filter
+    if category_id:
+        query["category_id"] = category_id
+    
     products = await db.products.find(query, {"_id": 0}).to_list(1000)
     return [Product(**prod) for prod in products]
 

@@ -17,7 +17,7 @@ const DEMO_RESTAURANT_ADMIN = {
   id: 'restaurant_admin_1',
   username: 'restaurant_admin',
   role: 'admin',
-  restaurant_id: 'restaurant_123', // Belongs to specific restaurant
+  restaurant_id: 'rest_demo_1', // Pizza Palace
   created_at: new Date().toISOString()
 };
 
@@ -25,7 +25,7 @@ const DEMO_RESTAURANT_USER = {
   id: 'restaurant_user_1',
   username: 'user',
   role: 'user',
-  restaurant_id: 'restaurant_123',
+  restaurant_id: 'rest_demo_1', // Pizza Palace
   created_at: new Date().toISOString()
 };
 
