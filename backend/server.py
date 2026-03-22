@@ -15,7 +15,7 @@ import jwt
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table as ReportLabTable, TableStyle, Paragraph, Spacer
 from io import BytesIO
 import uuid
 
@@ -112,10 +112,12 @@ class Order(BaseModel):
     payment_method: Optional[str] = None
     split_count: int = 1
     completed_at: Optional[str] = None
+    table_id: Optional[str] = None
 
 class OrderCreate(BaseModel):
     items: List[OrderItem]
     total_amount: float
+    table_id: Optional[str] = None
 
 class OrderComplete(BaseModel):
     payment_method: str
@@ -190,6 +192,95 @@ class SyncData(BaseModel):
 class ReportRequest(BaseModel):
     start_date: str
     end_date: str
+
+# ===== PRINTER MODELS =====
+class Printer(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    name: str
+    type: str  # "bluetooth" or "wifi"
+    address: str  # Bluetooth MAC address or IP:port
+    restaurant_id: str
+    is_default: bool = False
+    paper_width: int = 80  # 58mm or 80mm
+    created_at: str
+
+class PrinterCreate(BaseModel):
+    name: str
+    type: str  # "bluetooth" or "wifi"
+    address: str
+    is_default: bool = False
+    paper_width: int = 80
+
+class PrinterUpdate(BaseModel):
+    name: Optional[str] = None
+    type: Optional[str] = None
+    address: Optional[str] = None
+    is_default: Optional[bool] = None
+    paper_width: Optional[int] = None
+
+# ===== TABLE MODELS =====
+class Table(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    number: int
+    name: str
+    capacity: int
+    status: str = "available"  # available, occupied, reserved
+    restaurant_id: str
+    current_order_id: Optional[str] = None
+    merged_with: Optional[List[str]] = None  # List of table IDs merged with this one
+    created_at: str
+
+class TableCreate(BaseModel):
+    number: int
+    name: Optional[str] = None
+    capacity: int = 4
+
+class TableUpdate(BaseModel):
+    name: Optional[str] = None
+    capacity: Optional[int] = None
+    status: Optional[str] = None
+
+class TableMerge(BaseModel):
+    table_ids: List[str]  # Tables to merge
+
+class TableSplitBill(BaseModel):
+    order_id: str
+    splits: List[dict]  # Each split has items and payment info
+
+# ===== RESERVATION MODELS =====
+class Reservation(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    table_id: str
+    customer_name: str
+    customer_phone: Optional[str] = None
+    party_size: int
+    reservation_time: str
+    duration_minutes: int = 120
+    status: str = "confirmed"  # confirmed, seated, completed, cancelled, no_show
+    notes: Optional[str] = None
+    restaurant_id: str
+    created_at: str
+
+class ReservationCreate(BaseModel):
+    table_id: str
+    customer_name: str
+    customer_phone: Optional[str] = None
+    party_size: int
+    reservation_time: str
+    duration_minutes: int = 120
+    notes: Optional[str] = None
+
+class ReservationUpdate(BaseModel):
+    customer_name: Optional[str] = None
+    customer_phone: Optional[str] = None
+    party_size: Optional[int] = None
+    reservation_time: Optional[str] = None
+    duration_minutes: Optional[int] = None
+    status: Optional[str] = None
+    notes: Optional[str] = None
 
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
@@ -466,7 +557,11 @@ async def create_order(order_data: OrderCreate, current_user: User = Depends(get
     
     # Generate sequential order number
     if last_order and "order_number" in last_order:
-        order_number = last_order["order_number"] + 1
+        # Handle both string and int order_number from database
+        last_num = last_order["order_number"]
+        if isinstance(last_num, str):
+            last_num = int(last_num) if last_num.isdigit() else 0
+        order_number = last_num + 1
     else:
         order_number = 1
     
@@ -485,9 +580,18 @@ async def create_order(order_data: OrderCreate, current_user: User = Depends(get
         "status": "pending",
         "payment_method": None,
         "split_count": 1,
-        "completed_at": None
+        "completed_at": None,
+        "table_id": order_data.table_id
     }
     await db.orders.insert_one(order_dict)
+    
+    # If table_id is provided, update table status
+    if order_data.table_id:
+        await db.tables.update_one(
+            {"id": order_data.table_id},
+            {"$set": {"status": "occupied", "current_order_id": order_id}}
+        )
+    
     return Order(**order_dict)
 
 @api_router.put("/orders/{order_id}/complete", response_model=Order)
@@ -604,7 +708,7 @@ async def generate_report(report_req: ReportRequest, current_user: User = Depend
         for product, data in product_sales.items():
             table_data.append([product, str(data["quantity"]), f"${data['revenue']:.2f}"])
         
-        table = Table(table_data, colWidths=[200, 100, 100])
+        table = ReportLabTable(table_data, colWidths=[200, 100, 100])
         table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0f172a')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -677,7 +781,7 @@ async def print_kitchen_receipt(order_id: str, current_user: User = Depends(get_
     for item in order['items']:
         table_data.append([item['product_name'], str(item['quantity'])])
     
-    table = Table(table_data, colWidths=[300, 100])
+    table = ReportLabTable(table_data, colWidths=[300, 100])
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0f172a')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -780,7 +884,7 @@ async def print_customer_receipt(order_id: str, current_user: User = Depends(get
     
     table_data.append(["", "", "TOTAL:", f"${order['total_amount']:.2f}"])
     
-    table = Table(table_data, colWidths=[200, 80, 80, 100])
+    table = ReportLabTable(table_data, colWidths=[200, 80, 80, 100])
     table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#0f172a')),
         ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -949,6 +1053,745 @@ async def get_report_stats(start_date: str, end_date: str, current_user: User = 
         "avg_order_value": round(avg_order_value, 2),
         "top_products": [{"name": name, "quantity": data["quantity"], "revenue": round(data["revenue"], 2)} for name, data in top_products]
     }
+
+# ===== PRINTER API ENDPOINTS =====
+
+@api_router.get("/printers", response_model=List[Printer])
+async def get_printers(current_user: User = Depends(require_admin)):
+    """Get all printers for the restaurant"""
+    query = {}
+    if current_user.role != 'platform_owner' and current_user.restaurant_id:
+        query["restaurant_id"] = current_user.restaurant_id
+    printers = await db.printers.find(query, {"_id": 0}).to_list(100)
+    return [Printer(**p) for p in printers]
+
+@api_router.post("/printers", response_model=Printer)
+async def create_printer(printer_data: PrinterCreate, current_user: User = Depends(require_admin)):
+    """Add a new printer"""
+    if not current_user.restaurant_id and current_user.role != 'platform_owner':
+        raise HTTPException(status_code=400, detail="No restaurant associated with user")
+    
+    restaurant_id = current_user.restaurant_id or "platform"
+    printer_id = f"printer_{datetime.now(timezone.utc).timestamp()}"
+    
+    # If this is set as default, unset other defaults
+    if printer_data.is_default:
+        await db.printers.update_many(
+            {"restaurant_id": restaurant_id},
+            {"$set": {"is_default": False}}
+        )
+    
+    printer_dict = {
+        "id": printer_id,
+        "name": printer_data.name,
+        "type": printer_data.type,
+        "address": printer_data.address,
+        "restaurant_id": restaurant_id,
+        "is_default": printer_data.is_default,
+        "paper_width": printer_data.paper_width,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.printers.insert_one(printer_dict)
+    return Printer(**printer_dict)
+
+@api_router.put("/printers/{printer_id}", response_model=Printer)
+async def update_printer(printer_id: str, printer_data: PrinterUpdate, current_user: User = Depends(require_admin)):
+    """Update a printer"""
+    update_dict = {k: v for k, v in printer_data.model_dump().items() if v is not None}
+    
+    if printer_data.is_default:
+        restaurant_id = current_user.restaurant_id or "platform"
+        await db.printers.update_many(
+            {"restaurant_id": restaurant_id, "id": {"$ne": printer_id}},
+            {"$set": {"is_default": False}}
+        )
+    
+    if update_dict:
+        await db.printers.update_one({"id": printer_id}, {"$set": update_dict})
+    
+    updated = await db.printers.find_one({"id": printer_id}, {"_id": 0})
+    if not updated:
+        raise HTTPException(status_code=404, detail="Printer not found")
+    return Printer(**updated)
+
+@api_router.delete("/printers/{printer_id}")
+async def delete_printer(printer_id: str, current_user: User = Depends(require_admin)):
+    """Delete a printer"""
+    result = await db.printers.delete_one({"id": printer_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Printer not found")
+    return {"message": "Printer deleted"}
+
+@api_router.post("/printers/{printer_id}/test")
+async def test_printer(printer_id: str, current_user: User = Depends(require_admin)):
+    """Test printer connection and print a test receipt"""
+    printer = await db.printers.find_one({"id": printer_id}, {"_id": 0})
+    if not printer:
+        raise HTTPException(status_code=404, detail="Printer not found")
+    
+    # Generate ESC/POS test receipt commands
+    test_commands = generate_escpos_test_receipt(printer)
+    
+    return {
+        "message": "Test receipt generated",
+        "printer": printer["name"],
+        "type": printer["type"],
+        "address": printer["address"],
+        "commands": test_commands,  # Base64 encoded ESC/POS commands
+        "instructions": "Send these commands to the printer via Bluetooth or TCP socket"
+    }
+
+@api_router.post("/print/kitchen/{order_id}")
+async def print_kitchen_receipt_escpos(order_id: str, printer_id: Optional[str] = None, current_user: User = Depends(get_current_user)):
+    """Generate ESC/POS commands for kitchen receipt"""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Get restaurant info
+    restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
+    business_info = restaurant.get("business_info", {}) if restaurant else {}
+    
+    # Get table info if assigned
+    table_info = None
+    if order.get("table_id"):
+        table = await db.tables.find_one({"id": order["table_id"]}, {"_id": 0})
+        if table:
+            table_info = {"number": table["number"], "name": table.get("name", f"Table {table['number']}")}
+    
+    # Generate ESC/POS commands
+    commands = generate_escpos_kitchen_receipt(order, business_info, table_info)
+    
+    return {
+        "order_id": order_id,
+        "order_number": order.get("order_number", "N/A"),
+        "commands": commands,
+        "table": table_info
+    }
+
+@api_router.post("/print/customer/{order_id}")
+async def print_customer_receipt_escpos(order_id: str, printer_id: Optional[str] = None, current_user: User = Depends(get_current_user)):
+    """Generate ESC/POS commands for customer receipt"""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    if order["status"] != "completed":
+        raise HTTPException(status_code=400, detail="Order must be completed first")
+    
+    # Get restaurant info
+    restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
+    business_info = restaurant.get("business_info", {}) if restaurant else {}
+    
+    # Get table info if assigned
+    table_info = None
+    if order.get("table_id"):
+        table = await db.tables.find_one({"id": order["table_id"]}, {"_id": 0})
+        if table:
+            table_info = {"number": table["number"], "name": table.get("name", f"Table {table['number']}")}
+    
+    # Generate ESC/POS commands
+    commands = generate_escpos_customer_receipt(order, business_info, table_info)
+    
+    return {
+        "order_id": order_id,
+        "order_number": order.get("order_number", "N/A"),
+        "commands": commands,
+        "table": table_info
+    }
+
+# ESC/POS Helper Functions
+import base64
+
+def generate_escpos_test_receipt(printer: dict) -> str:
+    """Generate ESC/POS commands for a test receipt"""
+    width = printer.get("paper_width", 80)
+    char_width = 48 if width == 80 else 32
+    
+    commands = bytearray()
+    
+    # Initialize printer
+    commands.extend([0x1B, 0x40])  # ESC @
+    
+    # Center align
+    commands.extend([0x1B, 0x61, 0x01])  # ESC a 1
+    
+    # Bold on
+    commands.extend([0x1B, 0x45, 0x01])  # ESC E 1
+    
+    # Double height/width
+    commands.extend([0x1D, 0x21, 0x11])  # GS ! 17
+    
+    commands.extend(b"PRINTER TEST\n")
+    
+    # Normal size
+    commands.extend([0x1D, 0x21, 0x00])  # GS ! 0
+    
+    # Bold off
+    commands.extend([0x1B, 0x45, 0x00])  # ESC E 0
+    
+    commands.extend(f"{printer['name']}\n".encode())
+    commands.extend(f"Type: {printer['type'].upper()}\n".encode())
+    commands.extend(f"Address: {printer['address']}\n".encode())
+    commands.extend(b"\n")
+    
+    # Left align
+    commands.extend([0x1B, 0x61, 0x00])  # ESC a 0
+    
+    commands.extend(("-" * char_width + "\n").encode())
+    commands.extend(b"1234567890" * (char_width // 10) + b"\n")
+    commands.extend(b"ABCDEFGHIJ" * (char_width // 10) + b"\n")
+    commands.extend(("-" * char_width + "\n").encode())
+    
+    # Center align
+    commands.extend([0x1B, 0x61, 0x01])
+    commands.extend(b"\nTest Successful!\n")
+    commands.extend(f"Paper Width: {width}mm\n".encode())
+    
+    # Feed and cut
+    commands.extend([0x1B, 0x64, 0x05])  # ESC d 5 - feed 5 lines
+    commands.extend([0x1D, 0x56, 0x00])  # GS V 0 - full cut
+    
+    return base64.b64encode(commands).decode()
+
+def generate_escpos_kitchen_receipt(order: dict, business_info: dict, table_info: dict = None) -> str:
+    """Generate ESC/POS commands for kitchen receipt"""
+    commands = bytearray()
+    
+    # Initialize printer
+    commands.extend([0x1B, 0x40])  # ESC @
+    
+    # Center align
+    commands.extend([0x1B, 0x61, 0x01])
+    
+    # Bold + Double size
+    commands.extend([0x1B, 0x45, 0x01])
+    commands.extend([0x1D, 0x21, 0x11])
+    
+    commands.extend(b"** KITCHEN **\n")
+    
+    # Normal size
+    commands.extend([0x1D, 0x21, 0x00])
+    
+    if business_info.get('name'):
+        commands.extend(f"{business_info['name']}\n".encode())
+    
+    commands.extend(b"\n")
+    
+    # Double size for order number
+    commands.extend([0x1D, 0x21, 0x11])
+    commands.extend(f"Order #{str(order.get('order_number', 'N/A')).zfill(3)}\n".encode())
+    
+    # Normal size
+    commands.extend([0x1D, 0x21, 0x00])
+    
+    if table_info:
+        commands.extend([0x1D, 0x21, 0x01])  # Double width
+        commands.extend(f"TABLE {table_info['number']}\n".encode())
+        commands.extend([0x1D, 0x21, 0x00])
+    
+    commands.extend(b"\n")
+    
+    # Left align for items
+    commands.extend([0x1B, 0x61, 0x00])
+    
+    # Bold off
+    commands.extend([0x1B, 0x45, 0x00])
+    
+    commands.extend(f"Server: {order.get('created_by', 'N/A')}\n".encode())
+    commands.extend(f"Time: {order.get('created_at', '')[:19].replace('T', ' ')}\n".encode())
+    commands.extend(b"=" * 40 + b"\n")
+    
+    # Bold on for items
+    commands.extend([0x1B, 0x45, 0x01])
+    
+    for item in order.get('items', []):
+        qty = item.get('quantity', 1)
+        name = item.get('product_name', 'Unknown')
+        # Double size for quantity
+        commands.extend([0x1D, 0x21, 0x01])
+        commands.extend(f"{qty}x ".encode())
+        commands.extend([0x1D, 0x21, 0x00])
+        commands.extend(f"{name}\n".encode())
+    
+    commands.extend([0x1B, 0x45, 0x00])
+    commands.extend(b"=" * 40 + b"\n")
+    
+    # Feed and cut
+    commands.extend([0x1B, 0x64, 0x05])
+    commands.extend([0x1D, 0x56, 0x00])
+    
+    return base64.b64encode(commands).decode()
+
+def generate_escpos_customer_receipt(order: dict, business_info: dict, table_info: dict = None) -> str:
+    """Generate ESC/POS commands for customer receipt"""
+    commands = bytearray()
+    
+    # Initialize printer
+    commands.extend([0x1B, 0x40])
+    
+    # Center align
+    commands.extend([0x1B, 0x61, 0x01])
+    
+    # Bold + Double size for header
+    commands.extend([0x1B, 0x45, 0x01])
+    commands.extend([0x1D, 0x21, 0x11])
+    
+    if business_info.get('name'):
+        commands.extend(f"{business_info['name']}\n".encode())
+    else:
+        commands.extend(b"RECEIPT\n")
+    
+    # Normal size
+    commands.extend([0x1D, 0x21, 0x00])
+    commands.extend([0x1B, 0x45, 0x00])
+    
+    if business_info.get('address_line1'):
+        commands.extend(f"{business_info['address_line1']}\n".encode())
+    if business_info.get('city') and business_info.get('postcode'):
+        commands.extend(f"{business_info['city']} {business_info['postcode']}\n".encode())
+    if business_info.get('phone'):
+        commands.extend(f"Tel: {business_info['phone']}\n".encode())
+    if business_info.get('vat_number'):
+        commands.extend(f"VAT: {business_info['vat_number']}\n".encode())
+    
+    commands.extend(b"\n")
+    
+    # Left align
+    commands.extend([0x1B, 0x61, 0x00])
+    
+    commands.extend(f"Order #: {str(order.get('order_number', 'N/A')).zfill(3)}\n".encode())
+    if table_info:
+        commands.extend(f"Table: {table_info['number']}\n".encode())
+    commands.extend(f"Server: {order.get('created_by', 'N/A')}\n".encode())
+    commands.extend(f"Date: {order.get('created_at', '')[:19].replace('T', ' ')}\n".encode())
+    commands.extend(f"Payment: {order.get('payment_method', 'N/A').upper()}\n".encode())
+    
+    commands.extend(b"-" * 40 + b"\n")
+    
+    # Items
+    for item in order.get('items', []):
+        qty = item.get('quantity', 1)
+        name = item.get('product_name', 'Unknown')[:20]
+        price = item.get('unit_price', 0)
+        total = item.get('total', 0)
+        commands.extend(f"{qty}x {name}\n".encode())
+        commands.extend(f"   ${price:.2f} x {qty} = ${total:.2f}\n".encode())
+    
+    commands.extend(b"-" * 40 + b"\n")
+    
+    # Totals - right align
+    subtotal = order.get('subtotal', 0)
+    tip = order.get('tip_amount', 0)
+    total = order.get('total_amount', 0)
+    
+    commands.extend(f"{'Subtotal:':>30} ${subtotal:.2f}\n".encode())
+    if tip > 0:
+        tip_pct = order.get('tip_percentage', 0)
+        commands.extend(f"{f'Tip ({tip_pct}%):':>30} ${tip:.2f}\n".encode())
+    
+    # Bold for total
+    commands.extend([0x1B, 0x45, 0x01])
+    commands.extend([0x1D, 0x21, 0x01])  # Double width
+    commands.extend(f"{'TOTAL:':>20} ${total:.2f}\n".encode())
+    commands.extend([0x1D, 0x21, 0x00])
+    commands.extend([0x1B, 0x45, 0x00])
+    
+    commands.extend(b"\n")
+    
+    # Center align for footer
+    commands.extend([0x1B, 0x61, 0x01])
+    
+    if business_info.get('receipt_footer'):
+        commands.extend(f"{business_info['receipt_footer']}\n".encode())
+    else:
+        commands.extend(b"Thank you for your visit!\n")
+    
+    commands.extend(b"\nPowered by HevaPOS\n")
+    
+    # Feed and cut
+    commands.extend([0x1B, 0x64, 0x05])
+    commands.extend([0x1D, 0x56, 0x00])
+    
+    return base64.b64encode(commands).decode()
+
+# ===== TABLE API ENDPOINTS =====
+
+@api_router.get("/tables", response_model=List[Table])
+async def get_tables(current_user: User = Depends(get_current_user)):
+    """Get all tables for the restaurant"""
+    query = {}
+    if current_user.role != 'platform_owner' and current_user.restaurant_id:
+        query["restaurant_id"] = current_user.restaurant_id
+    tables = await db.tables.find(query, {"_id": 0}).sort("number", 1).to_list(200)
+    return [Table(**t) for t in tables]
+
+@api_router.post("/tables", response_model=Table)
+async def create_table(table_data: TableCreate, current_user: User = Depends(require_admin)):
+    """Create a new table"""
+    if not current_user.restaurant_id and current_user.role != 'platform_owner':
+        raise HTTPException(status_code=400, detail="No restaurant associated with user")
+    
+    restaurant_id = current_user.restaurant_id or "platform"
+    
+    # Check if table number already exists
+    existing = await db.tables.find_one({
+        "restaurant_id": restaurant_id,
+        "number": table_data.number
+    })
+    if existing:
+        raise HTTPException(status_code=400, detail=f"Table {table_data.number} already exists")
+    
+    table_id = f"table_{datetime.now(timezone.utc).timestamp()}"
+    table_dict = {
+        "id": table_id,
+        "number": table_data.number,
+        "name": table_data.name or f"Table {table_data.number}",
+        "capacity": table_data.capacity,
+        "status": "available",
+        "restaurant_id": restaurant_id,
+        "current_order_id": None,
+        "merged_with": None,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.tables.insert_one(table_dict)
+    return Table(**table_dict)
+
+@api_router.put("/tables/{table_id}", response_model=Table)
+async def update_table(table_id: str, table_data: TableUpdate, current_user: User = Depends(require_admin)):
+    """Update a table"""
+    update_dict = {k: v for k, v in table_data.model_dump().items() if v is not None}
+    
+    if update_dict:
+        await db.tables.update_one({"id": table_id}, {"$set": update_dict})
+    
+    updated = await db.tables.find_one({"id": table_id}, {"_id": 0})
+    if not updated:
+        raise HTTPException(status_code=404, detail="Table not found")
+    return Table(**updated)
+
+@api_router.delete("/tables/{table_id}")
+async def delete_table(table_id: str, current_user: User = Depends(require_admin)):
+    """Delete a table"""
+    table = await db.tables.find_one({"id": table_id}, {"_id": 0})
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found")
+    
+    if table.get("status") == "occupied":
+        raise HTTPException(status_code=400, detail="Cannot delete occupied table")
+    
+    await db.tables.delete_one({"id": table_id})
+    return {"message": "Table deleted"}
+
+@api_router.post("/tables/{table_id}/assign-order")
+async def assign_order_to_table(table_id: str, order_id: str, current_user: User = Depends(get_current_user)):
+    """Assign an order to a table"""
+    table = await db.tables.find_one({"id": table_id}, {"_id": 0})
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found")
+    
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Update table
+    await db.tables.update_one(
+        {"id": table_id},
+        {"$set": {"current_order_id": order_id, "status": "occupied"}}
+    )
+    
+    # Update order with table_id
+    await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {"table_id": table_id}}
+    )
+    
+    return {"message": f"Order assigned to table {table['number']}"}
+
+@api_router.post("/tables/{table_id}/clear")
+async def clear_table(table_id: str, current_user: User = Depends(get_current_user)):
+    """Clear a table after order is complete"""
+    table = await db.tables.find_one({"id": table_id}, {"_id": 0})
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found")
+    
+    await db.tables.update_one(
+        {"id": table_id},
+        {"$set": {"current_order_id": None, "status": "available", "merged_with": None}}
+    )
+    
+    return {"message": f"Table {table['number']} cleared"}
+
+@api_router.post("/tables/merge")
+async def merge_tables(merge_data: TableMerge, current_user: User = Depends(require_admin)):
+    """Merge multiple tables together"""
+    if len(merge_data.table_ids) < 2:
+        raise HTTPException(status_code=400, detail="Need at least 2 tables to merge")
+    
+    tables = await db.tables.find({"id": {"$in": merge_data.table_ids}}, {"_id": 0}).to_list(100)
+    if len(tables) != len(merge_data.table_ids):
+        raise HTTPException(status_code=404, detail="One or more tables not found")
+    
+    # Use the first table as the primary
+    primary_table = tables[0]
+    other_table_ids = merge_data.table_ids[1:]
+    
+    # Update primary table
+    await db.tables.update_one(
+        {"id": primary_table["id"]},
+        {"$set": {
+            "merged_with": other_table_ids,
+            "status": "occupied",
+            "capacity": sum(t["capacity"] for t in tables)
+        }}
+    )
+    
+    # Mark other tables as merged
+    await db.tables.update_many(
+        {"id": {"$in": other_table_ids}},
+        {"$set": {"status": "merged", "merged_with": [primary_table["id"]]}}
+    )
+    
+    return {
+        "message": f"Tables merged into Table {primary_table['number']}",
+        "primary_table_id": primary_table["id"],
+        "merged_table_ids": other_table_ids
+    }
+
+@api_router.post("/tables/{table_id}/unmerge")
+async def unmerge_tables(table_id: str, current_user: User = Depends(require_admin)):
+    """Unmerge previously merged tables"""
+    table = await db.tables.find_one({"id": table_id}, {"_id": 0})
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found")
+    
+    if not table.get("merged_with"):
+        raise HTTPException(status_code=400, detail="Table is not merged")
+    
+    merged_ids = table["merged_with"]
+    
+    # Get original capacity
+    original_table = await db.tables.find_one({"id": table_id, "merged_with": {"$exists": False}}, {"_id": 0})
+    original_capacity = original_table["capacity"] if original_table else 4
+    
+    # Reset primary table
+    await db.tables.update_one(
+        {"id": table_id},
+        {"$set": {"merged_with": None, "status": "available", "capacity": original_capacity}}
+    )
+    
+    # Reset other tables
+    await db.tables.update_many(
+        {"id": {"$in": merged_ids}},
+        {"$set": {"merged_with": None, "status": "available"}}
+    )
+    
+    return {"message": "Tables unmerged successfully"}
+
+@api_router.post("/tables/{table_id}/split-bill")
+async def split_table_bill(table_id: str, split_data: TableSplitBill, current_user: User = Depends(get_current_user)):
+    """Split the bill for a table"""
+    table = await db.tables.find_one({"id": table_id}, {"_id": 0})
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found")
+    
+    order = await db.orders.find_one({"id": split_data.order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    # Create split orders from the original
+    split_orders = []
+    for i, split in enumerate(split_data.splits):
+        split_id = f"{split_data.order_id}_split_{i+1}"
+        split_order = {
+            "id": split_id,
+            "original_order_id": split_data.order_id,
+            "table_id": table_id,
+            "items": split.get("items", []),
+            "total_amount": sum(item.get("total", 0) for item in split.get("items", [])),
+            "split_number": i + 1,
+            "status": "pending",
+            "created_at": datetime.now(timezone.utc).isoformat()
+        }
+        await db.split_orders.insert_one(split_order)
+        split_orders.append(split_order)
+    
+    return {
+        "message": f"Bill split into {len(split_data.splits)} parts",
+        "split_orders": split_orders
+    }
+
+# ===== RESERVATION API ENDPOINTS =====
+
+@api_router.get("/reservations", response_model=List[Reservation])
+async def get_reservations(
+    date: Optional[str] = None,
+    status: Optional[str] = None,
+    current_user: User = Depends(require_admin)
+):
+    """Get reservations for the restaurant"""
+    query = {}
+    if current_user.role != 'platform_owner' and current_user.restaurant_id:
+        query["restaurant_id"] = current_user.restaurant_id
+    
+    if date:
+        query["reservation_time"] = {"$regex": f"^{date}"}
+    if status:
+        query["status"] = status
+    
+    reservations = await db.reservations.find(query, {"_id": 0}).sort("reservation_time", 1).to_list(500)
+    return [Reservation(**r) for r in reservations]
+
+@api_router.post("/reservations", response_model=Reservation)
+async def create_reservation(res_data: ReservationCreate, current_user: User = Depends(require_admin)):
+    """Create a new reservation"""
+    if not current_user.restaurant_id and current_user.role != 'platform_owner':
+        raise HTTPException(status_code=400, detail="No restaurant associated with user")
+    
+    restaurant_id = current_user.restaurant_id or "platform"
+    
+    # Check table exists
+    table = await db.tables.find_one({"id": res_data.table_id}, {"_id": 0})
+    if not table:
+        raise HTTPException(status_code=404, detail="Table not found")
+    
+    # Check for conflicting reservations
+    res_time = datetime.fromisoformat(res_data.reservation_time)
+    # Make timezone-aware if naive
+    if res_time.tzinfo is None:
+        res_time = res_time.replace(tzinfo=timezone.utc)
+    res_end = res_time + timedelta(minutes=res_data.duration_minutes)
+    
+    conflicts = await db.reservations.find({
+        "table_id": res_data.table_id,
+        "status": {"$in": ["confirmed", "seated"]},
+        "reservation_time": {"$lt": res_end.isoformat()},
+    }).to_list(100)
+    
+    for conflict in conflicts:
+        conflict_time = datetime.fromisoformat(conflict["reservation_time"])
+        # Make timezone-aware if naive
+        if conflict_time.tzinfo is None:
+            conflict_time = conflict_time.replace(tzinfo=timezone.utc)
+        conflict_end = conflict_time + timedelta(minutes=conflict.get("duration_minutes", 120))
+        if conflict_time < res_end and conflict_end > res_time:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Table already reserved from {conflict_time.strftime('%H:%M')} to {conflict_end.strftime('%H:%M')}"
+            )
+    
+    res_id = f"res_{datetime.now(timezone.utc).timestamp()}"
+    res_dict = {
+        "id": res_id,
+        "table_id": res_data.table_id,
+        "customer_name": res_data.customer_name,
+        "customer_phone": res_data.customer_phone,
+        "party_size": res_data.party_size,
+        "reservation_time": res_data.reservation_time,
+        "duration_minutes": res_data.duration_minutes,
+        "status": "confirmed",
+        "notes": res_data.notes,
+        "restaurant_id": restaurant_id,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.reservations.insert_one(res_dict)
+    
+    # Update table status if reservation is for now
+    if res_time <= datetime.now(timezone.utc) <= res_end:
+        await db.tables.update_one(
+            {"id": res_data.table_id},
+            {"$set": {"status": "reserved"}}
+        )
+    
+    return Reservation(**res_dict)
+
+@api_router.put("/reservations/{res_id}", response_model=Reservation)
+async def update_reservation(res_id: str, res_data: ReservationUpdate, current_user: User = Depends(require_admin)):
+    """Update a reservation"""
+    update_dict = {k: v for k, v in res_data.model_dump().items() if v is not None}
+    
+    if update_dict:
+        await db.reservations.update_one({"id": res_id}, {"$set": update_dict})
+    
+    updated = await db.reservations.find_one({"id": res_id}, {"_id": 0})
+    if not updated:
+        raise HTTPException(status_code=404, detail="Reservation not found")
+    
+    # Update table status based on reservation status
+    if res_data.status:
+        table_status = "available"
+        if res_data.status == "confirmed":
+            res_time = datetime.fromisoformat(updated["reservation_time"])
+            res_end = res_time + timedelta(minutes=updated.get("duration_minutes", 120))
+            if res_time <= datetime.now(timezone.utc) <= res_end:
+                table_status = "reserved"
+        elif res_data.status == "seated":
+            table_status = "occupied"
+        
+        await db.tables.update_one(
+            {"id": updated["table_id"]},
+            {"$set": {"status": table_status}}
+        )
+    
+    return Reservation(**updated)
+
+@api_router.delete("/reservations/{res_id}")
+async def cancel_reservation(res_id: str, current_user: User = Depends(require_admin)):
+    """Cancel a reservation"""
+    reservation = await db.reservations.find_one({"id": res_id}, {"_id": 0})
+    if not reservation:
+        raise HTTPException(status_code=404, detail="Reservation not found")
+    
+    await db.reservations.update_one(
+        {"id": res_id},
+        {"$set": {"status": "cancelled"}}
+    )
+    
+    # Free up the table
+    await db.tables.update_one(
+        {"id": reservation["table_id"]},
+        {"$set": {"status": "available"}}
+    )
+    
+    return {"message": "Reservation cancelled"}
+
+@api_router.post("/reservations/{res_id}/seat")
+async def seat_reservation(res_id: str, current_user: User = Depends(get_current_user)):
+    """Mark reservation as seated"""
+    reservation = await db.reservations.find_one({"id": res_id}, {"_id": 0})
+    if not reservation:
+        raise HTTPException(status_code=404, detail="Reservation not found")
+    
+    await db.reservations.update_one(
+        {"id": res_id},
+        {"$set": {"status": "seated"}}
+    )
+    
+    await db.tables.update_one(
+        {"id": reservation["table_id"]},
+        {"$set": {"status": "occupied"}}
+    )
+    
+    return {"message": f"Party of {reservation['party_size']} seated at table"}
+
+@api_router.post("/reservations/{res_id}/complete")
+async def complete_reservation(res_id: str, current_user: User = Depends(get_current_user)):
+    """Mark reservation as completed"""
+    reservation = await db.reservations.find_one({"id": res_id}, {"_id": 0})
+    if not reservation:
+        raise HTTPException(status_code=404, detail="Reservation not found")
+    
+    await db.reservations.update_one(
+        {"id": res_id},
+        {"$set": {"status": "completed"}}
+    )
+    
+    await db.tables.update_one(
+        {"id": reservation["table_id"]},
+        {"$set": {"status": "available"}}
+    )
+    
+    return {"message": "Reservation completed"}
 
 # Create the main app without a prefix
 app = FastAPI()

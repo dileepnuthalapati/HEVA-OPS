@@ -19,6 +19,8 @@ import Reports from './pages/Reports';
 import CashDrawer from './pages/CashDrawer';
 import RestaurantSettings from './pages/RestaurantSettings';
 import RestaurantManagement from './pages/RestaurantManagement';
+import TableManagement from './pages/TableManagement';
+import PrinterSettings from './pages/PrinterSettings';
 
 // Styles
 import './App.css';
@@ -89,6 +91,8 @@ const AppRoutes = () => {
       <Route path="/reports" element={<ProtectedRoute adminOnly><Reports /></ProtectedRoute>} />
       <Route path="/cash-drawer" element={<ProtectedRoute adminOnly><CashDrawer /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute adminOnly><RestaurantSettings /></ProtectedRoute>} />
+      <Route path="/tables" element={<ProtectedRoute adminOnly><TableManagement /></ProtectedRoute>} />
+      <Route path="/printers" element={<ProtectedRoute adminOnly><PrinterSettings /></ProtectedRoute>} />
       
       {/* All Authenticated Users */}
       <Route path="/pos" element={<ProtectedRoute><POSScreen /></ProtectedRoute>} />

@@ -4,7 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { reportAPI } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { LayoutDashboard, Package, FolderTree, ShoppingCart, FileText, LogOut, TrendingUp, DollarSign, ShoppingBag, Wallet, Store } from 'lucide-react';
+import { LayoutDashboard, Package, FolderTree, ShoppingCart, FileText, LogOut, TrendingUp, DollarSign, ShoppingBag, Wallet, Store, Users, Printer, Settings } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Sidebar = ({ active }) => {
@@ -13,11 +13,15 @@ const Sidebar = ({ active }) => {
   const menuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     ...(canAccessRestaurants ? [{ path: '/restaurants', icon: Store, label: 'Restaurants' }] : []),
+    { path: '/tables', icon: Users, label: 'Tables' },
     { path: '/categories', icon: FolderTree, label: 'Categories' },
     { path: '/products', icon: Package, label: 'Products' },
-    { path: '/orders', icon: ShoppingCart, label: 'Orders' },
+    { path: '/pos', icon: ShoppingCart, label: 'POS' },
+    { path: '/orders', icon: FileText, label: 'Orders' },
     { path: '/reports', icon: FileText, label: 'Reports' },
     { path: '/cash-drawer', icon: Wallet, label: 'Cash Drawer' },
+    { path: '/printers', icon: Printer, label: 'Printers' },
+    { path: '/settings', icon: Settings, label: 'Settings' },
   ];
 
   return (
