@@ -126,19 +126,28 @@ Build and deploy a multi-tenant restaurant POS (Point of Sale) system that allow
 - [x] POS has standalone view (no sidebar)
 - [x] Route protection prevents cross-role access
 
+### Session 4 - POS & User Management (March 2026)
+- [x] **Table Selection in POS** - Dropdown in cart to assign orders to tables
+- [x] **Restaurant User Creation** - Platform Owner can create admin/staff users
+- [x] **User Management Dialog** - View, add, delete users per restaurant
+- [x] **Kitchen Receipt Auto-Print** - ESC/POS commands generated on order creation
+- [x] **PDF Fallback** - When no printer connected, downloads PDF receipt
+- [x] **Pending Orders Table Info** - Shows table badge on orders with tables
+- [x] All 41 backend tests passing (100%)
+
 ---
 
 ## Backlog (P1 - Next Priority)
 
 ### POS Enhancements
-- [ ] Table selection in POS order flow
-- [ ] Print kitchen receipt when order placed
-- [ ] Split bill functionality in POS
+- [ ] Clear table automatically when order is completed
+- [ ] Split bill functionality in payment dialog
+- [ ] Print customer receipt after payment complete
 
 ### Platform Owner
-- [ ] Create restaurant admin users during onboarding
-- [ ] Subscription status management API
+- [ ] Subscription status management API (trial → active → suspended)
 - [ ] Email notifications for trial expiry
+- [ ] Revenue dashboard with charts
 
 ---
 
