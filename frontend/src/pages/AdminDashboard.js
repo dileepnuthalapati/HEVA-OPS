@@ -4,15 +4,15 @@ import { useAuth } from '../context/AuthContext';
 import { reportAPI } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { LayoutDashboard, Package, FolderTree, ShoppingCart, FileText, LogOut, TrendingUp, DollarSign, ShoppingBag, Wallet } from 'lucide-react';
+import { LayoutDashboard, Package, FolderTree, ShoppingCart, FileText, LogOut, TrendingUp, DollarSign, ShoppingBag, Wallet, Store } from 'lucide-react';
 import { toast } from 'sonner';
 
 const Sidebar = ({ active }) => {
-  const { logout } = useAuth();
+  const { logout, canAccessRestaurants } = useAuth();
 
   const menuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/restaurants', icon: Store, label: 'Restaurants' },
+    ...(canAccessRestaurants ? [{ path: '/restaurants', icon: Store, label: 'Restaurants' }] : []),
     { path: '/categories', icon: FolderTree, label: 'Categories' },
     { path: '/products', icon: Package, label: 'Products' },
     { path: '/orders', icon: ShoppingCart, label: 'Orders' },
