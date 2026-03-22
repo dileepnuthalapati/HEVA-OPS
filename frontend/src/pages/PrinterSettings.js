@@ -165,7 +165,7 @@ const PrinterSettings = () => {
   if (loading) {
     return (
       <div className="flex">
-        <Sidebar active={location.pathname} />
+        <Sidebar />
         <div className="flex-1 p-8">
           <div className="text-center py-12">Loading...</div>
         </div>
@@ -175,7 +175,7 @@ const PrinterSettings = () => {
 
   return (
     <div className="flex">
-      <Sidebar active={location.pathname} />
+      <Sidebar />
       <div className="flex-1 p-8">
         <div className="max-w-5xl mx-auto">
           {/* Header */}

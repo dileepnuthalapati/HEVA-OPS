@@ -25,7 +25,7 @@ const Login = () => {
       
       // Route based on role
       if (response.user.role === 'platform_owner') {
-        navigate('/restaurants');
+        navigate('/platform/dashboard');
       } else if (response.user.role === 'admin') {
         navigate('/dashboard');
       } else {

@@ -8,19 +8,27 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { OfflineProvider } from './context/OfflineContext';
 import OfflineIndicator from './components/OfflineIndicator';
 
-// Pages
-import Login from './pages/Login';
+// Pages - Platform Owner
+import PlatformDashboard from './pages/PlatformDashboard';
+import PlatformCategories from './pages/PlatformCategories';
+import PlatformReports from './pages/PlatformReports';
+import PlatformSettings from './pages/PlatformSettings';
+import RestaurantManagement from './pages/RestaurantManagement';
+
+// Pages - Restaurant Admin
 import AdminDashboard from './pages/AdminDashboard';
-import POSScreen from './pages/POSScreen';
 import ProductManagement from './pages/ProductManagement';
 import CategoryManagement from './pages/CategoryManagement';
 import OrderHistory from './pages/OrderHistory';
 import Reports from './pages/Reports';
 import CashDrawer from './pages/CashDrawer';
 import RestaurantSettings from './pages/RestaurantSettings';
-import RestaurantManagement from './pages/RestaurantManagement';
 import TableManagement from './pages/TableManagement';
 import PrinterSettings from './pages/PrinterSettings';
+
+// Pages - All Users
+import Login from './pages/Login';
+import POSScreen from './pages/POSScreen';
 
 // Styles
 import './App.css';
@@ -31,7 +39,7 @@ const API = `${BACKEND_URL}/api`;
 
 // --- Components ---
 
-const ProtectedRoute = ({ children, adminOnly = false, platformOwnerOnly = false }) => {
+const ProtectedRoute = ({ children, adminOnly = false, platformOwnerOnly = false, restaurantAdminOnly = false }) => {
   const { user, loading, isPlatformOwner, isRestaurantAdmin } = useAuth();
 
   if (loading) {
@@ -49,6 +57,14 @@ const ProtectedRoute = ({ children, adminOnly = false, platformOwnerOnly = false
   // Platform owner only routes
   if (platformOwnerOnly && !isPlatformOwner) {
     return <Navigate to={isRestaurantAdmin ? "/dashboard" : "/pos"} replace />;
+  }
+
+  // Restaurant admin only routes (not platform owner)
+  if (restaurantAdminOnly && !isRestaurantAdmin) {
+    if (isPlatformOwner) {
+      return <Navigate to="/platform/dashboard" replace />;
+    }
+    return <Navigate to="/pos" replace />;
   }
 
   // Admin routes (platform owner OR restaurant admin)
@@ -70,7 +86,7 @@ const AppRoutes = () => {
         element={
           user ? (
             isPlatformOwner ? (
-              <Navigate to="/restaurants" replace />
+              <Navigate to="/platform/dashboard" replace />
             ) : isRestaurantAdmin ? (
               <Navigate to="/dashboard" replace />
             ) : (
@@ -81,20 +97,25 @@ const AppRoutes = () => {
           )
         }
       />
+      
       {/* Platform Owner Only */}
+      <Route path="/platform/dashboard" element={<ProtectedRoute platformOwnerOnly><PlatformDashboard /></ProtectedRoute>} />
       <Route path="/restaurants" element={<ProtectedRoute platformOwnerOnly><RestaurantManagement /></ProtectedRoute>} />
+      <Route path="/platform/categories" element={<ProtectedRoute platformOwnerOnly><PlatformCategories /></ProtectedRoute>} />
+      <Route path="/platform/reports" element={<ProtectedRoute platformOwnerOnly><PlatformReports /></ProtectedRoute>} />
+      <Route path="/platform/settings" element={<ProtectedRoute platformOwnerOnly><PlatformSettings /></ProtectedRoute>} />
       
-      {/* Restaurant Admin Only */}
-      <Route path="/dashboard" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />
-      <Route path="/products" element={<ProtectedRoute adminOnly><ProductManagement /></ProtectedRoute>} />
-      <Route path="/categories" element={<ProtectedRoute adminOnly><CategoryManagement /></ProtectedRoute>} />
-      <Route path="/reports" element={<ProtectedRoute adminOnly><Reports /></ProtectedRoute>} />
-      <Route path="/cash-drawer" element={<ProtectedRoute adminOnly><CashDrawer /></ProtectedRoute>} />
-      <Route path="/settings" element={<ProtectedRoute adminOnly><RestaurantSettings /></ProtectedRoute>} />
-      <Route path="/tables" element={<ProtectedRoute adminOnly><TableManagement /></ProtectedRoute>} />
-      <Route path="/printers" element={<ProtectedRoute adminOnly><PrinterSettings /></ProtectedRoute>} />
+      {/* Restaurant Admin Only (not platform owner) */}
+      <Route path="/dashboard" element={<ProtectedRoute restaurantAdminOnly><AdminDashboard /></ProtectedRoute>} />
+      <Route path="/tables" element={<ProtectedRoute restaurantAdminOnly><TableManagement /></ProtectedRoute>} />
+      <Route path="/categories" element={<ProtectedRoute restaurantAdminOnly><CategoryManagement /></ProtectedRoute>} />
+      <Route path="/products" element={<ProtectedRoute restaurantAdminOnly><ProductManagement /></ProtectedRoute>} />
+      <Route path="/reports" element={<ProtectedRoute restaurantAdminOnly><Reports /></ProtectedRoute>} />
+      <Route path="/cash-drawer" element={<ProtectedRoute restaurantAdminOnly><CashDrawer /></ProtectedRoute>} />
+      <Route path="/printers" element={<ProtectedRoute restaurantAdminOnly><PrinterSettings /></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute restaurantAdminOnly><RestaurantSettings /></ProtectedRoute>} />
       
-      {/* All Authenticated Users */}
+      {/* POS Staff & Restaurant Admin */}
       <Route path="/pos" element={<ProtectedRoute><POSScreen /></ProtectedRoute>} />
       <Route path="/orders" element={<ProtectedRoute><OrderHistory /></ProtectedRoute>} />
     </Routes>
