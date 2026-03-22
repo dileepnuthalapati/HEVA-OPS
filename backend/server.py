@@ -916,7 +916,8 @@ async def get_report_stats(start_date: str, end_date: str, current_user: User = 
 app = FastAPI()
 
 # Create a router with the /api prefix
-api_router = APIRouter(prefix="/api")
+# api_router already defined at line 35 - commenting this duplicate!
+# api_router = APIRouter(prefix="/api")
 
 
 # Define Models
