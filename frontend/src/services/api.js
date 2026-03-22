@@ -1,12 +1,11 @@
 import axios from 'axios';
 import { saveToIndexedDB, getAllFromIndexedDB, getUnsyncedOrders } from './db';
 
-// For production APK, backend must be accessible
-// Option 1: Deploy backend to cloud (Heroku, AWS, Railway)
-// Option 2: Use ngrok/localtunnel for testing
-// Option 3: Ensure phone and computer on same WiFi, use computer's local IP
-
+// TEMPORARY: Using test-login endpoint for preview testing
 const API_URL = process.env.REACT_APP_BACKEND_URL || 'https://your-backend-url.com';
+
+// Use test endpoint for now
+export const USE_TEST_LOGIN = true;
 const API = `${API_URL}/api`;
 
 console.log('Connecting to API at:', API);
@@ -44,7 +43,8 @@ export const authAPI = {
     return response.data;
   },
   login: async (username, password) => {
-    const response = await api.post('/auth/login', { username, password });
+    // TEMPORARY: Use test-login for preview testing
+    const response = await api.post('/auth/test-login', { username, password });
     if (response.data.access_token) {
       setAuthToken(response.data.access_token);
     }
