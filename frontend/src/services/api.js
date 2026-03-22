@@ -1,16 +1,12 @@
 import axios from 'axios';
 import { saveToIndexedDB, getAllFromIndexedDB, getUnsyncedOrders } from './db';
 
-/**
- * CONFIGURATION FOR YOUR DEVICE:
- * 1. Find your computer's IP (cmd -> ipconfig -> IPv4 Address)
- * 2. Replace '10.0.2.2' below with that IP if using a physical phone.
- * 3. Ensure your backend is running with --host 0.0.0.0
- */
-const COMPUTER_IP = '192.168.0.252'; // Change this to your 192.168.x.x IP for physical devices
-const DEFAULT_API_URL = `http://${COMPUTER_IP}:5000`;
+// For production APK, backend must be accessible
+// Option 1: Deploy backend to cloud (Heroku, AWS, Railway)
+// Option 2: Use ngrok/localtunnel for testing
+// Option 3: Ensure phone and computer on same WiFi, use computer's local IP
 
-const API_URL = process.env.REACT_APP_BACKEND_URL || DEFAULT_API_URL;
+const API_URL = process.env.REACT_APP_BACKEND_URL || 'https://your-backend-url.com';
 const API = `${API_URL}/api`;
 
 console.log('Connecting to API at:', API);
