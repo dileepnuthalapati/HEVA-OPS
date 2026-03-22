@@ -29,8 +29,8 @@ const API = `${BACKEND_URL}/api`;
 
 // --- Components ---
 
-const ProtectedRoute = ({ children, adminOnly = false }) => {
-  const { user, loading } = useAuth();
+const ProtectedRoute = ({ children, adminOnly = false, platformOwnerOnly = false }) => {
+  const { user, loading, isPlatformOwner, isRestaurantAdmin } = useAuth();
 
   if (loading) {
     return (
@@ -44,7 +44,13 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
     return <Navigate to="/login" replace />;
   }
 
-  if (adminOnly && user.role !== 'admin') {
+  // Platform owner only routes
+  if (platformOwnerOnly && !isPlatformOwner) {
+    return <Navigate to={isRestaurantAdmin ? "/dashboard" : "/pos"} replace />;
+  }
+
+  // Admin routes (platform owner OR restaurant admin)
+  if (adminOnly && user.role === 'user') {
     return <Navigate to="/pos" replace />;
   }
 
@@ -52,7 +58,7 @@ const ProtectedRoute = ({ children, adminOnly = false }) => {
 };
 
 const AppRoutes = () => {
-  const { user } = useAuth();
+  const { user, isPlatformOwner, isRestaurantAdmin } = useAuth();
 
   return (
     <Routes>
@@ -61,7 +67,9 @@ const AppRoutes = () => {
         path="/"
         element={
           user ? (
-            user.role === 'admin' ? (
+            isPlatformOwner ? (
+              <Navigate to="/restaurants" replace />
+            ) : isRestaurantAdmin ? (
               <Navigate to="/dashboard" replace />
             ) : (
               <Navigate to="/pos" replace />
@@ -71,15 +79,20 @@ const AppRoutes = () => {
           )
         }
       />
+      {/* Platform Owner Only */}
+      <Route path="/restaurants" element={<ProtectedRoute platformOwnerOnly><RestaurantManagement /></ProtectedRoute>} />
+      
+      {/* Restaurant Admin Only */}
       <Route path="/dashboard" element={<ProtectedRoute adminOnly><AdminDashboard /></ProtectedRoute>} />
-      <Route path="/pos" element={<ProtectedRoute><POSScreen /></ProtectedRoute>} />
       <Route path="/products" element={<ProtectedRoute adminOnly><ProductManagement /></ProtectedRoute>} />
       <Route path="/categories" element={<ProtectedRoute adminOnly><CategoryManagement /></ProtectedRoute>} />
-      <Route path="/orders" element={<ProtectedRoute><OrderHistory /></ProtectedRoute>} />
       <Route path="/reports" element={<ProtectedRoute adminOnly><Reports /></ProtectedRoute>} />
       <Route path="/cash-drawer" element={<ProtectedRoute adminOnly><CashDrawer /></ProtectedRoute>} />
-      <Route path="/settings" element={<ProtectedRoute><RestaurantSettings /></ProtectedRoute>} />
-      <Route path="/restaurants" element={<ProtectedRoute adminOnly><RestaurantManagement /></ProtectedRoute>} />
+      <Route path="/settings" element={<ProtectedRoute adminOnly><RestaurantSettings /></ProtectedRoute>} />
+      
+      {/* All Authenticated Users */}
+      <Route path="/pos" element={<ProtectedRoute><POSScreen /></ProtectedRoute>} />
+      <Route path="/orders" element={<ProtectedRoute><OrderHistory /></ProtectedRoute>} />
     </Routes>
   );
 };

@@ -5,10 +5,27 @@ const AuthContext = createContext();
 
 // DEMO MODE: Auto-login bypass for testing
 const DEMO_MODE = true;
-const DEMO_ADMIN = {
-  id: 'demo_admin',
+const DEMO_PLATFORM_OWNER = {
+  id: 'platform_owner_1',
   username: 'admin',
+  role: 'platform_owner', // New role!
+  restaurant_id: null, // Platform owner has no specific restaurant
+  created_at: new Date().toISOString()
+};
+
+const DEMO_RESTAURANT_ADMIN = {
+  id: 'restaurant_admin_1',
+  username: 'restaurant_admin',
   role: 'admin',
+  restaurant_id: 'restaurant_123', // Belongs to specific restaurant
+  created_at: new Date().toISOString()
+};
+
+const DEMO_RESTAURANT_USER = {
+  id: 'restaurant_user_1',
+  username: 'user',
+  role: 'user',
+  restaurant_id: 'restaurant_123',
   created_at: new Date().toISOString()
 };
 
@@ -17,11 +34,23 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // DEMO MODE: Auto-login as admin
+    // DEMO MODE: Auto-login based on URL param or default
     if (DEMO_MODE) {
-      console.log('🎭 DEMO MODE: Auto-logged in as admin');
-      setUser(DEMO_ADMIN);
-      localStorage.setItem('demo_user', JSON.stringify(DEMO_ADMIN));
+      const urlParams = new URLSearchParams(window.location.search);
+      const role = urlParams.get('role');
+      
+      let demoUser;
+      if (role === 'restaurant_admin') {
+        demoUser = DEMO_RESTAURANT_ADMIN;
+      } else if (role === 'user') {
+        demoUser = DEMO_RESTAURANT_USER;
+      } else {
+        demoUser = DEMO_PLATFORM_OWNER; // Default: platform owner
+      }
+      
+      console.log(`🎭 DEMO MODE: Auto-logged in as ${demoUser.role}`);
+      setUser(demoUser);
+      localStorage.setItem('demo_user', JSON.stringify(demoUser));
       setLoading(false);
       return;
     }
@@ -36,11 +65,16 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (username, password) => {
-    // DEMO MODE: Accept any login
+    // DEMO MODE: Return different users based on username
     if (DEMO_MODE) {
-      const demoUser = username === 'user' 
-        ? { ...DEMO_ADMIN, username: 'user', role: 'user', id: 'demo_user' }
-        : DEMO_ADMIN;
+      let demoUser;
+      if (username === 'restaurant_admin' || username === 'rest_admin') {
+        demoUser = DEMO_RESTAURANT_ADMIN;
+      } else if (username === 'user' || username === 'staff') {
+        demoUser = DEMO_RESTAURANT_USER;
+      } else {
+        demoUser = DEMO_PLATFORM_OWNER;
+      }
       setUser(demoUser);
       return { user: demoUser };
     }
@@ -59,8 +93,24 @@ export const AuthProvider = ({ children }) => {
     localStorage.removeItem('demo_user');
   };
 
+  // Role check helpers
+  const isPlatformOwner = user?.role === 'platform_owner';
+  const isRestaurantAdmin = user?.role === 'admin';
+  const isRestaurantUser = user?.role === 'user';
+  const canAccessRestaurants = isPlatformOwner; // Only platform owner
+
   return (
-    <AuthContext.Provider value={{ user, login, logout, loading, isAdmin: user?.role === 'admin' }}>
+    <AuthContext.Provider value={{ 
+      user, 
+      login, 
+      logout, 
+      loading, 
+      isPlatformOwner,
+      isRestaurantAdmin,
+      isRestaurantUser,
+      canAccessRestaurants,
+      isAdmin: isPlatformOwner || isRestaurantAdmin
+    }}>
       {children}
     </AuthContext.Provider>
   );
