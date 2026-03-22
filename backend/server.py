@@ -282,6 +282,13 @@ class ReservationUpdate(BaseModel):
     status: Optional[str] = None
     notes: Optional[str] = None
 
+# ===== RESTAURANT USER MODELS =====
+class RestaurantUserCreate(BaseModel):
+    username: str
+    password: str
+    role: str = "admin"  # admin or user
+    restaurant_id: str
+
 def verify_password(plain_password, hashed_password):
     return pwd_context.verify(plain_password, hashed_password)
 
@@ -376,6 +383,68 @@ async def login(credentials: UserLogin):
 @api_router.get("/auth/me", response_model=User)
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+# ===== RESTAURANT USER MANAGEMENT =====
+
+@api_router.post("/restaurants/{restaurant_id}/users", response_model=User)
+async def create_restaurant_user(restaurant_id: str, user_data: RestaurantUserCreate, current_user: User = Depends(require_platform_owner)):
+    """Platform Owner creates a user for a specific restaurant"""
+    # Verify restaurant exists
+    restaurant = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0})
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+    
+    # Check username is unique
+    existing = await db.users.find_one({"username": user_data.username})
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    
+    # Validate role
+    if user_data.role not in ["admin", "user"]:
+        raise HTTPException(status_code=400, detail="Role must be 'admin' or 'user'")
+    
+    user_id = f"user_{datetime.now(timezone.utc).timestamp()}"
+    hashed_password = get_password_hash(user_data.password)
+    user_dict = {
+        "id": user_id,
+        "username": user_data.username,
+        "password": hashed_password,
+        "role": user_data.role,
+        "restaurant_id": restaurant_id,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.users.insert_one(user_dict)
+    
+    # Add user to restaurant's users list
+    await db.restaurants.update_one(
+        {"id": restaurant_id},
+        {"$push": {"users": user_data.username}}
+    )
+    
+    return User(id=user_id, username=user_data.username, role=user_data.role, restaurant_id=restaurant_id, created_at=user_dict["created_at"])
+
+@api_router.get("/restaurants/{restaurant_id}/users")
+async def get_restaurant_users(restaurant_id: str, current_user: User = Depends(require_platform_owner)):
+    """Get all users for a specific restaurant"""
+    users = await db.users.find({"restaurant_id": restaurant_id}, {"_id": 0, "password": 0}).to_list(100)
+    return users
+
+@api_router.delete("/restaurants/{restaurant_id}/users/{user_id}")
+async def delete_restaurant_user(restaurant_id: str, user_id: str, current_user: User = Depends(require_platform_owner)):
+    """Delete a user from a restaurant"""
+    user = await db.users.find_one({"id": user_id, "restaurant_id": restaurant_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    await db.users.delete_one({"id": user_id})
+    
+    # Remove from restaurant's users list
+    await db.restaurants.update_one(
+        {"id": restaurant_id},
+        {"$pull": {"users": user["username"]}}
+    )
+    
+    return {"message": "User deleted"}
 
 @api_router.post("/restaurants", response_model=Restaurant)
 async def create_restaurant(restaurant_data: RestaurantCreate, current_user: User = Depends(require_platform_owner)):

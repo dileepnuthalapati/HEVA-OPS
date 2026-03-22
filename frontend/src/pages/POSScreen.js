@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { categoryAPI, productAPI, orderAPI } from '../services/api';
+import { categoryAPI, productAPI, orderAPI, tableAPI, printerAPI } from '../services/api';
 import printerService from '../services/printer';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
@@ -9,6 +9,7 @@ import { Separator } from '../components/ui/separator';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, DollarSign, CreditCard, Users } from 'lucide-react';
 
@@ -16,7 +17,9 @@ const POSScreen = () => {
   const { user, logout } = useAuth();
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
+  const [tables, setTables] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedTable, setSelectedTable] = useState(null);
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pendingOrders, setPendingOrders] = useState([]);
@@ -31,6 +34,7 @@ const POSScreen = () => {
   useEffect(() => {
     loadData();
     loadPendingOrders();
+    loadTables();
     checkPrinterSupport();
   }, []);
 
@@ -86,6 +90,15 @@ const POSScreen = () => {
       setPendingOrders(orders);
     } catch (error) {
       console.error('Failed to load pending orders:', error);
+    }
+  };
+
+  const loadTables = async () => {
+    try {
+      const tablesData = await tableAPI.getAll();
+      setTables(tablesData);
+    } catch (error) {
+      console.error('Failed to load tables:', error);
     }
   };
 
@@ -155,28 +168,43 @@ const POSScreen = () => {
       const order = await orderAPI.create({
         items: cart,
         total_amount: total,
+        table_id: selectedTable || null,
       });
       
-      // Try thermal printer first
-      if (printerConnected) {
-        try {
-          await printerService.printKitchenReceipt(order);
-          toast.success('Order placed! Kitchen receipt printed.');
-        } catch (error) {
-          console.error('Thermal print failed:', error);
-          // Fallback to PDF
+      // Print kitchen receipt via ESC/POS API
+      try {
+        const printResult = await printerAPI.printKitchenReceipt(order.id);
+        console.log('Kitchen receipt ESC/POS commands generated:', printResult);
+        
+        // If we have a connected thermal printer, send the commands
+        if (printerConnected && printerService.isConnected()) {
+          await printerService.printRaw(printResult.commands);
+          toast.success(`Order #${order.order_number} placed! Kitchen receipt printed.`);
+        } else {
+          // Fallback to PDF download
           const kitchenReceipt = await orderAPI.printKitchenReceipt(order.id);
           downloadPDF(kitchenReceipt, `kitchen_${String(order.order_number).padStart(3, '0')}.pdf`);
-          toast.success('Order placed! Kitchen receipt downloaded.');
+          toast.success(`Order #${order.order_number} placed! Kitchen receipt downloaded.`);
         }
-      } else {
-        // Download PDF
-        const kitchenReceipt = await orderAPI.printKitchenReceipt(order.id);
-        downloadPDF(kitchenReceipt, `kitchen_${String(order.order_number).padStart(3, '0')}.pdf`);
-        toast.success('Order placed! Kitchen receipt downloaded.');
+      } catch (printError) {
+        console.error('Print failed, falling back to PDF:', printError);
+        try {
+          const kitchenReceipt = await orderAPI.printKitchenReceipt(order.id);
+          downloadPDF(kitchenReceipt, `kitchen_${String(order.order_number).padStart(3, '0')}.pdf`);
+          toast.success(`Order #${order.order_number} placed! Kitchen receipt downloaded.`);
+        } catch (pdfError) {
+          toast.success(`Order #${order.order_number} placed!`);
+        }
+      }
+      
+      // Update table status if assigned
+      if (selectedTable) {
+        await tableAPI.assignOrder(selectedTable, order.id);
+        loadTables();
       }
       
       setCart([]);
+      setSelectedTable(null);
       loadPendingOrders();
     } catch (error) {
       toast.error('Failed to place order');
@@ -348,12 +376,21 @@ const POSScreen = () => {
               {pendingOrders.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">No pending orders</div>
               ) : (
-                pendingOrders.map((order) => (
+                pendingOrders.map((order) => {
+                  const orderTable = order.table_id ? tables.find(t => t.id === order.table_id) : null;
+                  return (
                   <Card key={order.id} data-testid={`pending-order-${order.id}`}>
                     <CardContent className="p-6">
                       <div className="flex justify-between items-start mb-4">
                         <div>
-                          <div className="text-lg font-bold">Order #{String(order.order_number).padStart(3, '0')}</div>
+                          <div className="text-lg font-bold flex items-center gap-2">
+                            Order #{String(order.order_number).padStart(3, '0')}
+                            {orderTable && (
+                              <span className="text-sm bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                                Table {orderTable.number}
+                              </span>
+                            )}
+                          </div>
                           <div className="text-sm text-muted-foreground">
                             {new Date(order.created_at).toLocaleString()}
                           </div>
@@ -384,7 +421,7 @@ const POSScreen = () => {
                       </Button>
                     </CardContent>
                   </Card>
-                ))
+                )})
               )}
             </div>
           ) : products.length === 0 ? (
@@ -432,6 +469,37 @@ const POSScreen = () => {
               </Button>
             )}
           </div>
+        </div>
+
+        {/* Table Selection */}
+        <div className="px-6 py-3 border-b bg-slate-50">
+          <Label className="text-xs font-medium text-muted-foreground mb-2 block">Assign to Table</Label>
+          <Select value={selectedTable || "no-table"} onValueChange={(v) => setSelectedTable(v === "no-table" ? null : v)}>
+            <SelectTrigger data-testid="table-selector" className="w-full">
+              <SelectValue placeholder="Select table (optional)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="no-table">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-muted-foreground" />
+                  No Table (Takeaway)
+                </div>
+              </SelectItem>
+              {tables.filter(t => t.status === 'available' || t.status === 'occupied').map((table) => (
+                <SelectItem key={table.id} value={table.id}>
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    Table {table.number}
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${
+                      table.status === 'available' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {table.status === 'available' ? 'Free' : 'Occupied'}
+                    </span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <ScrollArea className="flex-1 p-6">
