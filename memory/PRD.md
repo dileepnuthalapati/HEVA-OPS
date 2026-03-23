@@ -135,14 +135,24 @@ Build and deploy a multi-tenant restaurant POS (Point of Sale) system that allow
 - [x] **Pending Orders Table Info** - Shows table badge on orders with tables
 - [x] All 41 backend tests passing (100%)
 
+### Session 5 - Payment Features (March 2026)
+- [x] **Clear Table on Payment** - Table auto-cleared when order completed
+- [x] **Split Bill UI** - Visual breakdown of per-person amounts
+- [x] **Split Summary** - Shows each person's portion clearly
+- [x] **Cash/Card Per-Person Amount** - Buttons show individual amount when split
+- [x] **Customer Receipt Print** - ESC/POS commands generated after payment
+- [x] **Table Info in Payment Dialog** - Shows table badge and clear message
+- [x] **Tip + Split Calculation** - Correct math: (subtotal + tip) / split_count
+- [x] All 52 backend tests passing (100%)
+
 ---
 
 ## Backlog (P1 - Next Priority)
 
 ### POS Enhancements
-- [ ] Clear table automatically when order is completed
-- [ ] Split bill functionality in payment dialog
-- [ ] Print customer receipt after payment complete
+- [ ] Multiple payment methods (part cash, part card) for single order
+- [ ] Order notes/special instructions
+- [ ] Discounts and coupons
 
 ### Platform Owner
 - [ ] Subscription status management API (trial → active → suspended)
