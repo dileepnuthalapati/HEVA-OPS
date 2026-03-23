@@ -267,23 +267,41 @@ const POSScreen = () => {
         splitCount
       );
       
-      // Try thermal printer first
-      if (printerConnected) {
-        try {
-          await printerService.printCustomerReceipt(completedOrder);
-          toast.success(`Order completed with ${paymentMethod}! Customer receipt printed.`);
-        } catch (error) {
-          console.error('Thermal print failed:', error);
-          // Fallback to PDF
+      // Print customer receipt via ESC/POS API
+      try {
+        const printResult = await printerAPI.printCustomerReceipt(selectedOrderToComplete.id);
+        console.log('Customer receipt ESC/POS commands generated:', printResult);
+        
+        // If we have a connected thermal printer, send the commands
+        if (printerConnected && printerService.isConnected()) {
+          await printerService.printRaw(printResult.commands);
+          toast.success(`Payment complete! Customer receipt printed.`);
+        } else {
+          // Fallback to PDF download
           const customerReceipt = await orderAPI.printCustomerReceipt(selectedOrderToComplete.id);
-          downloadPDF(customerReceipt, `receipt_${selectedOrderToComplete.id.slice(0, 8)}.pdf`);
-          toast.success(`Order completed with ${paymentMethod}! Customer receipt downloaded.`);
+          downloadPDF(customerReceipt, `receipt_${String(selectedOrderToComplete.order_number).padStart(3, '0')}.pdf`);
+          toast.success(`Payment complete! Customer receipt downloaded.`);
         }
-      } else {
-        // Download PDF
-        const customerReceipt = await orderAPI.printCustomerReceipt(selectedOrderToComplete.id);
-        downloadPDF(customerReceipt, `receipt_${selectedOrderToComplete.id.slice(0, 8)}.pdf`);
-        toast.success(`Order completed with ${paymentMethod}! Customer receipt downloaded.`);
+      } catch (printError) {
+        console.error('Print failed, falling back to PDF:', printError);
+        try {
+          const customerReceipt = await orderAPI.printCustomerReceipt(selectedOrderToComplete.id);
+          downloadPDF(customerReceipt, `receipt_${String(selectedOrderToComplete.order_number).padStart(3, '0')}.pdf`);
+          toast.success(`Payment complete! Customer receipt downloaded.`);
+        } catch (pdfError) {
+          toast.success(`Order completed with ${paymentMethod}!`);
+        }
+      }
+      
+      // Clear the table if this order had a table assigned
+      if (selectedOrderToComplete.table_id) {
+        try {
+          await tableAPI.clear(selectedOrderToComplete.table_id);
+          console.log('Table cleared after payment');
+          loadTables();
+        } catch (clearError) {
+          console.error('Failed to clear table:', clearError);
+        }
       }
       
       setShowPaymentDialog(false);
@@ -588,9 +606,19 @@ const POSScreen = () => {
       <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Complete Payment</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              Complete Payment
+              {selectedOrderToComplete?.table_id && (
+                <span className="text-sm font-normal bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                  Table {tables.find(t => t.id === selectedOrderToComplete.table_id)?.number || '?'}
+                </span>
+              )}
+            </DialogTitle>
             <DialogDescription>
-              Order #{selectedOrderToComplete?.id.slice(0, 8).toUpperCase()}
+              Order #{String(selectedOrderToComplete?.order_number || '').padStart(3, '0')}
+              {selectedOrderToComplete?.items?.length > 0 && (
+                <span className="ml-2">• {selectedOrderToComplete.items.length} items</span>
+              )}
             </DialogDescription>
           </DialogHeader>
           
@@ -707,6 +735,14 @@ const POSScreen = () => {
                   ${calculateGrandTotal().toFixed(2)}
                 </span>
               </div>
+              
+              {/* Table info if assigned */}
+              {selectedOrderToComplete?.table_id && (
+                <div className="mt-2 p-2 bg-blue-50 rounded-lg text-sm text-blue-700 flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  Table will be cleared after payment
+                </div>
+              )}
             </div>
             
             {/* Payment Method Buttons */}
@@ -718,6 +754,9 @@ const POSScreen = () => {
               >
                 <DollarSign className="w-8 h-8" />
                 <span className="text-base font-bold">Cash</span>
+                {splitCount > 1 && (
+                  <span className="text-xs opacity-75">${calculatePerPersonAmount().toFixed(2)} each</span>
+                )}
               </Button>
               <Button
                 className="h-20 flex flex-col gap-2"
@@ -727,8 +766,26 @@ const POSScreen = () => {
               >
                 <CreditCard className="w-8 h-8" />
                 <span className="text-base font-bold">Card</span>
+                {splitCount > 1 && (
+                  <span className="text-xs opacity-75">${calculatePerPersonAmount().toFixed(2)} each</span>
+                )}
               </Button>
             </div>
+            
+            {/* Split Bill Summary */}
+            {splitCount > 1 && (
+              <div className="mt-3 p-3 bg-slate-100 rounded-lg">
+                <div className="text-sm font-semibold mb-2">Split Summary</div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  {Array.from({ length: splitCount }, (_, i) => (
+                    <div key={i} className="flex justify-between p-2 bg-white rounded border">
+                      <span>Person {i + 1}</span>
+                      <span className="font-mono font-medium">${calculatePerPersonAmount().toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>
