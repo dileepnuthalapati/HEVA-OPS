@@ -145,14 +145,23 @@ Build and deploy a multi-tenant restaurant POS (Point of Sale) system that allow
 - [x] **Tip + Split Calculation** - Correct math: (subtotal + tip) / split_count
 - [x] All 52 backend tests passing (100%)
 
+### Session 6 - Advanced Order & Payment Features (March 2026)
+- [x] **Order Notes for Kitchen** - Notes field stored in orders and passed to kitchen receipts
+- [x] **Percentage Discount** - Apply X% discount (e.g., 10% loyalty discount)
+- [x] **Fixed Discount** - Apply fixed amount discount (capped at subtotal)
+- [x] **Discount Reason** - Optional reason for audit trail
+- [x] **Split Payment Methods** - Pay part cash, part card on single order
+- [x] **Split Payment Validation** - Cash + Card must equal total (allows 0.02 tolerance)
+- [x] **Frontend Discount Panel** - Percentage/Fixed toggle, value input, reason, Apply/Clear
+- [x] **Frontend Notes Panel** - Textarea for kitchen notes with Done/Clear buttons
+- [x] **Frontend Split Payment Mode** - Toggle to enter Cash/Card amounts separately
+- [x] **Discount Display in Cart** - Shows "Discount (10%)" with -$2.00 line item
+- [x] **Checkmark Indicators** - Shows ✓ on Discount/Notes buttons when values entered
+- [x] All 64 backend tests passing (12 new tests for discount/notes/split payment)
+
 ---
 
 ## Backlog (P1 - Next Priority)
-
-### POS Enhancements
-- [ ] Multiple payment methods (part cash, part card) for single order
-- [ ] Order notes/special instructions
-- [ ] Discounts and coupons
 
 ### Platform Owner
 - [ ] Subscription status management API (trial → active → suspended)
