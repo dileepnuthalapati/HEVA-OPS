@@ -95,6 +95,7 @@ class OrderItem(BaseModel):
     quantity: int
     unit_price: float
     total: float
+    notes: Optional[str] = None  # Item-level notes for kitchen
 
 class Order(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -102,6 +103,10 @@ class Order(BaseModel):
     order_number: int
     items: List[OrderItem]
     subtotal: float
+    discount_type: Optional[str] = None  # "percentage" or "fixed"
+    discount_value: float = 0.0  # Percentage (e.g., 10) or fixed amount (e.g., 5.00)
+    discount_amount: float = 0.0  # Calculated discount
+    discount_reason: Optional[str] = None  # Reason for discount
     tip_amount: float = 0.0
     tip_percentage: int = 0
     total_amount: float
@@ -109,21 +114,28 @@ class Order(BaseModel):
     created_at: str
     synced: bool = True
     status: str = "pending"
-    payment_method: Optional[str] = None
+    payment_method: Optional[str] = None  # "cash", "card", or "split"
+    payment_details: Optional[dict] = None  # For split: {"cash": 10.00, "card": 15.00}
     split_count: int = 1
     completed_at: Optional[str] = None
     table_id: Optional[str] = None
+    order_notes: Optional[str] = None  # General order notes
 
 class OrderCreate(BaseModel):
     items: List[OrderItem]
     total_amount: float
     table_id: Optional[str] = None
+    order_notes: Optional[str] = None
+    discount_type: Optional[str] = None
+    discount_value: float = 0.0
+    discount_reason: Optional[str] = None
 
 class OrderComplete(BaseModel):
-    payment_method: str
+    payment_method: str  # "cash", "card", or "split"
     tip_percentage: int = 0
     tip_amount: float = 0.0
     split_count: int = 1
+    payment_details: Optional[dict] = None  # For split payments: {"cash": 10.00, "card": 15.00}
 
 class CashDrawer(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -634,23 +646,40 @@ async def create_order(order_data: OrderCreate, current_user: User = Depends(get
     else:
         order_number = 1
     
+    # Calculate discount
+    subtotal = order_data.total_amount
+    discount_amount = 0.0
+    if order_data.discount_type and order_data.discount_value > 0:
+        if order_data.discount_type == "percentage":
+            discount_amount = subtotal * (order_data.discount_value / 100)
+        elif order_data.discount_type == "fixed":
+            discount_amount = min(order_data.discount_value, subtotal)  # Can't discount more than total
+    
+    total_after_discount = subtotal - discount_amount
+    
     order_id = f"order_{datetime.now(timezone.utc).timestamp()}"
     order_dict = {
         "id": order_id,
         "order_number": order_number,
         "items": [item.model_dump() for item in order_data.items],
-        "subtotal": order_data.total_amount,
+        "subtotal": subtotal,
+        "discount_type": order_data.discount_type,
+        "discount_value": order_data.discount_value,
+        "discount_amount": round(discount_amount, 2),
+        "discount_reason": order_data.discount_reason,
         "tip_amount": 0.0,
         "tip_percentage": 0,
-        "total_amount": order_data.total_amount,
+        "total_amount": round(total_after_discount, 2),
         "created_by": current_user.username,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "synced": True,
         "status": "pending",
         "payment_method": None,
+        "payment_details": None,
         "split_count": 1,
         "completed_at": None,
-        "table_id": order_data.table_id
+        "table_id": order_data.table_id,
+        "order_notes": order_data.order_notes
     }
     await db.orders.insert_one(order_dict)
     
@@ -672,19 +701,33 @@ async def complete_order(order_id: str, complete_data: OrderComplete, current_us
     if order["status"] == "completed":
         raise HTTPException(status_code=400, detail="Order already completed")
     
-    # Calculate new total with tip
-    subtotal = order["subtotal"]
+    # Calculate new total with tip (after discount already applied)
+    subtotal = order.get("subtotal", 0)
+    discount_amount = order.get("discount_amount", 0)
+    total_after_discount = subtotal - discount_amount
     tip_amount = complete_data.tip_amount
-    new_total = subtotal + tip_amount
+    new_total = total_after_discount + tip_amount
+    
+    # Validate split payment if payment_method is "split"
+    if complete_data.payment_method == "split":
+        if not complete_data.payment_details:
+            raise HTTPException(status_code=400, detail="Payment details required for split payment")
+        cash_amount = complete_data.payment_details.get("cash", 0)
+        card_amount = complete_data.payment_details.get("card", 0)
+        total_paid = cash_amount + card_amount
+        # Allow small rounding differences
+        if abs(total_paid - new_total) > 0.02:
+            raise HTTPException(status_code=400, detail=f"Split amounts ({total_paid:.2f}) don't match total ({new_total:.2f})")
     
     result = await db.orders.update_one(
         {"id": order_id},
         {"$set": {
             "status": "completed",
             "payment_method": complete_data.payment_method,
+            "payment_details": complete_data.payment_details,
             "tip_amount": tip_amount,
             "tip_percentage": complete_data.tip_percentage,
-            "total_amount": new_total,
+            "total_amount": round(new_total, 2),
             "split_count": complete_data.split_count,
             "completed_at": datetime.now(timezone.utc).isoformat()
         }}

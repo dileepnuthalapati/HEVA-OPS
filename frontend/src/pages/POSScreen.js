@@ -8,10 +8,11 @@ import { ScrollArea } from '../components/ui/scroll-area';
 import { Separator } from '../components/ui/separator';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, DollarSign, CreditCard, Users } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, DollarSign, CreditCard, Users, Percent, Tag, MessageSquare, Banknote } from 'lucide-react';
 
 const POSScreen = () => {
   const { user, logout } = useAuth();
@@ -30,6 +31,19 @@ const POSScreen = () => {
   const [customTip, setCustomTip] = useState('');
   const [splitCount, setSplitCount] = useState(1);
   const [printerConnected, setPrinterConnected] = useState(false);
+  
+  // New states for discounts, notes, and split payment
+  const [orderNotes, setOrderNotes] = useState('');
+  const [discountType, setDiscountType] = useState('');
+  const [discountValue, setDiscountValue] = useState('');
+  const [discountReason, setDiscountReason] = useState('');
+  const [showDiscountPanel, setShowDiscountPanel] = useState(false);
+  const [showNotesPanel, setShowNotesPanel] = useState(false);
+  
+  // Split payment mode (cash/card amounts)
+  const [splitPaymentMode, setSplitPaymentMode] = useState(false);
+  const [cashAmount, setCashAmount] = useState('');
+  const [cardAmount, setCardAmount] = useState('');
 
   useEffect(() => {
     loadData();
@@ -153,7 +167,30 @@ const POSScreen = () => {
 
   const clearCart = () => {
     setCart([]);
+    setOrderNotes('');
+    setDiscountType('');
+    setDiscountValue('');
+    setDiscountReason('');
     toast.info('Cart cleared');
+  };
+
+  // Calculate discount amount
+  const calculateDiscount = () => {
+    if (!discountType || !discountValue) return 0;
+    const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
+    if (discountType === 'percentage') {
+      return subtotal * (parseFloat(discountValue) / 100);
+    } else if (discountType === 'fixed') {
+      return Math.min(parseFloat(discountValue), subtotal);
+    }
+    return 0;
+  };
+
+  // Calculate cart total after discount
+  const calculateCartTotal = () => {
+    const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
+    const discount = calculateDiscount();
+    return subtotal - discount;
   };
 
   const placeOrder = async () => {
@@ -162,13 +199,17 @@ const POSScreen = () => {
       return;
     }
 
-    const total = cart.reduce((sum, item) => sum + item.total, 0);
+    const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
 
     try {
       const order = await orderAPI.create({
         items: cart,
-        total_amount: total,
+        total_amount: subtotal,
         table_id: selectedTable || null,
+        order_notes: orderNotes || null,
+        discount_type: discountType || null,
+        discount_value: discountValue ? parseFloat(discountValue) : 0,
+        discount_reason: discountReason || null,
       });
       
       // Print kitchen receipt via ESC/POS API
@@ -203,8 +244,15 @@ const POSScreen = () => {
         loadTables();
       }
       
+      // Clear cart and all related states
       setCart([]);
       setSelectedTable(null);
+      setOrderNotes('');
+      setDiscountType('');
+      setDiscountValue('');
+      setDiscountReason('');
+      setShowDiscountPanel(false);
+      setShowNotesPanel(false);
       loadPendingOrders();
     } catch (error) {
       toast.error('Failed to place order');
@@ -227,6 +275,9 @@ const POSScreen = () => {
     setTipPercentage(0);
     setCustomTip('');
     setSplitCount(1);
+    setSplitPaymentMode(false);
+    setCashAmount('');
+    setCardAmount('');
     setShowPaymentDialog(true);
   };
 
@@ -238,7 +289,8 @@ const POSScreen = () => {
     }
     
     if (tipPercentage > 0) {
-      return (selectedOrderToComplete.subtotal * tipPercentage) / 100;
+      const baseAmount = (selectedOrderToComplete.subtotal || 0) - (selectedOrderToComplete.discount_amount || 0);
+      return (baseAmount * tipPercentage) / 100;
     }
     
     return 0;
@@ -246,17 +298,43 @@ const POSScreen = () => {
 
   const calculateGrandTotal = () => {
     if (!selectedOrderToComplete) return 0;
-    return selectedOrderToComplete.subtotal + calculateTipAmount();
+    const baseAmount = (selectedOrderToComplete.subtotal || 0) - (selectedOrderToComplete.discount_amount || 0);
+    return baseAmount + calculateTipAmount();
   };
 
   const calculatePerPersonAmount = () => {
     return calculateGrandTotal() / splitCount;
   };
 
+  // Auto-calculate remaining amount for split payment
+  const calculateRemainingAmount = () => {
+    const total = calculateGrandTotal();
+    const cash = parseFloat(cashAmount) || 0;
+    const card = parseFloat(cardAmount) || 0;
+    return total - cash - card;
+  };
+
   const completeOrder = async (paymentMethod) => {
     if (!selectedOrderToComplete) return;
 
     const tipAmount = calculateTipAmount();
+    const grandTotal = calculateGrandTotal();
+    
+    // Handle split payment validation
+    let paymentDetails = null;
+    if (splitPaymentMode) {
+      const cash = parseFloat(cashAmount) || 0;
+      const card = parseFloat(cardAmount) || 0;
+      const totalPaid = cash + card;
+      
+      if (Math.abs(totalPaid - grandTotal) > 0.02) {
+        toast.error(`Payment total ($${totalPaid.toFixed(2)}) doesn't match order total ($${grandTotal.toFixed(2)})`);
+        return;
+      }
+      
+      paymentMethod = 'split';
+      paymentDetails = { cash, card };
+    }
 
     try {
       const completedOrder = await orderAPI.complete(
@@ -264,7 +342,8 @@ const POSScreen = () => {
         paymentMethod,
         tipPercentage,
         tipAmount,
-        splitCount
+        splitCount,
+        paymentDetails
       );
       
       // Print customer receipt via ESC/POS API
@@ -579,15 +658,128 @@ const POSScreen = () => {
         </ScrollArea>
 
         <div className="p-6 border-t space-y-4">
+          {/* Discount and Notes Buttons */}
+          <div className="flex gap-2">
+            <Button
+              variant={showDiscountPanel ? "secondary" : "outline"}
+              size="sm"
+              className="flex-1"
+              onClick={() => { setShowDiscountPanel(!showDiscountPanel); setShowNotesPanel(false); }}
+              data-testid="toggle-discount-btn"
+            >
+              <Percent className="w-4 h-4 mr-1" />
+              Discount
+              {discountValue && <span className="ml-1 text-emerald-600">✓</span>}
+            </Button>
+            <Button
+              variant={showNotesPanel ? "secondary" : "outline"}
+              size="sm"
+              className="flex-1"
+              onClick={() => { setShowNotesPanel(!showNotesPanel); setShowDiscountPanel(false); }}
+              data-testid="toggle-notes-btn"
+            >
+              <MessageSquare className="w-4 h-4 mr-1" />
+              Notes
+              {orderNotes && <span className="ml-1 text-emerald-600">✓</span>}
+            </Button>
+          </div>
+
+          {/* Discount Panel */}
+          {showDiscountPanel && (
+            <div className="p-3 bg-slate-50 rounded-lg space-y-3">
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant={discountType === 'percentage' ? 'default' : 'outline'}
+                  onClick={() => setDiscountType('percentage')}
+                  className="flex-1"
+                >
+                  <Percent className="w-3 h-3 mr-1" />
+                  Percentage
+                </Button>
+                <Button
+                  size="sm"
+                  variant={discountType === 'fixed' ? 'default' : 'outline'}
+                  onClick={() => setDiscountType('fixed')}
+                  className="flex-1"
+                >
+                  <Tag className="w-3 h-3 mr-1" />
+                  Fixed
+                </Button>
+              </div>
+              {discountType && (
+                <>
+                  <div>
+                    <Input
+                      type="number"
+                      placeholder={discountType === 'percentage' ? 'Enter %' : 'Enter $'}
+                      value={discountValue}
+                      onChange={(e) => setDiscountValue(e.target.value)}
+                      data-testid="discount-value-input"
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      placeholder="Reason (optional)"
+                      value={discountReason}
+                      onChange={(e) => setDiscountReason(e.target.value)}
+                      data-testid="discount-reason-input"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => { setDiscountType(''); setDiscountValue(''); setDiscountReason(''); }} className="flex-1">
+                      Clear
+                    </Button>
+                    <Button size="sm" onClick={() => setShowDiscountPanel(false)} className="flex-1">
+                      Apply
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Notes Panel */}
+          {showNotesPanel && (
+            <div className="p-3 bg-slate-50 rounded-lg space-y-3">
+              <Textarea
+                placeholder="Order notes for kitchen (allergies, special requests...)"
+                value={orderNotes}
+                onChange={(e) => setOrderNotes(e.target.value)}
+                rows={3}
+                data-testid="order-notes-input"
+              />
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => setOrderNotes('')} className="flex-1">
+                  Clear
+                </Button>
+                <Button size="sm" onClick={() => setShowNotesPanel(false)} className="flex-1">
+                  Done
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Order Summary */}
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Items</span>
               <span className="font-medium">{cart.reduce((sum, item) => sum + item.quantity, 0)}</span>
             </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="font-mono">${cart.reduce((sum, item) => sum + item.total, 0).toFixed(2)}</span>
+            </div>
+            {calculateDiscount() > 0 && (
+              <div className="flex justify-between text-sm text-emerald-600">
+                <span>Discount ({discountType === 'percentage' ? `${discountValue}%` : `$${discountValue}`})</span>
+                <span className="font-mono">-${calculateDiscount().toFixed(2)}</span>
+              </div>
+            )}
             <Separator />
             <div className="flex justify-between text-xl font-bold">
               <span>Total</span>
-              <span className="font-mono text-2xl">${totalAmount.toFixed(2)}</span>
+              <span className="font-mono text-2xl">${calculateCartTotal().toFixed(2)}</span>
             </div>
           </div>
           <Button

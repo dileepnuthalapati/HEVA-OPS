@@ -155,12 +155,13 @@ export const orderAPI = {
       throw error;
     }
   },
-  complete: async (orderId, paymentMethod, tipPercentage = 0, tipAmount = 0, splitCount = 1) => {
+  complete: async (orderId, paymentMethod, tipPercentage = 0, tipAmount = 0, splitCount = 1, paymentDetails = null) => {
     const response = await api.put(`/orders/${orderId}/complete`, { 
       payment_method: paymentMethod,
       tip_percentage: tipPercentage,
       tip_amount: tipAmount,
-      split_count: splitCount
+      split_count: splitCount,
+      payment_details: paymentDetails
     });
     await saveToIndexedDB('orders', response.data);
     return response.data;
