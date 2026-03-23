@@ -937,32 +937,108 @@ const POSScreen = () => {
               )}
             </div>
             
-            {/* Payment Method Buttons */}
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                className="h-20 flex flex-col gap-2"
-                data-testid="payment-cash-button"
-                onClick={() => completeOrder('cash')}
-              >
-                <DollarSign className="w-8 h-8" />
-                <span className="text-base font-bold">Cash</span>
-                {splitCount > 1 && (
-                  <span className="text-xs opacity-75">${calculatePerPersonAmount().toFixed(2)} each</span>
-                )}
-              </Button>
-              <Button
-                className="h-20 flex flex-col gap-2"
-                variant="secondary"
-                data-testid="payment-card-button"
-                onClick={() => completeOrder('card')}
-              >
-                <CreditCard className="w-8 h-8" />
-                <span className="text-base font-bold">Card</span>
-                {splitCount > 1 && (
-                  <span className="text-xs opacity-75">${calculatePerPersonAmount().toFixed(2)} each</span>
-                )}
-              </Button>
+            {/* Split Payment Method Toggle */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant={splitPaymentMode ? "default" : "outline"}
+                  onClick={() => setSplitPaymentMode(!splitPaymentMode)}
+                  data-testid="toggle-split-payment-mode"
+                  className="w-full"
+                >
+                  <Banknote className="w-4 h-4 mr-2" />
+                  {splitPaymentMode ? "Split Payment Mode ON" : "Pay with Multiple Methods"}
+                </Button>
+              </div>
+              
+              {/* Split Payment Method Inputs */}
+              {splitPaymentMode && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-3">
+                  <div className="text-sm font-medium text-amber-800">Enter amounts for each payment method:</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs flex items-center gap-1">
+                        <DollarSign className="w-3 h-3" /> Cash
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={cashAmount}
+                        onChange={(e) => setCashAmount(e.target.value)}
+                        data-testid="split-cash-input"
+                        className="h-10"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs flex items-center gap-1">
+                        <CreditCard className="w-3 h-3" /> Card
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={cardAmount}
+                        onChange={(e) => setCardAmount(e.target.value)}
+                        data-testid="split-card-input"
+                        className="h-10"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-between text-sm pt-2 border-t">
+                    <span>Total Entered:</span>
+                    <span className={`font-mono font-bold ${Math.abs((parseFloat(cashAmount) || 0) + (parseFloat(cardAmount) || 0) - calculateGrandTotal()) <= 0.02 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      ${((parseFloat(cashAmount) || 0) + (parseFloat(cardAmount) || 0)).toFixed(2)}
+                    </span>
+                  </div>
+                  {calculateRemainingAmount() > 0.02 && (
+                    <div className="text-xs text-amber-700">
+                      Remaining: ${calculateRemainingAmount().toFixed(2)}
+                    </div>
+                  )}
+                  <Button
+                    className="w-full h-12 bg-emerald-600 hover:bg-emerald-700"
+                    data-testid="complete-split-payment"
+                    onClick={() => completeOrder('split')}
+                    disabled={Math.abs((parseFloat(cashAmount) || 0) + (parseFloat(cardAmount) || 0) - calculateGrandTotal()) > 0.02}
+                  >
+                    Complete Split Payment
+                  </Button>
+                </div>
+              )}
             </div>
+            
+            {/* Single Payment Method Buttons */}
+            {!splitPaymentMode && (
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  className="h-20 flex flex-col gap-2"
+                  data-testid="payment-cash-button"
+                  onClick={() => completeOrder('cash')}
+                >
+                  <DollarSign className="w-8 h-8" />
+                  <span className="text-base font-bold">Cash</span>
+                  {splitCount > 1 && (
+                    <span className="text-xs opacity-75">${calculatePerPersonAmount().toFixed(2)} each</span>
+                  )}
+                </Button>
+                <Button
+                  className="h-20 flex flex-col gap-2"
+                  variant="secondary"
+                  data-testid="payment-card-button"
+                  onClick={() => completeOrder('card')}
+                >
+                  <CreditCard className="w-8 h-8" />
+                  <span className="text-base font-bold">Card</span>
+                  {splitCount > 1 && (
+                    <span className="text-xs opacity-75">${calculatePerPersonAmount().toFixed(2)} each</span>
+                  )}
+                </Button>
+              </div>
+            )}
             
             {/* Split Bill Summary */}
             {splitCount > 1 && (
