@@ -1971,6 +1971,121 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# ===== ONE-TIME SEED ENDPOINT =====
+@api_router.post("/seed-database")
+async def seed_database_endpoint(secret: str = None):
+    """
+    One-time database seeding endpoint.
+    Call with ?secret=hevapos2026 to seed the database.
+    Only works if no users exist (prevents accidental reseeding).
+    """
+    # Simple secret to prevent accidental calls
+    if secret != "hevapos2026":
+        raise HTTPException(status_code=403, detail="Invalid secret. Use ?secret=hevapos2026")
+    
+    # Check if already seeded
+    existing_users = await db.users.count_documents({})
+    if existing_users > 0:
+        return {"message": f"Database already seeded with {existing_users} users. Skipping.", "seeded": False}
+    
+    from datetime import timedelta
+    
+    # Create Platform Owner
+    platform_owner = {
+        "id": "platform_owner_1",
+        "username": "platform_owner",
+        "password": pwd_context.hash("admin123"),
+        "role": "platform_owner",
+        "restaurant_id": None,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.users.insert_one(platform_owner)
+    
+    # Create Demo Restaurant
+    trial_ends = datetime.now(timezone.utc) + timedelta(days=14)
+    demo_restaurant = {
+        "id": "rest_demo_1",
+        "owner_email": "demo@hevapos.com",
+        "subscription_status": "trial",
+        "subscription_plan": "standard_monthly",
+        "price": 19.99,
+        "currency": "GBP",
+        "business_info": {
+            "name": "Pizza Palace",
+            "address_line1": "123 High Street",
+            "city": "London",
+            "postcode": "SW1A 1AA",
+            "phone": "+44 20 1234 5678",
+            "email": "info@pizzapalace.com"
+        },
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "trial_ends_at": trial_ends.isoformat()
+    }
+    await db.restaurants.insert_one(demo_restaurant)
+    
+    # Create Restaurant Admin
+    restaurant_admin = {
+        "id": "restaurant_admin_1",
+        "username": "restaurant_admin",
+        "password": pwd_context.hash("admin123"),
+        "role": "admin",
+        "restaurant_id": "rest_demo_1",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.users.insert_one(restaurant_admin)
+    
+    # Create Staff User
+    staff_user = {
+        "id": "restaurant_user_1",
+        "username": "user",
+        "password": pwd_context.hash("user123"),
+        "role": "user",
+        "restaurant_id": "rest_demo_1",
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.users.insert_one(staff_user)
+    
+    # Create Categories
+    categories = [
+        {"id": "cat_1", "name": "Pizzas", "description": "Delicious pizzas", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "cat_2", "name": "Drinks", "description": "Beverages", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "cat_3", "name": "Sides", "description": "Sides and starters", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "cat_4", "name": "Desserts", "description": "Sweet treats", "created_at": datetime.now(timezone.utc).isoformat()},
+    ]
+    await db.categories.insert_many(categories)
+    
+    # Create Products
+    products = [
+        {"id": "prod_1", "name": "Margherita", "category_id": "cat_1", "category_name": "Pizzas", "price": 9.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_2", "name": "Pepperoni", "category_id": "cat_1", "category_name": "Pizzas", "price": 11.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_3", "name": "Hawaiian", "category_id": "cat_1", "category_name": "Pizzas", "price": 12.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_4", "name": "Veggie Supreme", "category_id": "cat_1", "category_name": "Pizzas", "price": 13.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_5", "name": "Coca-Cola", "category_id": "cat_2", "category_name": "Drinks", "price": 2.50, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_6", "name": "Sprite", "category_id": "cat_2", "category_name": "Drinks", "price": 2.50, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_7", "name": "Water", "category_id": "cat_2", "category_name": "Drinks", "price": 1.50, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_8", "name": "Garlic Bread", "category_id": "cat_3", "category_name": "Sides", "price": 4.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_9", "name": "Chicken Wings", "category_id": "cat_3", "category_name": "Sides", "price": 6.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_10", "name": "Chocolate Brownie", "category_id": "cat_4", "category_name": "Desserts", "price": 4.50, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_11", "name": "Ice Cream", "category_id": "cat_4", "category_name": "Desserts", "price": 3.50, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+    ]
+    await db.products.insert_many(products)
+    
+    return {
+        "message": "Database seeded successfully!",
+        "seeded": True,
+        "credentials": {
+            "platform_owner": {"username": "platform_owner", "password": "admin123"},
+            "restaurant_admin": {"username": "restaurant_admin", "password": "admin123"},
+            "staff": {"username": "user", "password": "user123"}
+        },
+        "data_created": {
+            "users": 3,
+            "restaurants": 1,
+            "categories": 4,
+            "products": 11
+        }
+    }
+
 if __name__ == "__main__":
     import uvicorn
     port = int(os.environ.get("PORT", 8000))
