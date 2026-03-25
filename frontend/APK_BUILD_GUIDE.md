@@ -69,9 +69,9 @@ keytool -genkey -v -keystore hevapos-release.keystore -alias hevapos -keyalg RSA
 
 ## Current Configuration
 
-**App ID:** `com.hetupathways.hevapos`
+**App ID:** `com.hetupathways.app`
 **App Name:** `HevaPOS`
-**Backend URL:** `https://restaurant-orders-38.preview.emergentagent.com`
+**Backend URL:** `https://heva-ops-production.up.railway.app`
 
 ---
 
