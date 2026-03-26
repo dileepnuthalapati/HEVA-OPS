@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import { categoryAPI, productAPI } from '../services/api';
+import { categoryAPI, productAPI, restaurantAPI } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -10,9 +10,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { Plus, Edit, Trash2 } from 'lucide-react';
 
+// Currency helper
+const getCurrencySymbol = (currency) => {
+  const symbols = { 'GBP': '£', 'USD': '$', 'EUR': '€', 'INR': '₹' };
+  return symbols[currency] || currency || '£';
+};
+
 const ProductManagement = () => {
   const [products, setProducts] = useState([]);
   const [categories, setCategories] = useState([]);
+  const [currency, setCurrency] = useState('GBP');
   const [open, setOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
   const [formData, setFormData] = useState({
@@ -25,7 +32,19 @@ const ProductManagement = () => {
 
   useEffect(() => {
     loadData();
+    loadRestaurantCurrency();
   }, []);
+
+  const loadRestaurantCurrency = async () => {
+    try {
+      const restaurant = await restaurantAPI.getMy();
+      if (restaurant?.currency) {
+        setCurrency(restaurant.currency);
+      }
+    } catch (error) {
+      // Use default currency
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -147,7 +166,7 @@ const ProductManagement = () => {
                     </Select>
                   </div>
                   <div>
-                    <Label htmlFor="price">Price ($)</Label>
+                    <Label htmlFor="price">Price ({getCurrencySymbol(currency)})</Label>
                     <Input
                       id="price"
                       data-testid="product-price-input"
@@ -249,7 +268,7 @@ const ProductManagement = () => {
                       )}
                       <div className="flex items-center justify-between">
                         <div className="text-2xl font-bold font-mono text-emerald-600">
-                          ${product.price.toFixed(2)}
+                          {getCurrencySymbol(currency)}{product.price.toFixed(2)}
                         </div>
                         <div
                           className={`text-sm px-3 py-1 rounded-full ${

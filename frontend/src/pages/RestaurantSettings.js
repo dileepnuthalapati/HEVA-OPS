@@ -301,11 +301,10 @@ const RestaurantSettings = () => {
             <CardContent>
               <div className="p-6 bg-white border-2 border-dashed rounded-lg font-mono text-sm">
                 <div className="text-center mb-4">
-                  <div className="text-lg font-bold">HevaPOS</div>
+                  <div className="text-lg font-bold">{formData.name || 'Your Restaurant Name'}</div>
                   <div className="text-xs text-muted-foreground">CUSTOMER RECEIPT</div>
                 </div>
                 <div className="border-t border-b border-dashed py-3 my-3">
-                  {formData.name && <div className="font-bold">{formData.name}</div>}
                   {formData.address_line1 && <div>{formData.address_line1}</div>}
                   {formData.address_line2 && <div>{formData.address_line2}</div>}
                   {formData.city && formData.postcode && (
@@ -326,7 +325,7 @@ const RestaurantSettings = () => {
                     <div className="text-center text-xs">Visit us at: {formData.website}</div>
                   )}
                   <div className="text-center text-xs text-muted-foreground mt-3">
-                    Powered by HevaPOS<br/>www.hevapos.com
+                    Powered by HevaPOS
                   </div>
                 </div>
               </div>

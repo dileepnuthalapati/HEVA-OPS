@@ -89,16 +89,6 @@ const Login = () => {
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
-          <div className="mt-6 text-center text-sm text-muted-foreground">
-            <p>Demo Accounts:</p>
-            <p className="mt-2 font-mono text-xs">
-              Platform Owner: platform_owner / admin123
-              <br />
-              Restaurant Admin: restaurant_admin / admin123
-              <br />
-              Staff: user / user123
-            </p>
-          </div>
         </CardContent>
       </Card>
     </div>

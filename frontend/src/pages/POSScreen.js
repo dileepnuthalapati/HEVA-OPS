@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { categoryAPI, productAPI, orderAPI, tableAPI, printerAPI } from '../services/api';
+import { categoryAPI, productAPI, orderAPI, tableAPI, printerAPI, restaurantAPI } from '../services/api';
 import printerService from '../services/printer';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
@@ -13,6 +13,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, DollarSign, CreditCard, Users, Percent, Tag, MessageSquare, Banknote } from 'lucide-react';
+
+// Currency helper
+const getCurrencySymbol = (currency) => {
+  const symbols = { 'GBP': '£', 'USD': '$', 'EUR': '€', 'INR': '₹' };
+  return symbols[currency] || currency || '£';
+};
 
 const POSScreen = () => {
   const { user, logout } = useAuth();
@@ -31,6 +37,10 @@ const POSScreen = () => {
   const [customTip, setCustomTip] = useState('');
   const [splitCount, setSplitCount] = useState(1);
   const [printerConnected, setPrinterConnected] = useState(false);
+  const [currency, setCurrency] = useState('GBP');
+  
+  // Edit order state
+  const [editingOrder, setEditingOrder] = useState(null);
   
   // New states for discounts, notes, and split payment
   const [orderNotes, setOrderNotes] = useState('');
@@ -48,12 +58,24 @@ const POSScreen = () => {
   useEffect(() => {
     loadData();
     loadPendingOrders();
+    loadRestaurantCurrency();
     loadTables();
     checkPrinterSupport();
   }, []);
 
   const checkPrinterSupport = () => {
     setPrinterConnected(printerService.isSupported());
+  };
+
+  const loadRestaurantCurrency = async () => {
+    try {
+      const restaurant = await restaurantAPI.getMy();
+      if (restaurant?.currency) {
+        setCurrency(restaurant.currency);
+      }
+    } catch (error) {
+      // Use default currency
+    }
   };
 
   const connectPrinter = async () => {
@@ -171,7 +193,67 @@ const POSScreen = () => {
     setDiscountType('');
     setDiscountValue('');
     setDiscountReason('');
+    setEditingOrder(null);
     toast.info('Cart cleared');
+  };
+
+  // Edit a pending order - load items into cart
+  const editPendingOrder = (order) => {
+    // Load order items into cart
+    setCart(order.items.map(item => ({
+      product_id: item.product_id,
+      product_name: item.product_name,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      total: item.total,
+    })));
+    
+    // Set order details
+    setEditingOrder(order);
+    setSelectedTable(order.table_id || null);
+    setOrderNotes(order.order_notes || '');
+    setDiscountType(order.discount_type || '');
+    setDiscountValue(order.discount_value ? order.discount_value.toString() : '');
+    setDiscountReason(order.discount_reason || '');
+    
+    // Close pending orders panel
+    setShowPendingOrders(false);
+    toast.info(`Editing Order #${order.order_number} - Add items and update`);
+  };
+
+  // Update an existing order
+  const updateOrder = async () => {
+    if (!editingOrder || cart.length === 0) return;
+    
+    const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
+    
+    try {
+      const updatedOrder = await orderAPI.update(editingOrder.id, {
+        items: cart,
+        total_amount: subtotal,
+        table_id: selectedTable || null,
+        order_notes: orderNotes || null,
+        discount_type: discountType || null,
+        discount_value: discountValue ? parseFloat(discountValue) : 0,
+        discount_reason: discountReason || null,
+      });
+      
+      toast.success(`Order #${updatedOrder.order_number} updated!`);
+      
+      // Clear cart and states
+      setCart([]);
+      setEditingOrder(null);
+      setSelectedTable(null);
+      setOrderNotes('');
+      setDiscountType('');
+      setDiscountValue('');
+      setDiscountReason('');
+      setShowDiscountPanel(false);
+      setShowNotesPanel(false);
+      loadPendingOrders();
+    } catch (error) {
+      toast.error('Failed to update order');
+    }
   };
 
   // Calculate discount amount
@@ -212,7 +294,7 @@ const POSScreen = () => {
         discount_reason: discountReason || null,
       });
       
-      // Print kitchen receipt via ESC/POS API
+      // Try to print kitchen receipt (silently fail if no printer)
       try {
         const printResult = await printerAPI.printKitchenReceipt(order.id);
         console.log('Kitchen receipt ESC/POS commands generated:', printResult);
@@ -220,29 +302,23 @@ const POSScreen = () => {
         // If we have a connected thermal printer, send the commands
         if (printerConnected && printerService.isConnected()) {
           await printerService.printRaw(printResult.commands);
-          toast.success(`Order #${order.order_number} placed! Kitchen receipt printed.`);
-        } else {
-          // Fallback to PDF download
-          const kitchenReceipt = await orderAPI.printKitchenReceipt(order.id);
-          downloadPDF(kitchenReceipt, `kitchen_${String(order.order_number).padStart(3, '0')}.pdf`);
-          toast.success(`Order #${order.order_number} placed! Kitchen receipt downloaded.`);
         }
       } catch (printError) {
-        console.error('Print failed, falling back to PDF:', printError);
-        try {
-          const kitchenReceipt = await orderAPI.printKitchenReceipt(order.id);
-          downloadPDF(kitchenReceipt, `kitchen_${String(order.order_number).padStart(3, '0')}.pdf`);
-          toast.success(`Order #${order.order_number} placed! Kitchen receipt downloaded.`);
-        } catch (pdfError) {
-          toast.success(`Order #${order.order_number} placed!`);
-        }
+        // Silently handle print errors - receipt printing is optional
+        console.log('Kitchen receipt printing skipped:', printError.message);
       }
       
       // Update table status if assigned
       if (selectedTable) {
-        await tableAPI.assignOrder(selectedTable, order.id);
-        loadTables();
+        try {
+          await tableAPI.assignOrder(selectedTable, order.id);
+          loadTables();
+        } catch (tableError) {
+          console.error('Failed to assign table:', tableError);
+        }
       }
+      
+      toast.success(`Order #${order.order_number} placed!`);
       
       // Clear cart and all related states
       setCart([]);
@@ -346,7 +422,7 @@ const POSScreen = () => {
         paymentDetails
       );
       
-      // Print customer receipt via ESC/POS API
+      // Try to print customer receipt (silently fail if no printer)
       try {
         const printResult = await printerAPI.printCustomerReceipt(selectedOrderToComplete.id);
         console.log('Customer receipt ESC/POS commands generated:', printResult);
@@ -354,22 +430,10 @@ const POSScreen = () => {
         // If we have a connected thermal printer, send the commands
         if (printerConnected && printerService.isConnected()) {
           await printerService.printRaw(printResult.commands);
-          toast.success(`Payment complete! Customer receipt printed.`);
-        } else {
-          // Fallback to PDF download
-          const customerReceipt = await orderAPI.printCustomerReceipt(selectedOrderToComplete.id);
-          downloadPDF(customerReceipt, `receipt_${String(selectedOrderToComplete.order_number).padStart(3, '0')}.pdf`);
-          toast.success(`Payment complete! Customer receipt downloaded.`);
         }
       } catch (printError) {
-        console.error('Print failed, falling back to PDF:', printError);
-        try {
-          const customerReceipt = await orderAPI.printCustomerReceipt(selectedOrderToComplete.id);
-          downloadPDF(customerReceipt, `receipt_${String(selectedOrderToComplete.order_number).padStart(3, '0')}.pdf`);
-          toast.success(`Payment complete! Customer receipt downloaded.`);
-        } catch (pdfError) {
-          toast.success(`Order completed with ${paymentMethod}!`);
-        }
+        // Silently handle print errors - receipt printing is optional
+        console.log('Receipt printing skipped:', printError.message);
       }
       
       // Clear the table if this order had a table assigned
@@ -383,6 +447,7 @@ const POSScreen = () => {
         }
       }
       
+      toast.success(`Order completed with ${paymentMethod}!`);
       setShowPaymentDialog(false);
       setSelectedOrderToComplete(null);
       setTipPercentage(0);
@@ -494,7 +559,7 @@ const POSScreen = () => {
                         </div>
                         <div className="text-right">
                           <div className="text-2xl font-bold font-mono text-emerald-600">
-                            ${order.total_amount.toFixed(2)}
+                            {getCurrencySymbol(currency)}{order.total_amount.toFixed(2)}
                           </div>
                         </div>
                       </div>
@@ -504,18 +569,29 @@ const POSScreen = () => {
                             <span>
                               {item.product_name} x {item.quantity}
                             </span>
-                            <span className="font-mono">${item.total.toFixed(2)}</span>
+                            <span className="font-mono">{getCurrencySymbol(currency)}{item.total.toFixed(2)}</span>
                           </div>
                         ))}
                       </div>
-                      <Button
-                        className="w-full btn-success"
-                        data-testid={`complete-order-${order.id}`}
-                        onClick={() => openCompleteDialog(order)}
-                      >
-                        <DollarSign className="w-4 h-4 mr-2" />
-                        Complete Payment
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          className="flex-1"
+                          data-testid={`edit-order-${order.id}`}
+                          onClick={() => editPendingOrder(order)}
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Edit / Add Items
+                        </Button>
+                        <Button
+                          className="flex-1 btn-success"
+                          data-testid={`complete-order-${order.id}`}
+                          onClick={() => openCompleteDialog(order)}
+                        >
+                          <DollarSign className="w-4 h-4 mr-2" />
+                          Complete
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 )})
@@ -542,7 +618,7 @@ const POSScreen = () => {
                   <CardContent className="p-4">
                     <div className="font-semibold text-sm mb-1 line-clamp-1">{product.name}</div>
                     <div className="text-xs text-muted-foreground mb-2">{product.category_name}</div>
-                    <div className="price text-emerald-600">${product.price.toFixed(2)}</div>
+                    <div className="price text-emerald-600">{getCurrencySymbol(currency)}{product.price.toFixed(2)}</div>
                     {!product.in_stock && <div className="text-xs text-red-500 mt-1">Out of stock</div>}
                   </CardContent>
                 </Card>
@@ -614,7 +690,7 @@ const POSScreen = () => {
                       <div className="flex-1">
                         <div className="font-semibold">{item.product_name}</div>
                         <div className="text-sm text-muted-foreground font-mono">
-                          ${item.unit_price.toFixed(2)} each
+                          {getCurrencySymbol(currency)}{item.unit_price.toFixed(2)} each
                         </div>
                       </div>
                       <Button
@@ -648,7 +724,7 @@ const POSScreen = () => {
                           <Plus className="w-4 h-4" />
                         </Button>
                       </div>
-                      <div className="font-bold font-mono text-lg">${item.total.toFixed(2)}</div>
+                      <div className="font-bold font-mono text-lg">{getCurrencySymbol(currency)}{item.total.toFixed(2)}</div>
                     </div>
                   </CardContent>
                 </Card>
@@ -712,7 +788,7 @@ const POSScreen = () => {
                   <div>
                     <Input
                       type="number"
-                      placeholder={discountType === 'percentage' ? 'Enter %' : 'Enter $'}
+                      placeholder={discountType === 'percentage' ? 'Enter %' : `Enter ${getCurrencySymbol(currency)}`}
                       value={discountValue}
                       onChange={(e) => setDiscountValue(e.target.value)}
                       data-testid="discount-value-input"
@@ -772,24 +848,51 @@ const POSScreen = () => {
             </div>
             {calculateDiscount() > 0 && (
               <div className="flex justify-between text-sm text-emerald-600">
-                <span>Discount ({discountType === 'percentage' ? `${discountValue}%` : `$${discountValue}`})</span>
-                <span className="font-mono">-${calculateDiscount().toFixed(2)}</span>
+                <span>Discount ({discountType === 'percentage' ? `${discountValue}%` : `${getCurrencySymbol(currency)}${discountValue}`})</span>
+                <span className="font-mono">-{getCurrencySymbol(currency)}{calculateDiscount().toFixed(2)}</span>
               </div>
             )}
             <Separator />
             <div className="flex justify-between text-xl font-bold">
               <span>Total</span>
-              <span className="font-mono text-2xl">${calculateCartTotal().toFixed(2)}</span>
+              <span className="font-mono text-2xl">{getCurrencySymbol(currency)}{calculateCartTotal().toFixed(2)}</span>
             </div>
           </div>
+          
+          {/* Editing Order Banner */}
+          {editingOrder && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-semibold text-amber-800">Editing Order #{editingOrder.order_number}</div>
+                  <div className="text-xs text-amber-600">Add items and click Update Order</div>
+                </div>
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  onClick={() => {
+                    setEditingOrder(null);
+                    setCart([]);
+                    setOrderNotes('');
+                    setDiscountType('');
+                    setDiscountValue('');
+                    setDiscountReason('');
+                  }}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+          
           <Button
             className="w-full h-14 text-lg bg-amber-500 hover:bg-amber-600 text-white"
             data-testid="place-order-button"
-            onClick={placeOrder}
+            onClick={editingOrder ? updateOrder : placeOrder}
             disabled={cart.length === 0}
           >
             <Printer className="w-5 h-5 mr-2" />
-            Place Order (Send to Kitchen)
+            {editingOrder ? `Update Order #${editingOrder.order_number}` : 'Place Order (Send to Kitchen)'}
           </Button>
         </div>
       </div>
@@ -872,7 +975,7 @@ const POSScreen = () => {
                   <div className="flex justify-between text-sm">
                     <span>Tip Amount:</span>
                     <span className="font-mono text-emerald-600">
-                      +${calculateTipAmount().toFixed(2)}
+                      +{getCurrencySymbol(currency)}{calculateTipAmount().toFixed(2)}
                     </span>
                   </div>
                 )}
@@ -914,7 +1017,7 @@ const POSScreen = () => {
                   <div className="flex justify-between text-sm">
                     <span>Per Person:</span>
                     <span className="font-mono text-blue-600">
-                      ${calculatePerPersonAmount().toFixed(2)}
+                      {getCurrencySymbol(currency)}{calculatePerPersonAmount().toFixed(2)}
                     </span>
                   </div>
                 )}
@@ -924,7 +1027,7 @@ const POSScreen = () => {
               <div className="flex justify-between font-bold text-lg">
                 <span>Grand Total:</span>
                 <span className="font-mono text-emerald-600">
-                  ${calculateGrandTotal().toFixed(2)}
+                  {getCurrencySymbol(currency)}{calculateGrandTotal().toFixed(2)}
                 </span>
               </div>
               
@@ -991,12 +1094,12 @@ const POSScreen = () => {
                   <div className="flex justify-between text-sm pt-2 border-t">
                     <span>Total Entered:</span>
                     <span className={`font-mono font-bold ${Math.abs((parseFloat(cashAmount) || 0) + (parseFloat(cardAmount) || 0) - calculateGrandTotal()) <= 0.02 ? 'text-emerald-600' : 'text-red-600'}`}>
-                      ${((parseFloat(cashAmount) || 0) + (parseFloat(cardAmount) || 0)).toFixed(2)}
+                      {getCurrencySymbol(currency)}{((parseFloat(cashAmount) || 0) + (parseFloat(cardAmount) || 0)).toFixed(2)}
                     </span>
                   </div>
                   {calculateRemainingAmount() > 0.02 && (
                     <div className="text-xs text-amber-700">
-                      Remaining: ${calculateRemainingAmount().toFixed(2)}
+                      Remaining: {getCurrencySymbol(currency)}{calculateRemainingAmount().toFixed(2)}
                     </div>
                   )}
                   <Button
@@ -1022,7 +1125,7 @@ const POSScreen = () => {
                   <DollarSign className="w-8 h-8" />
                   <span className="text-base font-bold">Cash</span>
                   {splitCount > 1 && (
-                    <span className="text-xs opacity-75">${calculatePerPersonAmount().toFixed(2)} each</span>
+                    <span className="text-xs opacity-75">{getCurrencySymbol(currency)}{calculatePerPersonAmount().toFixed(2)} each</span>
                   )}
                 </Button>
                 <Button
@@ -1034,7 +1137,7 @@ const POSScreen = () => {
                   <CreditCard className="w-8 h-8" />
                   <span className="text-base font-bold">Card</span>
                   {splitCount > 1 && (
-                    <span className="text-xs opacity-75">${calculatePerPersonAmount().toFixed(2)} each</span>
+                    <span className="text-xs opacity-75">{getCurrencySymbol(currency)}{calculatePerPersonAmount().toFixed(2)} each</span>
                   )}
                 </Button>
               </div>
