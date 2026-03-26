@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import Sidebar from '../components/Sidebar';
 import { printerAPI } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -10,54 +9,9 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 import { toast } from 'sonner';
-import { 
-  LayoutDashboard, Package, FolderTree, ShoppingCart, FileText, LogOut, 
-  Wallet, Settings, Plus, Printer, Wifi, Bluetooth, Trash2, TestTube,
-  Check, Star, Edit
-} from 'lucide-react';
-
-const Sidebar = ({ active }) => {
-  const { logout, canAccessRestaurants } = useAuth();
-
-  const menuItems = [
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/tables', icon: Package, label: 'Tables' },
-    { path: '/categories', icon: FolderTree, label: 'Categories' },
-    { path: '/products', icon: Package, label: 'Products' },
-    { path: '/pos', icon: ShoppingCart, label: 'POS' },
-    { path: '/orders', icon: FileText, label: 'Orders' },
-    { path: '/reports', icon: FileText, label: 'Reports' },
-    { path: '/cash-drawer', icon: Wallet, label: 'Cash Drawer' },
-    { path: '/printers', icon: Printer, label: 'Printers' },
-    { path: '/settings', icon: Settings, label: 'Settings' },
-  ];
-
-  return (
-    <div className="sidebar">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight">HevaPOS</h1>
-        <p className="text-sm text-muted-foreground mt-1">Printer Settings</p>
-      </div>
-      <nav className="space-y-2">
-        {menuItems.map((item) => (
-          <Link key={item.path} to={item.path} className={`sidebar-link ${active === item.path ? 'active' : ''}`}>
-            <item.icon className="w-5 h-5" />
-            <span>{item.label}</span>
-          </Link>
-        ))}
-      </nav>
-      <div className="mt-auto pt-8">
-        <Button variant="outline" className="w-full justify-start" onClick={logout}>
-          <LogOut className="w-5 h-5 mr-3" />
-          Logout
-        </Button>
-      </div>
-    </div>
-  );
-};
+import { Plus, Printer, Wifi, Bluetooth, Trash2, TestTube, Check, Star, Edit } from 'lucide-react';
 
 const PrinterSettings = () => {
-  const location = useLocation();
   const [printers, setPrinters] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddPrinter, setShowAddPrinter] = useState(false);

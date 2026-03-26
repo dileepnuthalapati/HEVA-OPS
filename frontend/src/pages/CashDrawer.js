@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import Sidebar from '../components/Sidebar';
 import { cashDrawerAPI } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -9,47 +8,9 @@ import { Textarea } from '../components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { LayoutDashboard, Package, FolderTree, ShoppingCart, FileText, LogOut, Wallet, Store, DollarSign, TrendingUp, TrendingDown } from 'lucide-react';
-
-const Sidebar = ({ active }) => {
-  const { logout } = useAuth();
-
-  const menuItems = [
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/restaurants', icon: Store, label: 'Restaurants' },
-    { path: '/categories', icon: FolderTree, label: 'Categories' },
-    { path: '/products', icon: Package, label: 'Products' },
-    { path: '/orders', icon: ShoppingCart, label: 'Orders' },
-    { path: '/reports', icon: FileText, label: 'Reports' },
-    { path: '/cash-drawer', icon: Wallet, label: 'Cash Drawer' },
-  ];
-
-  return (
-    <div className="sidebar">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight">HevaPOS</h1>
-        <p className="text-sm text-muted-foreground mt-1">Admin Panel</p>
-      </div>
-      <nav className="space-y-2">
-        {menuItems.map((item) => (
-          <Link key={item.path} to={item.path} className={`sidebar-link ${active === item.path ? 'active' : ''}`}>
-            <item.icon className="w-5 h-5" />
-            <span>{item.label}</span>
-          </Link>
-        ))}
-      </nav>
-      <div className="mt-auto pt-8">
-        <Button variant="outline" className="w-full justify-start" onClick={logout}>
-          <LogOut className="w-5 h-5 mr-3" />
-          Logout
-        </Button>
-      </div>
-    </div>
-  );
-};
+import { Wallet, TrendingUp, TrendingDown } from 'lucide-react';
 
 const CashDrawer = () => {
-  const location = useLocation();
   const [currentDrawer, setCurrentDrawer] = useState(null);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -123,7 +84,7 @@ const CashDrawer = () => {
   if (loading) {
     return (
       <div className="flex">
-        <Sidebar active={location.pathname} />
+        <Sidebar />
         <div className="flex-1 p-8">
           <div className="text-center py-12">Loading...</div>
         </div>
@@ -133,7 +94,7 @@ const CashDrawer = () => {
 
   return (
     <div className="flex">
-      <Sidebar active={location.pathname} />
+      <Sidebar />
       <div className="flex-1 p-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-8">
