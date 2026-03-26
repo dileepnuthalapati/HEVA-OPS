@@ -16,5 +16,9 @@
       "backgroundColor": "#0f172a",
       "showSpinner": false
     }
+  "android": {
+    "ignorePlugins": [
+      "BluetoothLe"
+    ]
   }
 }
