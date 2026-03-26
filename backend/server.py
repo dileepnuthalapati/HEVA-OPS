@@ -1017,3 +1017,48 @@ if __name__ == "__main__":
 @app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
+
+# ===== ONE-TIME SEED ENDPOINT =====
+@api_router.post("/seed-database")
+async def seed_database_endpoint(secret: str = None):
+    """One-time database seeding endpoint."""
+    if secret != "hevapos2026":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    
+    existing_users = await db.users.count_documents({})
+    if existing_users > 0:
+        return {"message": f"Already seeded with {existing_users} users", "seeded": False}
+    
+    from datetime import timedelta
+    
+    # Platform Owner
+    await db.users.insert_one({"id": "platform_owner_1", "username": "platform_owner", "password": pwd_context.hash("admin123"), "role": "platform_owner", "restaurant_id": None, "created_at": datetime.now(timezone.utc).isoformat()})
+    
+    # Restaurant
+    trial_ends = datetime.now(timezone.utc) + timedelta(days=14)
+    await db.restaurants.insert_one({"id": "rest_demo_1", "owner_email": "demo@hevapos.com", "subscription_status": "trial", "price": 19.99, "currency": "GBP", "business_info": {"name": "Pizza Palace", "city": "London"}, "created_at": datetime.now(timezone.utc).isoformat(), "trial_ends_at": trial_ends.isoformat()})
+    
+    # Admin & Staff
+    await db.users.insert_one({"id": "restaurant_admin_1", "username": "restaurant_admin", "password": pwd_context.hash("admin123"), "role": "admin", "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()})
+    await db.users.insert_one({"id": "restaurant_user_1", "username": "user", "password": pwd_context.hash("user123"), "role": "user", "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()})
+    
+    # Categories
+    await db.categories.insert_many([
+        {"id": "cat_1", "name": "Pizzas", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "cat_2", "name": "Drinks", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "cat_3", "name": "Sides", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "cat_4", "name": "Desserts", "created_at": datetime.now(timezone.utc).isoformat()},
+    ])
+    
+    # Products
+    await db.products.insert_many([
+        {"id": "prod_1", "name": "Margherita", "category_id": "cat_1", "category_name": "Pizzas", "price": 9.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_2", "name": "Pepperoni", "category_id": "cat_1", "category_name": "Pizzas", "price": 11.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_3", "name": "Hawaiian", "category_id": "cat_1", "category_name": "Pizzas", "price": 12.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_5", "name": "Coca-Cola", "category_id": "cat_2", "category_name": "Drinks", "price": 2.50, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_6", "name": "Sprite", "category_id": "cat_2", "category_name": "Drinks", "price": 2.50, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_8", "name": "Garlic Bread", "category_id": "cat_3", "category_name": "Sides", "price": 4.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_10", "name": "Chocolate Brownie", "category_id": "cat_4", "category_name": "Desserts", "price": 4.50, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+    ])
+    
+    return {"message": "Database seeded!", "seeded": True, "credentials": {"platform_owner": "admin123", "restaurant_admin": "admin123", "staff_user": "user123"}}
