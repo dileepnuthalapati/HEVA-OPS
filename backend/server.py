@@ -35,7 +35,7 @@ api_router = APIRouter(prefix="/api")
 # Health check endpoint for Railway
 @app.get("/")
 async def health_check():
-    return {"status": "healthy", "message": "HevaPOS API is running"}
+    return {"status": "healthy"}
 
 security = HTTPBearer()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
