@@ -1,246 +1,104 @@
-# HevaPOS - Multi-Tenant Restaurant POS System
+# HevaPOS - Product Requirements Document
 
-## Product Overview
-A comprehensive multi-tenant SaaS POS system for restaurants with role-based access, table management, and advanced payment features.
+## Original Problem Statement
+Build a multi-tenant SaaS POS system called "HevaPOS" with:
+- Cloud-based backend (FastAPI) and DB (MongoDB Atlas) for real-time multi-device syncing
+- Android APK capability for tablets/phones via Capacitor
+- Three user roles: Platform Owner, Restaurant Admin, Staff
+- Full POS functionality: cart, discounts, order notes, cash/card split payments, receipt printing
+- Customization per tenant (currency, receipt details, tables, menus)
 
-## Production URLs
-- **Backend API**: https://heva-ops-production.up.railway.app
-- **Database**: MongoDB Atlas
-- **App ID**: com.hetupathways.app
+## User Personas
+1. **Platform Owner**: Manages all restaurants, global settings, user creation
+2. **Restaurant Admin**: Manages single restaurant's dashboard, settings, POS operations
+3. **Staff User**: Access only to dedicated POS screen for taking orders
 
-## User Roles & Credentials
-| Role | Username | Password | Access |
-|------|----------|----------|--------|
-| Platform Owner | platform_owner | admin123 | Manage restaurants, global settings |
-| Restaurant Admin | restaurant_admin | admin123 | Manage menu, tables, staff, reports |
-| Staff | user | user123 | POS screen only |
+## Core Requirements
+- Multi-tenant data isolation per restaurant
+- Role-based access control with dedicated layouts/navigation
+- Table management with status tracking
+- Printer management (WiFi/Bluetooth ESC/POS)
+- Basic reservations system
+- Advanced payment options (split bills, multiple payment methods)
+- Dynamic currency based on restaurant settings
 
 ---
 
-## Completed Features (March 2026)
+## Implementation Status
 
-### Authentication & Access Control
-- [x] JWT-based authentication
-- [x] Role-based access (Platform Owner, Admin, Staff)
-- [x] Protected routes with role verification
-- [x] Shared Sidebar component with role-specific menus
+### Completed Features (as of March 2026)
+- [x] User Authentication (JWT-based)
+- [x] Restaurant Management (CRUD)
+- [x] Role-based architecture (shared Sidebar component)
+- [x] Table Management (CRUD + status tracking)
+- [x] Printer Management (WiFi/Bluetooth)
+- [x] Basic Reservations
+- [x] Table Selection in POS
+- [x] User Creation by Platform Owner
+- [x] Kitchen & Customer Receipt Printing
+- [x] Split Bill functionality
+- [x] Clear Table on Payment
+- [x] Discounts/Coupons on orders
+- [x] Order Notes for kitchen
+- [x] Multiple Payment Methods (cash + card split)
+- [x] Edit Pending Orders
+- [x] Dynamic Currency Symbols
+- [x] Railway Deployment (Backend)
+- [x] Capacitor Configuration (APK)
+- [x] White-labeling (Emergent badge removed)
 
-### Platform Owner Features
-- [x] Restaurant management (Create, Edit, Delete)
-- [x] User management per restaurant
-- [x] Custom subscription pricing
-- [x] Multi-currency support (GBP, USD, EUR, INR)
+### In Progress
+- None
 
-### Restaurant Admin Features
-- [x] Restaurant settings (business info, receipt customization)
-- [x] Category management (CRUD)
-- [x] Product management (CRUD with images, stock status)
-- [x] Table management (CRUD with status tracking)
-- [x] Printer management (WiFi/Bluetooth ESC/POS)
-- [x] Order history
-- [x] Sales reports with date range
-- [x] Cash drawer management (open/close/reconcile)
+### Upcoming Tasks (P1)
+- [ ] Subscription Management (trial → active/suspended logic)
+- [ ] Email Notifications (trial expiry alerts)
 
-### POS Features
-- [x] Product grid with categories
-- [x] Cart management (add, remove, quantity)
-- [x] Table selection for dine-in orders
-- [x] Order notes for kitchen
-- [x] Discount support (percentage & fixed)
-- [x] Order placement with kitchen receipt
-- [x] **Edit pending orders (add more items)**
-- [x] Pending orders view
+### Future Tasks (P2)
+- [ ] Revenue Dashboard for Platform Owner
+- [ ] Payment Gateway Integration (Stripe/Square/Razorpay)
+- [ ] Kitchen Display System (KDS)
 
-### Payment Features
-- [x] Cash payment
-- [x] Card payment
-- [x] Split payment (part cash, part card)
-- [x] Tip support (10%, 15%, 20%, custom)
-- [x] Split bill by number of people
-- [x] Auto-clear table after payment
-- [x] Customer receipt generation
-
-### UI/UX
-- [x] Dynamic currency symbol based on restaurant location
-- [x] Receipt preview with restaurant name
-- [x] Clean login page (no demo credentials shown)
-- [x] Consistent sidebar navigation across all pages
-- [x] Silent error handling for optional features (printing)
+### Backlog
+- [ ] Backend refactoring (server.py split into routers)
 
 ---
 
 ## Technical Architecture
 
-### Frontend
-- React 18 with React Router
-- Tailwind CSS + Shadcn UI components
-- Capacitor for Android APK
-- IndexedDB for offline support
+### Stack
+- **Frontend**: React, Tailwind CSS, Shadcn UI, Capacitor
+- **Backend**: FastAPI, Motor (async MongoDB)
+- **Database**: MongoDB Atlas (Production), Local MongoDB (Development)
+- **Hosting**: Railway (Backend)
 
-### Backend
-- FastAPI (Python)
-- Motor (async MongoDB driver)
-- JWT authentication
-- ESC/POS receipt generation
+### Key Files
+- `/app/backend/server.py` - Monolithic API (~2100 lines)
+- `/app/frontend/src/pages/POSScreen.js` - Main POS UI
+- `/app/frontend/src/components/Sidebar.js` - Role-based navigation
+- `/app/frontend/capacitor.config.json` - APK configuration
 
-### Database
-- MongoDB Atlas (cloud)
-- Collections: users, restaurants, categories, products, orders, tables, printers, cash_drawers
+### Database Schema
+- `restaurants`: {id, business_info, currency, users}
+- `users`: {id, username, role, restaurant_id}
+- `orders`: {notes, discount, payment_details, status}
+- `tables`, `printers`, `reservations`
 
-### Deployment
-- Backend: Railway (auto-deploy from GitHub)
-- Database: MongoDB Atlas
-- Mobile: Android APK via Capacitor
-
----
-
-## File Structure
-```
-/app/
-├── backend/
-│   ├── server.py          # All API endpoints (~2200 lines)
-│   ├── requirements.txt
-│   └── Procfile
-├── frontend/
-│   ├── src/
-│   │   ├── components/
-│   │   │   ├── Sidebar.js      # Shared role-based sidebar
-│   │   │   └── ui/             # Shadcn components
-│   │   ├── context/
-│   │   │   └── AuthContext.js  # Auth state management
-│   │   ├── pages/
-│   │   │   ├── Login.js
-│   │   │   ├── POSScreen.js
-│   │   │   ├── AdminDashboard.js
-│   │   │   ├── CategoryManagement.js
-│   │   │   ├── ProductManagement.js
-│   │   │   ├── TableManagement.js
-│   │   │   ├── OrderHistory.js
-│   │   │   ├── Reports.js
-│   │   │   ├── CashDrawer.js
-│   │   │   ├── RestaurantSettings.js
-│   │   │   ├── PrinterSettings.js
-│   │   │   ├── PlatformDashboard.js
-│   │   │   └── RestaurantManagement.js
-│   │   ├── services/
-│   │   │   ├── api.js          # All API calls
-│   │   │   └── printer.js      # Web Serial API for ESC/POS
-│   │   └── App.js
-│   ├── capacitor.config.json
-│   └── package.json
-└── memory/
-    └── PRD.md
-```
+### Key API Endpoints
+- `GET /` - Healthcheck (Railway)
+- `PUT /api/restaurants/my/settings` - Update tenant settings
+- `PUT /api/orders/{order_id}` - Edit pending order
+- `PUT /api/orders/{order_id}/complete` - Complete with split payments
 
 ---
 
-## API Endpoints Summary
+## Test Credentials
+- Platform Owner: `platform_owner` / `admin123`
+- Restaurant Admin: `restaurant_admin` / `admin123`
+- Staff User: `user` / `user123`
 
-### Auth
-- POST /api/auth/login
-- GET /api/auth/me
-
-### Restaurants (Platform Owner)
-- GET /api/restaurants
-- POST /api/restaurants
-- PUT /api/restaurants/{id}
-- DELETE /api/restaurants/{id}
-- POST /api/restaurants/{id}/users
-
-### Restaurant Settings (Admin)
-- GET /api/restaurants/my
-- PUT /api/restaurants/my/settings
-
-### Categories
-- GET /api/categories
-- POST /api/categories
-- PUT /api/categories/{id}
-- DELETE /api/categories/{id}
-
-### Products
-- GET /api/products
-- POST /api/products
-- PUT /api/products/{id}
-- DELETE /api/products/{id}
-
-### Orders
-- GET /api/orders
-- GET /api/orders/pending
-- POST /api/orders
-- PUT /api/orders/{id}
-- PUT /api/orders/{id}/complete
-
-### Tables
-- GET /api/tables
-- POST /api/tables
-- PUT /api/tables/{id}
-- DELETE /api/tables/{id}
-- POST /api/tables/{id}/clear
-
-### Printers
-- GET /api/printers
-- POST /api/printers
-- DELETE /api/printers/{id}
-- POST /api/printers/{id}/test
-
-### Reports & Cash Drawer
-- GET /api/reports/stats
-- GET /api/cash-drawer/current
-- POST /api/cash-drawer/open
-- POST /api/cash-drawer/close
-
----
-
-## Future Enhancements (Backlog)
-
-### P1 - High Priority
-- [ ] Subscription management (trial → active → suspended)
-- [ ] Email notifications (trial expiry, payment reminders)
-- [ ] Password change functionality
-- [ ] User management for Restaurant Admin
-
-### P2 - Medium Priority
-- [ ] Revenue dashboard with charts
-- [ ] Kitchen Display System (KDS)
-- [ ] Inventory/Stock management
-- [ ] Customer database & loyalty
-
-### P3 - Low Priority
-- [ ] Payment gateway integration (Stripe/Razorpay)
-- [ ] Online ordering integration
-- [ ] Multi-language support
-- [ ] iOS app build
-
----
-
-## Live Testing Status
-- **Status**: Ready for Production Testing
-- **Started**: March 2026
-- **Feedback**: Pending from live restaurant use
-
----
-
-## Change Log
-
-### March 26, 2026
-- Fixed categories/products not saving (restaurant_id issue)
-- Fixed restaurant settings save error
-- Added edit/delete restaurants for Platform Owner
-- Added edit pending orders feature
-- Dynamic currency symbol based on restaurant location
-- Updated receipt preview with restaurant name
-- Removed demo credentials from login page
-- Silent error handling for printer operations
-
-### March 25, 2026
-- Railway deployment configured (PORT, healthcheck)
-- MongoDB Atlas IP whitelist configured
-- Database seeding endpoint added
-- All API endpoints verified working
-
-### Previous Sessions
-- Role-based access control implemented
-- Table management with status tracking
-- Printer management (ESC/POS)
-- Split bill and multiple payment methods
-- Discount and order notes features
+## Deployment Notes
+- Backend on Railway requires `PORT` environment variable (dynamic binding)
+- MongoDB Atlas requires IP whitelist (currently `0.0.0.0/0`)
+- APK built locally by user using Capacitor
+- User syncs code to GitHub for Railway auto-deployment
