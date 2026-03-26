@@ -44,12 +44,14 @@ class User(BaseModel):
     id: str
     username: str
     role: str
+    restaurant_id: Optional[str] = None
     created_at: str
 
 class UserCreate(BaseModel):
     username: str
     password: str
     role: str = "user"
+    restaurant_id: Optional[str] = None
 
 class UserLogin(BaseModel):
     username: str
@@ -66,12 +68,14 @@ class Category(BaseModel):
     name: str
     description: Optional[str] = None
     image_url: Optional[str] = None
+    restaurant_id: Optional[str] = None
     created_at: str
 
 class CategoryCreate(BaseModel):
     name: str
     description: Optional[str] = None
     image_url: Optional[str] = None
+    restaurant_id: Optional[str] = None
 
 class Product(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -82,6 +86,7 @@ class Product(BaseModel):
     price: float
     image_url: Optional[str] = None
     in_stock: bool = True
+    restaurant_id: Optional[str] = None
     created_at: str
 
 class ProductCreate(BaseModel):
@@ -90,6 +95,7 @@ class ProductCreate(BaseModel):
     price: float
     image_url: Optional[str] = None
     in_stock: bool = True
+    restaurant_id: Optional[str] = None
 
 class OrderItem(BaseModel):
     product_id: str
@@ -114,6 +120,7 @@ class Order(BaseModel):
     payment_method: Optional[str] = None
     split_count: int = 1
     completed_at: Optional[str] = None
+    restaurant_id: Optional[str] = None
 
 class OrderCreate(BaseModel):
     items: List[OrderItem]
@@ -139,6 +146,7 @@ class CashDrawer(BaseModel):
     opened_at: str
     closed_at: Optional[str] = None
     status: str = "open"
+    restaurant_id: Optional[str] = None
 
 class CashDrawerOpen(BaseModel):
     opening_balance: float
@@ -210,10 +218,14 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
     token = credentials.credentials
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
+        user_id: str = payload.get("sub")
+        if user_id is None:
             raise HTTPException(status_code=401, detail="Invalid authentication")
-        user = await db.users.find_one({"username": username}, {"_id": 0})
+        user = await db.users.find_one({"id": user_id}, {"_id": 0})
+        if user is None:
+            # Fallback to username for compatibility with older tokens
+            user = await db.users.find_one({"username": user_id}, {"_id": 0})
+
         if user is None:
             raise HTTPException(status_code=401, detail="User not found")
         return User(**user)
@@ -224,14 +236,26 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 async def get_current_restaurant(current_user: User = Depends(get_current_user)):
     """Get the restaurant associated with the current user"""
-    restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
+    if current_user.restaurant_id:
+        restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0})
+    else:
+        # Legacy/Fallback
+        restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
+
     if not restaurant:
+        if current_user.role == "platform_owner":
+            return None # Platform owner might not have a restaurant
         raise HTTPException(status_code=404, detail="Restaurant not found for user")
     return Restaurant(**restaurant)
 
 def require_admin(current_user: User = Depends(get_current_user)):
-    if current_user.role != "admin":
+    if current_user.role not in ["admin", "platform_owner"]:
         raise HTTPException(status_code=403, detail="Admin access required")
+    return current_user
+
+def require_platform_owner(current_user: User = Depends(get_current_user)):
+    if current_user.role != "platform_owner":
+        raise HTTPException(status_code=403, detail="Platform Owner access required")
     return current_user
 
 @api_router.post("/auth/register", response_model=User)
@@ -247,12 +271,21 @@ async def register(user_data: UserCreate):
         "username": user_data.username,
         "password": hashed_password,
         "role": user_data.role,
+        "restaurant_id": user_data.restaurant_id,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.users.insert_one(user_dict)
-    return User(id=user_id, username=user_data.username, role=user_data.role, created_at=user_dict["created_at"])
+    return User(**user_dict)
 
 @api_router.post("/auth/login", response_model=Token)
+async def login(credentials: UserLogin):
+    user = await db.users.find_one({"username": credentials.username})
+    if not user or not verify_password(credentials.password, user["password"]):
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    access_token = create_access_token(data={"sub": user["id"], "role": user["role"]})
+    user_obj = User(**user)
+    return Token(access_token=access_token, token_type="bearer", user=user_obj)
 
 # TEMPORARY: Test login bypass for preview testing
 @api_router.post("/auth/test-login", response_model=Token)
@@ -266,15 +299,6 @@ async def test_login(credentials: UserLogin):
     user_data = User(**user)
     
     return Token(access_token=access_token, token_type="bearer", user=user_data)
-
-async def login(credentials: UserLogin):
-    user = await db.users.find_one({"username": credentials.username})
-    if not user or not verify_password(credentials.password, user["password"]):
-        raise HTTPException(status_code=401, detail="Invalid credentials")
-    
-    access_token = create_access_token(data={"sub": user["username"]})
-    user_obj = User(id=user["id"], username=user["username"], role=user["role"], created_at=user["created_at"])
-    return Token(access_token=access_token, token_type="bearer", user=user_obj)
 
 @api_router.get("/auth/me", response_model=User)
 async def get_me(current_user: User = Depends(get_current_user)):
@@ -290,7 +314,7 @@ async def create_restaurant(restaurant_data: RestaurantCreate, current_user: Use
     
     restaurant_dict = {
         "id": restaurant_id,
-        "owner_email": current_user.username,
+        "owner_email": restaurant_data.email,
         "subscription_status": "trial",
         "subscription_plan": "standard_monthly",
         "price": restaurant_data.subscription_price,
@@ -309,7 +333,11 @@ async def create_restaurant(restaurant_data: RestaurantCreate, current_user: Use
 @api_router.get("/restaurants/my", response_model=Restaurant)
 async def get_my_restaurant(current_user: User = Depends(get_current_user)):
     """Get current user's restaurant"""
-    restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
+    if current_user.restaurant_id:
+        restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0})
+    else:
+        restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
+
     if not restaurant:
         raise HTTPException(status_code=404, detail="No restaurant found for this user")
     return Restaurant(**restaurant)
@@ -317,20 +345,18 @@ async def get_my_restaurant(current_user: User = Depends(get_current_user)):
 @api_router.put("/restaurants/my/settings")
 async def update_restaurant_settings(settings: RestaurantUpdate, current_user: User = Depends(get_current_user)):
     """Update restaurant business information"""
-    restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
-    if not restaurant:
-        raise HTTPException(status_code=404, detail="No restaurant found")
+    restaurant_data = await get_my_restaurant(current_user)
     
     # Update only provided fields
     update_data = {k: v for k, v in settings.model_dump().items() if v is not None}
     
     if update_data:
         await db.restaurants.update_one(
-            {"id": restaurant["id"]},
+            {"id": restaurant_data.id},
             {"$set": {f"business_info.{k}": v for k, v in update_data.items()}}
         )
     
-    updated = await db.restaurants.find_one({"id": restaurant["id"]}, {"_id": 0})
+    updated = await db.restaurants.find_one({"id": restaurant_data.id}, {"_id": 0})
     return {"message": "Settings updated successfully", "business_info": updated["business_info"]}
 
 @api_router.get("/restaurants")
@@ -348,6 +374,7 @@ async def create_category(category_data: CategoryCreate, current_user: User = De
         "name": category_data.name,
         "description": category_data.description,
         "image_url": category_data.image_url,
+        "restaurant_id": category_data.restaurant_id or current_user.restaurant_id,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.categories.insert_one(category_dict)
@@ -397,6 +424,7 @@ async def create_product(product_data: ProductCreate, current_user: User = Depen
         "price": product_data.price,
         "image_url": product_data.image_url,
         "in_stock": product_data.in_stock,
+        "restaurant_id": product_data.restaurant_id or current_user.restaurant_id,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.products.insert_one(product_dict)
@@ -479,7 +507,8 @@ async def create_order(order_data: OrderCreate, current_user: User = Depends(get
         "status": "pending",
         "payment_method": None,
         "split_count": 1,
-        "completed_at": None
+        "completed_at": None,
+        "restaurant_id": current_user.restaurant_id
     }
     await db.orders.insert_one(order_dict)
     return Order(**order_dict)
@@ -517,14 +546,24 @@ async def complete_order(order_id: str, complete_data: OrderComplete, current_us
 @api_router.get("/orders/pending", response_model=List[Order])
 async def get_pending_orders(current_user: User = Depends(get_current_user)):
     query = {"status": "pending"}
-    if current_user.role != "admin":
-        query["created_by"] = current_user.username
+    if current_user.role != "platform_owner":
+        if current_user.role == "admin":
+             query["restaurant_id"] = current_user.restaurant_id
+        else:
+             query["created_by"] = current_user.username
+
     orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return [Order(**order) for order in orders]
 
 @api_router.get("/orders", response_model=List[Order])
 async def get_orders(current_user: User = Depends(get_current_user)):
-    query = {} if current_user.role == "admin" else {"created_by": current_user.username}
+    query = {}
+    if current_user.role != "platform_owner":
+        if current_user.role == "admin":
+            query["restaurant_id"] = current_user.restaurant_id
+        else:
+            query["created_by"] = current_user.username
+
     orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return [Order(**order) for order in orders]
 
@@ -542,7 +581,8 @@ async def sync_offline_data(sync_data: SyncData, current_user: User = Depends(ge
             "synced": True,
             "status": "pending",
             "payment_method": None,
-            "completed_at": None
+            "completed_at": None,
+            "restaurant_id": current_user.restaurant_id
         }
         await db.orders.insert_one(order_dict)
         synced_count += 1
@@ -553,10 +593,11 @@ async def generate_report(report_req: ReportRequest, current_user: User = Depend
     start_dt = datetime.fromisoformat(report_req.start_date)
     end_dt = datetime.fromisoformat(report_req.end_date)
     
-    orders = await db.orders.find(
-        {"created_at": {"$gte": start_dt.isoformat(), "$lte": end_dt.isoformat()}},
-        {"_id": 0}
-    ).to_list(10000)
+    query = {"created_at": {"$gte": start_dt.isoformat(), "$lte": end_dt.isoformat()}}
+    if current_user.role != "platform_owner":
+        query["restaurant_id"] = current_user.restaurant_id
+
+    orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
     
     total_sales = sum(order["total_amount"] for order in orders)
     total_orders = len(orders)
@@ -627,7 +668,7 @@ async def print_kitchen_receipt(order_id: str, current_user: User = Depends(get_
         raise HTTPException(status_code=404, detail="Order not found")
     
     # Get restaurant info
-    restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
+    restaurant = await db.restaurants.find_one({"id": order.get("restaurant_id")}, {"_id": 0})
     business_info = restaurant.get("business_info", {}) if restaurant else {}
     
     buffer = BytesIO()
@@ -703,7 +744,7 @@ async def print_customer_receipt(order_id: str, current_user: User = Depends(get
         raise HTTPException(status_code=400, detail="Order must be completed first")
     
     # Get restaurant info
-    restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
+    restaurant = await db.restaurants.find_one({"id": order.get("restaurant_id")}, {"_id": 0})
     business_info = restaurant.get("business_info", {}) if restaurant else {}
     
     buffer = BytesIO()
@@ -827,7 +868,11 @@ async def print_customer_receipt(order_id: str, current_user: User = Depends(get
 async def open_cash_drawer(drawer_data: CashDrawerOpen, current_user: User = Depends(require_admin)):
     # Check if there's already an open drawer for today
     today = datetime.now(timezone.utc).date().isoformat()
-    existing = await db.cash_drawers.find_one({"date": today, "status": "open"}, {"_id": 0})
+    query = {"date": today, "status": "open"}
+    if current_user.role != "platform_owner":
+        query["restaurant_id"] = current_user.restaurant_id
+
+    existing = await db.cash_drawers.find_one(query, {"_id": 0})
     if existing:
         raise HTTPException(status_code=400, detail="Cash drawer already open for today")
     
@@ -844,7 +889,8 @@ async def open_cash_drawer(drawer_data: CashDrawerOpen, current_user: User = Dep
         "closed_by": None,
         "opened_at": datetime.now(timezone.utc).isoformat(),
         "closed_at": None,
-        "status": "open"
+        "status": "open",
+        "restaurant_id": current_user.restaurant_id
     }
     await db.cash_drawers.insert_one(drawer_dict)
     return CashDrawer(**drawer_dict)
@@ -852,19 +898,24 @@ async def open_cash_drawer(drawer_data: CashDrawerOpen, current_user: User = Dep
 @api_router.get("/cash-drawer/current", response_model=CashDrawer)
 async def get_current_cash_drawer(current_user: User = Depends(require_admin)):
     today = datetime.now(timezone.utc).date().isoformat()
-    drawer = await db.cash_drawers.find_one({"date": today, "status": "open"}, {"_id": 0})
+    query = {"date": today, "status": "open"}
+    if current_user.role != "platform_owner":
+        query["restaurant_id"] = current_user.restaurant_id
+
+    drawer = await db.cash_drawers.find_one(query, {"_id": 0})
     if not drawer:
         raise HTTPException(status_code=404, detail="No open cash drawer for today")
     
     # Calculate expected cash from cash orders
-    cash_orders = await db.orders.find(
-        {
+    order_query = {
             "status": "completed",
             "payment_method": "cash",
             "created_at": {"$gte": drawer["opened_at"]}
-        },
-        {"_id": 0}
-    ).to_list(10000)
+    }
+    if current_user.role != "platform_owner":
+        order_query["restaurant_id"] = current_user.restaurant_id
+
+    cash_orders = await db.orders.find(order_query, {"_id": 0}).to_list(10000)
     
     total_cash_sales = sum(order["total_amount"] for order in cash_orders)
     drawer["expected_cash"] = drawer["opening_balance"] + total_cash_sales
@@ -874,19 +925,24 @@ async def get_current_cash_drawer(current_user: User = Depends(require_admin)):
 @api_router.put("/cash-drawer/close", response_model=CashDrawer)
 async def close_cash_drawer(close_data: CashDrawerClose, current_user: User = Depends(require_admin)):
     today = datetime.now(timezone.utc).date().isoformat()
-    drawer = await db.cash_drawers.find_one({"date": today, "status": "open"}, {"_id": 0})
+    query = {"date": today, "status": "open"}
+    if current_user.role != "platform_owner":
+        query["restaurant_id"] = current_user.restaurant_id
+
+    drawer = await db.cash_drawers.find_one(query, {"_id": 0})
     if not drawer:
         raise HTTPException(status_code=404, detail="No open cash drawer to close")
     
     # Calculate expected cash
-    cash_orders = await db.orders.find(
-        {
+    order_query = {
             "status": "completed",
             "payment_method": "cash",
             "created_at": {"$gte": drawer["opened_at"]}
-        },
-        {"_id": 0}
-    ).to_list(10000)
+    }
+    if current_user.role != "platform_owner":
+        order_query["restaurant_id"] = current_user.restaurant_id
+
+    cash_orders = await db.orders.find(order_query, {"_id": 0}).to_list(10000)
     
     total_cash_sales = sum(order["total_amount"] for order in cash_orders)
     expected_cash = drawer["opening_balance"] + total_cash_sales
@@ -910,7 +966,11 @@ async def close_cash_drawer(close_data: CashDrawerClose, current_user: User = De
 
 @api_router.get("/cash-drawer/history")
 async def get_cash_drawer_history(current_user: User = Depends(require_admin)):
-    drawers = await db.cash_drawers.find({}, {"_id": 0}).sort("date", -1).limit(30).to_list(100)
+    query = {}
+    if current_user.role != "platform_owner":
+        query["restaurant_id"] = current_user.restaurant_id
+
+    drawers = await db.cash_drawers.find(query, {"_id": 0}).sort("date", -1).limit(30).to_list(100)
     return drawers
 
 @api_router.get("/reports/stats")
@@ -918,10 +978,11 @@ async def get_report_stats(start_date: str, end_date: str, current_user: User = 
     start_dt = datetime.fromisoformat(start_date)
     end_dt = datetime.fromisoformat(end_date)
     
-    orders = await db.orders.find(
-        {"created_at": {"$gte": start_dt.isoformat(), "$lte": end_dt.isoformat()}},
-        {"_id": 0}
-    ).to_list(10000)
+    query = {"created_at": {"$gte": start_dt.isoformat(), "$lte": end_dt.isoformat()}}
+    if current_user.role != "platform_owner":
+        query["restaurant_id"] = current_user.restaurant_id
+
+    orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
     
     total_sales = sum(order["total_amount"] for order in orders)
     total_orders = len(orders)
@@ -999,9 +1060,13 @@ async def seed_database_endpoint(secret: str = None):
     if secret != "hevapos2026":
         raise HTTPException(status_code=403, detail="Invalid secret")
     
-    existing_users = await db.users.count_documents({})
-    if existing_users > 0:
-        return {"message": f"Already seeded with {existing_users} users", "seeded": False}
+    # Clear existing data to ensure clean seed
+    await db.users.delete_many({})
+    await db.restaurants.delete_many({})
+    await db.categories.delete_many({})
+    await db.products.delete_many({})
+    await db.orders.delete_many({})
+    await db.cash_drawers.delete_many({})
     
     from datetime import timedelta
     
@@ -1010,7 +1075,7 @@ async def seed_database_endpoint(secret: str = None):
     
     # Restaurant
     trial_ends = datetime.now(timezone.utc) + timedelta(days=14)
-    await db.restaurants.insert_one({"id": "rest_demo_1", "owner_email": "demo@hevapos.com", "subscription_status": "trial", "price": 19.99, "currency": "GBP", "business_info": {"name": "Pizza Palace", "city": "London"}, "created_at": datetime.now(timezone.utc).isoformat(), "trial_ends_at": trial_ends.isoformat()})
+    await db.restaurants.insert_one({"id": "rest_demo_1", "owner_email": "demo@hevapos.com", "subscription_status": "trial", "price": 19.99, "currency": "GBP", "business_info": {"name": "Pizza Palace", "city": "London"}, "users": ["restaurant_admin", "user"], "created_at": datetime.now(timezone.utc).isoformat(), "trial_ends_at": trial_ends.isoformat()})
     
     # Admin & Staff
     await db.users.insert_one({"id": "restaurant_admin_1", "username": "restaurant_admin", "password": pwd_context.hash("admin123"), "role": "admin", "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()})
@@ -1018,21 +1083,21 @@ async def seed_database_endpoint(secret: str = None):
     
     # Categories
     await db.categories.insert_many([
-        {"id": "cat_1", "name": "Pizzas", "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "cat_2", "name": "Drinks", "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "cat_3", "name": "Sides", "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "cat_4", "name": "Desserts", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "cat_1", "name": "Pizzas", "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "cat_2", "name": "Drinks", "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "cat_3", "name": "Sides", "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "cat_4", "name": "Desserts", "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
     ])
     
     # Products
     await db.products.insert_many([
-        {"id": "prod_1", "name": "Margherita", "category_id": "cat_1", "category_name": "Pizzas", "price": 9.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "prod_2", "name": "Pepperoni", "category_id": "cat_1", "category_name": "Pizzas", "price": 11.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "prod_3", "name": "Hawaiian", "category_id": "cat_1", "category_name": "Pizzas", "price": 12.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "prod_5", "name": "Coca-Cola", "category_id": "cat_2", "category_name": "Drinks", "price": 2.50, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "prod_6", "name": "Sprite", "category_id": "cat_2", "category_name": "Drinks", "price": 2.50, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "prod_8", "name": "Garlic Bread", "category_id": "cat_3", "category_name": "Sides", "price": 4.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "prod_10", "name": "Chocolate Brownie", "category_id": "cat_4", "category_name": "Desserts", "price": 4.50, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_1", "name": "Margherita", "category_id": "cat_1", "category_name": "Pizzas", "price": 9.99, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_2", "name": "Pepperoni", "category_id": "cat_1", "category_name": "Pizzas", "price": 11.99, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_3", "name": "Hawaiian", "category_id": "cat_1", "category_name": "Pizzas", "price": 12.99, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_5", "name": "Coca-Cola", "category_id": "cat_2", "category_name": "Drinks", "price": 2.50, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_6", "name": "Sprite", "category_id": "cat_2", "category_name": "Drinks", "price": 2.50, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_8", "name": "Garlic Bread", "category_id": "cat_3", "category_name": "Sides", "price": 4.99, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_10", "name": "Chocolate Brownie", "category_id": "cat_4", "category_name": "Desserts", "price": 4.50, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
     ])
     
     return {"message": "Database seeded!", "seeded": True, "credentials": {"platform_owner": "admin123", "restaurant_admin": "admin123", "staff_user": "user123"}}
