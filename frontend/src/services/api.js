@@ -243,6 +243,14 @@ export const restaurantAPI = {
     const response = await api.post('/restaurants', data);
     return response.data;
   },
+  update: async (restaurantId, data) => {
+    const response = await api.put(`/restaurants/${restaurantId}`, data);
+    return response.data;
+  },
+  delete: async (restaurantId) => {
+    const response = await api.delete(`/restaurants/${restaurantId}`);
+    return response.data;
+  },
   // Restaurant User Management
   getUsers: async (restaurantId) => {
     const response = await api.get(`/restaurants/${restaurantId}/users`);

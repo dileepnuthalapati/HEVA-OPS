@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, Store, Building2, Mail, Phone, MapPin, DollarSign, User, Users, Trash2, Key } from 'lucide-react';
+import { Plus, Store, Building2, Mail, Phone, MapPin, DollarSign, User, Users, Trash2, Key, Edit } from 'lucide-react';
 
 const CURRENCY_OPTIONS = [
   { value: 'GBP', label: '£ GBP - British Pound', symbol: '£' },
@@ -28,6 +28,7 @@ const RestaurantManagement = () => {
   const [selectedRestaurant, setSelectedRestaurant] = useState(null);
   const [restaurantUsers, setRestaurantUsers] = useState([]);
   const [saving, setSaving] = useState(false);
+  const [editingRestaurant, setEditingRestaurant] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
     address_line1: '',
@@ -71,46 +72,101 @@ const RestaurantManagement = () => {
     setSaving(true);
 
     try {
-      // Create restaurant first
-      const restaurant = await restaurantAPI.create({
-        name: formData.name,
-        address_line1: formData.address_line1,
-        address_line2: formData.address_line2,
-        city: formData.city,
-        postcode: formData.postcode,
-        phone: formData.phone,
-        email: formData.email,
-        website: formData.website,
-        vat_number: formData.vat_number,
-        receipt_footer: formData.receipt_footer,
-        subscription_price: parseFloat(formData.subscription_price),
-        currency: formData.currency,
-      });
-      
-      // Create admin user for the restaurant if provided
-      if (formData.admin_username && formData.admin_password) {
-        try {
-          await restaurantAPI.createUser(restaurant.id, {
-            username: formData.admin_username,
-            password: formData.admin_password,
-            role: 'admin',
-            restaurant_id: restaurant.id
-          });
-          toast.success(`Restaurant and admin user "${formData.admin_username}" created!`);
-        } catch (userError) {
-          toast.warning(`Restaurant created, but user creation failed: ${userError.response?.data?.detail || 'Unknown error'}`);
-        }
+      if (editingRestaurant) {
+        // Update existing restaurant
+        await restaurantAPI.update(editingRestaurant.id, {
+          name: formData.name,
+          address_line1: formData.address_line1,
+          address_line2: formData.address_line2,
+          city: formData.city,
+          postcode: formData.postcode,
+          phone: formData.phone,
+          email: formData.email,
+          website: formData.website,
+          vat_number: formData.vat_number,
+          receipt_footer: formData.receipt_footer,
+          subscription_price: parseFloat(formData.subscription_price),
+          currency: formData.currency,
+        });
+        toast.success('Restaurant updated successfully!');
       } else {
-        toast.success('Restaurant added successfully!');
+        // Create restaurant first
+        const restaurant = await restaurantAPI.create({
+          name: formData.name,
+          address_line1: formData.address_line1,
+          address_line2: formData.address_line2,
+          city: formData.city,
+          postcode: formData.postcode,
+          phone: formData.phone,
+          email: formData.email,
+          website: formData.website,
+          vat_number: formData.vat_number,
+          receipt_footer: formData.receipt_footer,
+          subscription_price: parseFloat(formData.subscription_price),
+          currency: formData.currency,
+        });
+        
+        // Create admin user for the restaurant if provided
+        if (formData.admin_username && formData.admin_password) {
+          try {
+            await restaurantAPI.createUser(restaurant.id, {
+              username: formData.admin_username,
+              password: formData.admin_password,
+              role: 'admin',
+              restaurant_id: restaurant.id
+            });
+            toast.success(`Restaurant and admin user "${formData.admin_username}" created!`);
+          } catch (userError) {
+            toast.warning(`Restaurant created, but user creation failed: ${userError.response?.data?.detail || 'Unknown error'}`);
+          }
+        } else {
+          toast.success('Restaurant added successfully!');
+        }
       }
       
       setShowAddDialog(false);
+      setEditingRestaurant(null);
       resetForm();
       loadRestaurants();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to add restaurant');
+      toast.error(error.response?.data?.detail || 'Failed to save restaurant');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleEditRestaurant = (restaurant) => {
+    setEditingRestaurant(restaurant);
+    setFormData({
+      name: restaurant.business_info?.name || '',
+      address_line1: restaurant.business_info?.address_line1 || '',
+      address_line2: restaurant.business_info?.address_line2 || '',
+      city: restaurant.business_info?.city || '',
+      postcode: restaurant.business_info?.postcode || '',
+      phone: restaurant.business_info?.phone || '',
+      email: restaurant.owner_email || '',
+      website: restaurant.business_info?.website || '',
+      vat_number: restaurant.business_info?.vat_number || '',
+      receipt_footer: restaurant.business_info?.receipt_footer || '',
+      subscription_price: restaurant.price?.toString() || '',
+      currency: restaurant.currency || 'GBP',
+      admin_username: '',
+      admin_password: '',
+    });
+    setShowAddDialog(true);
+  };
+
+  const handleDeleteRestaurant = async (restaurant) => {
+    if (!window.confirm(`Are you sure you want to delete "${restaurant.business_info?.name || 'this restaurant'}"? This will delete ALL data including orders, tables, and users.`)) {
+      return;
+    }
+    
+    try {
+      await restaurantAPI.delete(restaurant.id);
+      toast.success('Restaurant deleted successfully');
+      loadRestaurants();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete restaurant');
     }
   };
 
@@ -210,18 +266,27 @@ const RestaurantManagement = () => {
               <h1 className="text-4xl font-bold tracking-tight mb-2">Restaurant Management</h1>
               <p className="text-muted-foreground">Manage all your HevaPOS customers</p>
             </div>
-            <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+            <Dialog open={showAddDialog} onOpenChange={(open) => {
+              setShowAddDialog(open);
+              if (!open) {
+                setEditingRestaurant(null);
+                resetForm();
+              }
+            }}>
               <DialogTrigger asChild>
-                <Button data-testid="add-restaurant-button" onClick={resetForm}>
+                <Button data-testid="add-restaurant-button" onClick={() => {
+                  setEditingRestaurant(null);
+                  resetForm();
+                }}>
                   <Plus className="w-4 h-4 mr-2" />
                   Add Restaurant
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>Add New Restaurant</DialogTitle>
+                  <DialogTitle>{editingRestaurant ? 'Edit Restaurant' : 'Add New Restaurant'}</DialogTitle>
                   <DialogDescription>
-                    Create a new restaurant account with custom pricing
+                    {editingRestaurant ? 'Update restaurant details' : 'Create a new restaurant account with custom pricing'}
                   </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4 mt-4">
@@ -553,14 +618,34 @@ const RestaurantManagement = () => {
                           {getCurrencySymbol(restaurant.currency)}{restaurant.price.toFixed(2)}
                         </div>
                         <div className="text-xs text-muted-foreground mb-3">per month</div>
-                        <Button 
-                          size="sm" 
-                          variant="outline"
-                          onClick={() => openUserManagement(restaurant)}
-                        >
-                          <Users className="w-4 h-4 mr-1" />
-                          Manage Users
-                        </Button>
+                        <div className="flex gap-2 justify-end">
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => handleEditRestaurant(restaurant)}
+                            data-testid={`edit-restaurant-${restaurant.id}`}
+                          >
+                            <Edit className="w-4 h-4 mr-1" />
+                            Edit
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            onClick={() => openUserManagement(restaurant)}
+                          >
+                            <Users className="w-4 h-4 mr-1" />
+                            Users
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            className="text-red-500 hover:text-red-700 hover:border-red-300"
+                            onClick={() => handleDeleteRestaurant(restaurant)}
+                            data-testid={`delete-restaurant-${restaurant.id}`}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </CardContent>

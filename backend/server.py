@@ -484,6 +484,43 @@ async def create_restaurant(restaurant_data: RestaurantCreate, current_user: Use
     await db.restaurants.insert_one(restaurant_dict)
     return Restaurant(**restaurant_dict)
 
+@api_router.put("/restaurants/{restaurant_id}")
+async def update_restaurant(restaurant_id: str, restaurant_data: RestaurantCreate, current_user: User = Depends(require_platform_owner)):
+    """Platform Owner updates a restaurant's details"""
+    restaurant = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0})
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+    
+    # Update business info and pricing
+    update_data = {
+        "owner_email": restaurant_data.email,
+        "price": restaurant_data.subscription_price,
+        "currency": restaurant_data.currency,
+        "business_info": {k: v for k, v in restaurant_data.model_dump().items() 
+                         if k not in ['subscription_price', 'currency']}
+    }
+    
+    await db.restaurants.update_one({"id": restaurant_id}, {"$set": update_data})
+    
+    updated = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0})
+    return Restaurant(**updated)
+
+@api_router.delete("/restaurants/{restaurant_id}")
+async def delete_restaurant(restaurant_id: str, current_user: User = Depends(require_platform_owner)):
+    """Platform Owner deletes a restaurant and all its data"""
+    restaurant = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0})
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+    
+    # Delete all related data
+    await db.users.delete_many({"restaurant_id": restaurant_id})
+    await db.orders.delete_many({"restaurant_id": restaurant_id})
+    await db.tables.delete_many({"restaurant_id": restaurant_id})
+    await db.printers.delete_many({"restaurant_id": restaurant_id})
+    await db.restaurants.delete_one({"id": restaurant_id})
+    
+    return {"message": "Restaurant and all related data deleted"}
+
 @api_router.get("/restaurants/my", response_model=Restaurant)
 async def get_my_restaurant(current_user: User = Depends(get_current_user)):
     """Get current user's restaurant"""
