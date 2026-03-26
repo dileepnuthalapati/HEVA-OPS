@@ -503,10 +503,53 @@ async def create_restaurant(restaurant_data: RestaurantCreate, current_user: Use
     await db.restaurants.insert_one(restaurant_dict)
     return Restaurant(**restaurant_dict)
 
+@api_router.put("/restaurants/{restaurant_id}")
+async def update_restaurant(restaurant_id: str, restaurant_data: RestaurantCreate, current_user: User = Depends(require_platform_owner)):
+    """Platform Owner updates a restaurant's details"""
+    restaurant = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0})
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+    
+    # Update business info and pricing
+    update_data = {
+        "owner_email": restaurant_data.email,
+        "price": restaurant_data.subscription_price,
+        "currency": restaurant_data.currency,
+        "business_info": {k: v for k, v in restaurant_data.model_dump().items() 
+                         if k not in ['subscription_price', 'currency']}
+    }
+    
+    await db.restaurants.update_one({"id": restaurant_id}, {"$set": update_data})
+    
+    updated = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0})
+    return Restaurant(**updated)
+
+@api_router.delete("/restaurants/{restaurant_id}")
+async def delete_restaurant(restaurant_id: str, current_user: User = Depends(require_platform_owner)):
+    """Platform Owner deletes a restaurant and all its data"""
+    restaurant = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0})
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+    
+    # Delete all related data
+    await db.users.delete_many({"restaurant_id": restaurant_id})
+    await db.orders.delete_many({"restaurant_id": restaurant_id})
+    await db.tables.delete_many({"restaurant_id": restaurant_id})
+    await db.printers.delete_many({"restaurant_id": restaurant_id})
+    await db.restaurants.delete_one({"id": restaurant_id})
+    
+    return {"message": "Restaurant and all related data deleted"}
+
 @api_router.get("/restaurants/my", response_model=Restaurant)
 async def get_my_restaurant(current_user: User = Depends(get_current_user)):
     """Get current user's restaurant"""
+    # First try to find by users array
     restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
+    
+    # If not found and user has restaurant_id, find by id
+    if not restaurant and current_user.restaurant_id:
+        restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0})
+    
     if not restaurant:
         raise HTTPException(status_code=404, detail="No restaurant found for this user")
     return Restaurant(**restaurant)
@@ -514,7 +557,13 @@ async def get_my_restaurant(current_user: User = Depends(get_current_user)):
 @api_router.put("/restaurants/my/settings")
 async def update_restaurant_settings(settings: RestaurantUpdate, current_user: User = Depends(get_current_user)):
     """Update restaurant business information"""
+    # First try to find by users array
     restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
+    
+    # If not found and user has restaurant_id, find by id
+    if not restaurant and current_user.restaurant_id:
+        restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0})
+    
     if not restaurant:
         raise HTTPException(status_code=404, detail="No restaurant found")
     
@@ -545,6 +594,7 @@ async def create_category(category_data: CategoryCreate, current_user: User = De
         "name": category_data.name,
         "description": category_data.description,
         "image_url": category_data.image_url,
+        "restaurant_id": current_user.restaurant_id,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.categories.insert_one(category_dict)
@@ -555,7 +605,11 @@ async def get_categories(current_user: User = Depends(get_current_user)):
     # Filter by restaurant_id for restaurant admins/users
     query = {}
     if current_user.role != 'platform_owner' and current_user.restaurant_id:
-        query["restaurant_id"] = current_user.restaurant_id
+        query["$or"] = [
+            {"restaurant_id": current_user.restaurant_id},
+            {"restaurant_id": None},  # Include global categories
+            {"restaurant_id": {"$exists": False}}  # Include old categories without restaurant_id
+        ]
     
     categories = await db.categories.find(query, {"_id": 0}).to_list(1000)
     return [Category(**cat) for cat in categories]
@@ -564,7 +618,7 @@ async def get_categories(current_user: User = Depends(get_current_user)):
 async def update_category(category_id: str, category_data: CategoryCreate, current_user: User = Depends(require_admin)):
     result = await db.categories.update_one(
         {"id": category_id},
-        {"$set": category_data.model_dump()}
+        {"$set": {**category_data.model_dump(), "restaurant_id": current_user.restaurant_id}}
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Category not found")
@@ -594,7 +648,7 @@ async def create_product(product_data: ProductCreate, current_user: User = Depen
         "price": product_data.price,
         "image_url": product_data.image_url,
         "in_stock": product_data.in_stock,
-        "restaurant_id": product_data.restaurant_id or current_user.restaurant_id,
+        "restaurant_id": current_user.restaurant_id,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.products.insert_one(product_dict)
@@ -610,7 +664,11 @@ async def get_products(
     
     # Filter by restaurant_id (only for restaurant admins/users)
     if current_user.role != 'platform_owner' and current_user.restaurant_id:
-        query["restaurant_id"] = current_user.restaurant_id
+        query["$or"] = [
+            {"restaurant_id": current_user.restaurant_id},
+            {"restaurant_id": None},  # Include global products
+            {"restaurant_id": {"$exists": False}}  # Include old products without restaurant_id
+        ]
     
     # Additional category filter
     if category_id:
@@ -627,6 +685,7 @@ async def update_product(product_id: str, product_data: ProductCreate, current_u
     
     update_dict = product_data.model_dump()
     update_dict["category_name"] = category["name"]
+    update_dict["restaurant_id"] = current_user.restaurant_id
     
     result = await db.products.update_one(
         {"id": product_id},
@@ -1555,7 +1614,11 @@ async def get_tables(current_user: User = Depends(get_current_user)):
     """Get all tables for the restaurant"""
     query = {}
     if current_user.role != 'platform_owner' and current_user.restaurant_id:
-        query["restaurant_id"] = current_user.restaurant_id
+        query["$or"] = [
+            {"restaurant_id": current_user.restaurant_id},
+            {"restaurant_id": None},
+            {"restaurant_id": {"$exists": False}}
+        ]
     tables = await db.tables.find(query, {"_id": 0}).sort("number", 1).to_list(200)
     return [Table(**t) for t in tables]
 
