@@ -575,6 +575,7 @@ async def create_category(category_data: CategoryCreate, current_user: User = De
         "name": category_data.name,
         "description": category_data.description,
         "image_url": category_data.image_url,
+        "restaurant_id": current_user.restaurant_id,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.categories.insert_one(category_dict)
@@ -585,7 +586,11 @@ async def get_categories(current_user: User = Depends(get_current_user)):
     # Filter by restaurant_id for restaurant admins/users
     query = {}
     if current_user.role != 'platform_owner' and current_user.restaurant_id:
-        query["restaurant_id"] = current_user.restaurant_id
+        query["$or"] = [
+            {"restaurant_id": current_user.restaurant_id},
+            {"restaurant_id": None},  # Include global categories
+            {"restaurant_id": {"$exists": False}}  # Include old categories without restaurant_id
+        ]
     
     categories = await db.categories.find(query, {"_id": 0}).to_list(1000)
     return [Category(**cat) for cat in categories]
@@ -594,7 +599,7 @@ async def get_categories(current_user: User = Depends(get_current_user)):
 async def update_category(category_id: str, category_data: CategoryCreate, current_user: User = Depends(require_admin)):
     result = await db.categories.update_one(
         {"id": category_id},
-        {"$set": category_data.model_dump()}
+        {"$set": {**category_data.model_dump(), "restaurant_id": current_user.restaurant_id}}
     )
     if result.modified_count == 0:
         raise HTTPException(status_code=404, detail="Category not found")
@@ -624,6 +629,7 @@ async def create_product(product_data: ProductCreate, current_user: User = Depen
         "price": product_data.price,
         "image_url": product_data.image_url,
         "in_stock": product_data.in_stock,
+        "restaurant_id": current_user.restaurant_id,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.products.insert_one(product_dict)
@@ -639,7 +645,11 @@ async def get_products(
     
     # Filter by restaurant_id (only for restaurant admins/users)
     if current_user.role != 'platform_owner' and current_user.restaurant_id:
-        query["restaurant_id"] = current_user.restaurant_id
+        query["$or"] = [
+            {"restaurant_id": current_user.restaurant_id},
+            {"restaurant_id": None},  # Include global products
+            {"restaurant_id": {"$exists": False}}  # Include old products without restaurant_id
+        ]
     
     # Additional category filter
     if category_id:
@@ -656,6 +666,7 @@ async def update_product(product_id: str, product_data: ProductCreate, current_u
     
     update_dict = product_data.model_dump()
     update_dict["category_name"] = category["name"]
+    update_dict["restaurant_id"] = current_user.restaurant_id
     
     result = await db.products.update_one(
         {"id": product_id},
@@ -1583,7 +1594,11 @@ async def get_tables(current_user: User = Depends(get_current_user)):
     """Get all tables for the restaurant"""
     query = {}
     if current_user.role != 'platform_owner' and current_user.restaurant_id:
-        query["restaurant_id"] = current_user.restaurant_id
+        query["$or"] = [
+            {"restaurant_id": current_user.restaurant_id},
+            {"restaurant_id": None},
+            {"restaurant_id": {"$exists": False}}
+        ]
     tables = await db.tables.find(query, {"_id": 0}).sort("number", 1).to_list(200)
     return [Table(**t) for t in tables]
 
