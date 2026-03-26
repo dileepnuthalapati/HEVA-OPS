@@ -487,7 +487,13 @@ async def create_restaurant(restaurant_data: RestaurantCreate, current_user: Use
 @api_router.get("/restaurants/my", response_model=Restaurant)
 async def get_my_restaurant(current_user: User = Depends(get_current_user)):
     """Get current user's restaurant"""
+    # First try to find by users array
     restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
+    
+    # If not found and user has restaurant_id, find by id
+    if not restaurant and current_user.restaurant_id:
+        restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0})
+    
     if not restaurant:
         raise HTTPException(status_code=404, detail="No restaurant found for this user")
     return Restaurant(**restaurant)
@@ -495,7 +501,13 @@ async def get_my_restaurant(current_user: User = Depends(get_current_user)):
 @api_router.put("/restaurants/my/settings")
 async def update_restaurant_settings(settings: RestaurantUpdate, current_user: User = Depends(get_current_user)):
     """Update restaurant business information"""
+    # First try to find by users array
     restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
+    
+    # If not found and user has restaurant_id, find by id
+    if not restaurant and current_user.restaurant_id:
+        restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0})
+    
     if not restaurant:
         raise HTTPException(status_code=404, detail="No restaurant found")
     
