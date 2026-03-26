@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { categoryAPI, productAPI, orderAPI, tableAPI, printerAPI } from '../services/api';
+import { categoryAPI, productAPI, orderAPI, tableAPI, printerAPI, restaurantAPI } from '../services/api';
 import printerService from '../services/printer';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
@@ -13,6 +13,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, DollarSign, CreditCard, Users, Percent, Tag, MessageSquare, Banknote } from 'lucide-react';
+
+// Currency helper
+const getCurrencySymbol = (currency) => {
+  const symbols = { 'GBP': '£', 'USD': '$', 'EUR': '€', 'INR': '₹' };
+  return symbols[currency] || currency || '£';
+};
 
 const POSScreen = () => {
   const { user, logout } = useAuth();
@@ -31,6 +37,7 @@ const POSScreen = () => {
   const [customTip, setCustomTip] = useState('');
   const [splitCount, setSplitCount] = useState(1);
   const [printerConnected, setPrinterConnected] = useState(false);
+  const [currency, setCurrency] = useState('GBP');
   
   // New states for discounts, notes, and split payment
   const [orderNotes, setOrderNotes] = useState('');
@@ -48,12 +55,24 @@ const POSScreen = () => {
   useEffect(() => {
     loadData();
     loadPendingOrders();
+    loadRestaurantCurrency();
     loadTables();
     checkPrinterSupport();
   }, []);
 
   const checkPrinterSupport = () => {
     setPrinterConnected(printerService.isSupported());
+  };
+
+  const loadRestaurantCurrency = async () => {
+    try {
+      const restaurant = await restaurantAPI.getMy();
+      if (restaurant?.currency) {
+        setCurrency(restaurant.currency);
+      }
+    } catch (error) {
+      // Use default currency
+    }
   };
 
   const connectPrinter = async () => {
@@ -494,7 +513,7 @@ const POSScreen = () => {
                         </div>
                         <div className="text-right">
                           <div className="text-2xl font-bold font-mono text-emerald-600">
-                            ${order.total_amount.toFixed(2)}
+                            {getCurrencySymbol(currency)}{order.total_amount.toFixed(2)}
                           </div>
                         </div>
                       </div>
@@ -504,7 +523,7 @@ const POSScreen = () => {
                             <span>
                               {item.product_name} x {item.quantity}
                             </span>
-                            <span className="font-mono">${item.total.toFixed(2)}</span>
+                            <span className="font-mono">{getCurrencySymbol(currency)}{item.total.toFixed(2)}</span>
                           </div>
                         ))}
                       </div>
@@ -542,7 +561,7 @@ const POSScreen = () => {
                   <CardContent className="p-4">
                     <div className="font-semibold text-sm mb-1 line-clamp-1">{product.name}</div>
                     <div className="text-xs text-muted-foreground mb-2">{product.category_name}</div>
-                    <div className="price text-emerald-600">${product.price.toFixed(2)}</div>
+                    <div className="price text-emerald-600">{getCurrencySymbol(currency)}{product.price.toFixed(2)}</div>
                     {!product.in_stock && <div className="text-xs text-red-500 mt-1">Out of stock</div>}
                   </CardContent>
                 </Card>
@@ -614,7 +633,7 @@ const POSScreen = () => {
                       <div className="flex-1">
                         <div className="font-semibold">{item.product_name}</div>
                         <div className="text-sm text-muted-foreground font-mono">
-                          ${item.unit_price.toFixed(2)} each
+                          {getCurrencySymbol(currency)}{item.unit_price.toFixed(2)} each
                         </div>
                       </div>
                       <Button
@@ -648,7 +667,7 @@ const POSScreen = () => {
                           <Plus className="w-4 h-4" />
                         </Button>
                       </div>
-                      <div className="font-bold font-mono text-lg">${item.total.toFixed(2)}</div>
+                      <div className="font-bold font-mono text-lg">{getCurrencySymbol(currency)}{item.total.toFixed(2)}</div>
                     </div>
                   </CardContent>
                 </Card>
@@ -712,7 +731,7 @@ const POSScreen = () => {
                   <div>
                     <Input
                       type="number"
-                      placeholder={discountType === 'percentage' ? 'Enter %' : 'Enter $'}
+                      placeholder={discountType === 'percentage' ? 'Enter %' : `Enter ${getCurrencySymbol(currency)}`}
                       value={discountValue}
                       onChange={(e) => setDiscountValue(e.target.value)}
                       data-testid="discount-value-input"
@@ -772,14 +791,14 @@ const POSScreen = () => {
             </div>
             {calculateDiscount() > 0 && (
               <div className="flex justify-between text-sm text-emerald-600">
-                <span>Discount ({discountType === 'percentage' ? `${discountValue}%` : `$${discountValue}`})</span>
-                <span className="font-mono">-${calculateDiscount().toFixed(2)}</span>
+                <span>Discount ({discountType === 'percentage' ? `${discountValue}%` : `${getCurrencySymbol(currency)}${discountValue}`})</span>
+                <span className="font-mono">-{getCurrencySymbol(currency)}{calculateDiscount().toFixed(2)}</span>
               </div>
             )}
             <Separator />
             <div className="flex justify-between text-xl font-bold">
               <span>Total</span>
-              <span className="font-mono text-2xl">${calculateCartTotal().toFixed(2)}</span>
+              <span className="font-mono text-2xl">{getCurrencySymbol(currency)}{calculateCartTotal().toFixed(2)}</span>
             </div>
           </div>
           <Button
@@ -872,7 +891,7 @@ const POSScreen = () => {
                   <div className="flex justify-between text-sm">
                     <span>Tip Amount:</span>
                     <span className="font-mono text-emerald-600">
-                      +${calculateTipAmount().toFixed(2)}
+                      +{getCurrencySymbol(currency)}{calculateTipAmount().toFixed(2)}
                     </span>
                   </div>
                 )}
@@ -914,7 +933,7 @@ const POSScreen = () => {
                   <div className="flex justify-between text-sm">
                     <span>Per Person:</span>
                     <span className="font-mono text-blue-600">
-                      ${calculatePerPersonAmount().toFixed(2)}
+                      {getCurrencySymbol(currency)}{calculatePerPersonAmount().toFixed(2)}
                     </span>
                   </div>
                 )}
@@ -924,7 +943,7 @@ const POSScreen = () => {
               <div className="flex justify-between font-bold text-lg">
                 <span>Grand Total:</span>
                 <span className="font-mono text-emerald-600">
-                  ${calculateGrandTotal().toFixed(2)}
+                  {getCurrencySymbol(currency)}{calculateGrandTotal().toFixed(2)}
                 </span>
               </div>
               
@@ -991,12 +1010,12 @@ const POSScreen = () => {
                   <div className="flex justify-between text-sm pt-2 border-t">
                     <span>Total Entered:</span>
                     <span className={`font-mono font-bold ${Math.abs((parseFloat(cashAmount) || 0) + (parseFloat(cardAmount) || 0) - calculateGrandTotal()) <= 0.02 ? 'text-emerald-600' : 'text-red-600'}`}>
-                      ${((parseFloat(cashAmount) || 0) + (parseFloat(cardAmount) || 0)).toFixed(2)}
+                      {getCurrencySymbol(currency)}{((parseFloat(cashAmount) || 0) + (parseFloat(cardAmount) || 0)).toFixed(2)}
                     </span>
                   </div>
                   {calculateRemainingAmount() > 0.02 && (
                     <div className="text-xs text-amber-700">
-                      Remaining: ${calculateRemainingAmount().toFixed(2)}
+                      Remaining: {getCurrencySymbol(currency)}{calculateRemainingAmount().toFixed(2)}
                     </div>
                   )}
                   <Button
@@ -1022,7 +1041,7 @@ const POSScreen = () => {
                   <DollarSign className="w-8 h-8" />
                   <span className="text-base font-bold">Cash</span>
                   {splitCount > 1 && (
-                    <span className="text-xs opacity-75">${calculatePerPersonAmount().toFixed(2)} each</span>
+                    <span className="text-xs opacity-75">{getCurrencySymbol(currency)}{calculatePerPersonAmount().toFixed(2)} each</span>
                   )}
                 </Button>
                 <Button
@@ -1034,7 +1053,7 @@ const POSScreen = () => {
                   <CreditCard className="w-8 h-8" />
                   <span className="text-base font-bold">Card</span>
                   {splitCount > 1 && (
-                    <span className="text-xs opacity-75">${calculatePerPersonAmount().toFixed(2)} each</span>
+                    <span className="text-xs opacity-75">{getCurrencySymbol(currency)}{calculatePerPersonAmount().toFixed(2)} each</span>
                   )}
                 </Button>
               </div>
