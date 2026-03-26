@@ -1,8 +1,8 @@
 import axios from 'axios';
 import { saveToIndexedDB, getAllFromIndexedDB, getUnsyncedOrders } from './db';
 
-// TEMPORARY: Using test-login endpoint for preview testing
-const API_URL = process.env.REACT_APP_BACKEND_URL || 'https://your-backend-url.com';
+// Updated to Railway production URL
+const API_URL = process.env.REACT_APP_BACKEND_URL || 'https://heva-ops-production.up.railway.app';
 
 // Use test endpoint for now
 export const USE_TEST_LOGIN = true;

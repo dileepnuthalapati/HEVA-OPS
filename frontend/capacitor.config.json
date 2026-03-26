@@ -3,6 +3,8 @@
   "appName": "HevaPOS",
   "webDir": "build",
   "android": {
-    "ignorePlugins": ["BluetoothLe"]
+    "ignorePlugins": [
+      "BluetoothLe"
+    ]
   }
 }
