@@ -752,6 +752,46 @@ async def create_order(order_data: OrderCreate, current_user: User = Depends(get
     
     return Order(**order_dict)
 
+@api_router.put("/orders/{order_id}", response_model=Order)
+async def update_order(order_id: str, order_data: OrderCreate, current_user: User = Depends(get_current_user)):
+    """Update a pending order (add/remove items, update notes, etc.)"""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    if order["status"] == "completed":
+        raise HTTPException(status_code=400, detail="Cannot edit a completed order")
+    
+    # Calculate subtotal and discount
+    subtotal = sum(item.total for item in order_data.items)
+    discount_amount = 0
+    if order_data.discount_type and order_data.discount_value:
+        if order_data.discount_type == "percentage":
+            discount_amount = subtotal * (order_data.discount_value / 100)
+        else:  # fixed
+            discount_amount = min(order_data.discount_value, subtotal)
+    
+    total_after_discount = subtotal - discount_amount
+    
+    # Update order
+    update_dict = {
+        "items": [item.model_dump() for item in order_data.items],
+        "subtotal": round(subtotal, 2),
+        "total_amount": round(total_after_discount, 2),
+        "order_notes": order_data.order_notes,
+        "discount_type": order_data.discount_type,
+        "discount_value": order_data.discount_value,
+        "discount_reason": order_data.discount_reason,
+        "discount_amount": round(discount_amount, 2),
+        "table_id": order_data.table_id,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    await db.orders.update_one({"id": order_id}, {"$set": update_dict})
+    
+    updated = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    return Order(**updated)
+
 @api_router.put("/orders/{order_id}/complete", response_model=Order)
 async def complete_order(order_id: str, complete_data: OrderComplete, current_user: User = Depends(get_current_user)):
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})

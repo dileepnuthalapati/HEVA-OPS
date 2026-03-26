@@ -166,6 +166,11 @@ export const orderAPI = {
     await saveToIndexedDB('orders', response.data);
     return response.data;
   },
+  update: async (orderId, data) => {
+    const response = await api.put(`/orders/${orderId}`, data);
+    await saveToIndexedDB('orders', response.data);
+    return response.data;
+  },
   printKitchenReceipt: async (orderId) => {
     const response = await api.post(`/orders/${orderId}/print-kitchen-receipt`, {}, { responseType: 'blob' });
     return response.data;

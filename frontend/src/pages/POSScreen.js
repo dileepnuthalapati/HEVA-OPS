@@ -39,6 +39,9 @@ const POSScreen = () => {
   const [printerConnected, setPrinterConnected] = useState(false);
   const [currency, setCurrency] = useState('GBP');
   
+  // Edit order state
+  const [editingOrder, setEditingOrder] = useState(null);
+  
   // New states for discounts, notes, and split payment
   const [orderNotes, setOrderNotes] = useState('');
   const [discountType, setDiscountType] = useState('');
@@ -190,7 +193,67 @@ const POSScreen = () => {
     setDiscountType('');
     setDiscountValue('');
     setDiscountReason('');
+    setEditingOrder(null);
     toast.info('Cart cleared');
+  };
+
+  // Edit a pending order - load items into cart
+  const editPendingOrder = (order) => {
+    // Load order items into cart
+    setCart(order.items.map(item => ({
+      product_id: item.product_id,
+      product_name: item.product_name,
+      quantity: item.quantity,
+      unit_price: item.unit_price,
+      total: item.total,
+    })));
+    
+    // Set order details
+    setEditingOrder(order);
+    setSelectedTable(order.table_id || null);
+    setOrderNotes(order.order_notes || '');
+    setDiscountType(order.discount_type || '');
+    setDiscountValue(order.discount_value ? order.discount_value.toString() : '');
+    setDiscountReason(order.discount_reason || '');
+    
+    // Close pending orders panel
+    setShowPendingOrders(false);
+    toast.info(`Editing Order #${order.order_number} - Add items and update`);
+  };
+
+  // Update an existing order
+  const updateOrder = async () => {
+    if (!editingOrder || cart.length === 0) return;
+    
+    const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
+    
+    try {
+      const updatedOrder = await orderAPI.update(editingOrder.id, {
+        items: cart,
+        total_amount: subtotal,
+        table_id: selectedTable || null,
+        order_notes: orderNotes || null,
+        discount_type: discountType || null,
+        discount_value: discountValue ? parseFloat(discountValue) : 0,
+        discount_reason: discountReason || null,
+      });
+      
+      toast.success(`Order #${updatedOrder.order_number} updated!`);
+      
+      // Clear cart and states
+      setCart([]);
+      setEditingOrder(null);
+      setSelectedTable(null);
+      setOrderNotes('');
+      setDiscountType('');
+      setDiscountValue('');
+      setDiscountReason('');
+      setShowDiscountPanel(false);
+      setShowNotesPanel(false);
+      loadPendingOrders();
+    } catch (error) {
+      toast.error('Failed to update order');
+    }
   };
 
   // Calculate discount amount
@@ -510,14 +573,25 @@ const POSScreen = () => {
                           </div>
                         ))}
                       </div>
-                      <Button
-                        className="w-full btn-success"
-                        data-testid={`complete-order-${order.id}`}
-                        onClick={() => openCompleteDialog(order)}
-                      >
-                        <DollarSign className="w-4 h-4 mr-2" />
-                        Complete Payment
-                      </Button>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          className="flex-1"
+                          data-testid={`edit-order-${order.id}`}
+                          onClick={() => editPendingOrder(order)}
+                        >
+                          <Plus className="w-4 h-4 mr-2" />
+                          Edit / Add Items
+                        </Button>
+                        <Button
+                          className="flex-1 btn-success"
+                          data-testid={`complete-order-${order.id}`}
+                          onClick={() => openCompleteDialog(order)}
+                        >
+                          <DollarSign className="w-4 h-4 mr-2" />
+                          Complete
+                        </Button>
+                      </div>
                     </CardContent>
                   </Card>
                 )})
@@ -784,14 +858,41 @@ const POSScreen = () => {
               <span className="font-mono text-2xl">{getCurrencySymbol(currency)}{calculateCartTotal().toFixed(2)}</span>
             </div>
           </div>
+          
+          {/* Editing Order Banner */}
+          {editingOrder && (
+            <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg mb-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="font-semibold text-amber-800">Editing Order #{editingOrder.order_number}</div>
+                  <div className="text-xs text-amber-600">Add items and click Update Order</div>
+                </div>
+                <Button 
+                  size="sm" 
+                  variant="ghost" 
+                  onClick={() => {
+                    setEditingOrder(null);
+                    setCart([]);
+                    setOrderNotes('');
+                    setDiscountType('');
+                    setDiscountValue('');
+                    setDiscountReason('');
+                  }}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+            </div>
+          )}
+          
           <Button
             className="w-full h-14 text-lg bg-amber-500 hover:bg-amber-600 text-white"
             data-testid="place-order-button"
-            onClick={placeOrder}
+            onClick={editingOrder ? updateOrder : placeOrder}
             disabled={cart.length === 0}
           >
             <Printer className="w-5 h-5 mr-2" />
-            Place Order (Send to Kitchen)
+            {editingOrder ? `Update Order #${editingOrder.order_number}` : 'Place Order (Send to Kitchen)'}
           </Button>
         </div>
       </div>
