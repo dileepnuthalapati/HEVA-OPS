@@ -32,6 +32,10 @@ db = client[os.environ['DB_NAME']]
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
+# Health check endpoint for Railway
+@app.get("/")
+async def health_check():
+    return {"status": "healthy", "message": "HevaPOS API is running"}
 
 security = HTTPBearer()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
