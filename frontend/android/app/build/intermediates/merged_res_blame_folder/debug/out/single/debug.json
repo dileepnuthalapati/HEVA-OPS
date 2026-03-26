@@ -8,11 +8,11 @@
         "source": "com.hetupathways.app-main-28:/mipmap-anydpi-v26/ic_launcher.xml"
     },
     {
-        "merged": "C:\\Users\\dilee\\.gradle\\daemon\\8.7\\com.hetupathways.app-merged_res-26:\\xml_config.xml.flat",
-        "source": "C:\\Users\\dilee\\.gradle\\daemon\\8.7\\com.hetupathways.app-main-28:\\xml\\config.xml"
+        "merged": "com.hetupathways.app-merged_res-26:/xml_config.xml.flat",
+        "source": "com.hetupathways.app-main-28:/xml/config.xml"
     },
     {
-        "merged": "C:\\Users\\dilee\\.gradle\\daemon\\8.7\\com.hetupathways.app-merged_res-26:\\xml_file_paths.xml.flat",
-        "source": "C:\\Users\\dilee\\.gradle\\daemon\\8.7\\com.hetupathways.app-main-28:\\xml\\file_paths.xml"
+        "merged": "com.hetupathways.app-merged_res-26:/xml_file_paths.xml.flat",
+        "source": "com.hetupathways.app-main-28:/xml/file_paths.xml"
     }
 ]

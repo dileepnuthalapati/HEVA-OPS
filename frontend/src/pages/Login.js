@@ -25,7 +25,7 @@ const Login = () => {
       
       // Navigate based on role
       if (response.user.role === 'platform_owner') {
-        navigate('/admin'); // Or wherever platform owners go
+        navigate('/restaurants');
       } else if (response.user.role === 'admin') {
         navigate('/dashboard');
       } else {
@@ -33,7 +33,7 @@ const Login = () => {
       }
     } catch (error) {
       console.error('Login error:', error);
-      toast.error('Connection failed. Please check if backend is running.');
+      toast.error('Invalid username or password');
     } finally {
       setLoading(false);
     }
