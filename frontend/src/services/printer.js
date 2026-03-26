@@ -36,6 +36,11 @@ class ThermalPrinterService {
     return 'serial' in navigator;
   }
 
+  // Check if printer is connected
+  isConnected() {
+    return this.port !== null && this.writer !== null;
+  }
+
   // Connect to printer
   async connect() {
     if (!this.isSupported()) {

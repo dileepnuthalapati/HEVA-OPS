@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
-import { categoryAPI, productAPI, orderAPI } from '../services/api';
+import { categoryAPI, productAPI, orderAPI, tableAPI, printerAPI } from '../services/api';
 import printerService from '../services/printer';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
@@ -8,15 +8,19 @@ import { ScrollArea } from '../components/ui/scroll-area';
 import { Separator } from '../components/ui/separator';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { Textarea } from '../components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, DollarSign, CreditCard, Users } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, DollarSign, CreditCard, Users, Percent, Tag, MessageSquare, Banknote } from 'lucide-react';
 
 const POSScreen = () => {
   const { user, logout } = useAuth();
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
+  const [tables, setTables] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
+  const [selectedTable, setSelectedTable] = useState(null);
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pendingOrders, setPendingOrders] = useState([]);
@@ -27,10 +31,24 @@ const POSScreen = () => {
   const [customTip, setCustomTip] = useState('');
   const [splitCount, setSplitCount] = useState(1);
   const [printerConnected, setPrinterConnected] = useState(false);
+  
+  // New states for discounts, notes, and split payment
+  const [orderNotes, setOrderNotes] = useState('');
+  const [discountType, setDiscountType] = useState('');
+  const [discountValue, setDiscountValue] = useState('');
+  const [discountReason, setDiscountReason] = useState('');
+  const [showDiscountPanel, setShowDiscountPanel] = useState(false);
+  const [showNotesPanel, setShowNotesPanel] = useState(false);
+  
+  // Split payment mode (cash/card amounts)
+  const [splitPaymentMode, setSplitPaymentMode] = useState(false);
+  const [cashAmount, setCashAmount] = useState('');
+  const [cardAmount, setCardAmount] = useState('');
 
   useEffect(() => {
     loadData();
     loadPendingOrders();
+    loadTables();
     checkPrinterSupport();
   }, []);
 
@@ -89,6 +107,15 @@ const POSScreen = () => {
     }
   };
 
+  const loadTables = async () => {
+    try {
+      const tablesData = await tableAPI.getAll();
+      setTables(tablesData);
+    } catch (error) {
+      console.error('Failed to load tables:', error);
+    }
+  };
+
   const addToCart = (product) => {
     const existing = cart.find((item) => item.product_id === product.id);
     if (existing) {
@@ -140,7 +167,30 @@ const POSScreen = () => {
 
   const clearCart = () => {
     setCart([]);
+    setOrderNotes('');
+    setDiscountType('');
+    setDiscountValue('');
+    setDiscountReason('');
     toast.info('Cart cleared');
+  };
+
+  // Calculate discount amount
+  const calculateDiscount = () => {
+    if (!discountType || !discountValue) return 0;
+    const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
+    if (discountType === 'percentage') {
+      return subtotal * (parseFloat(discountValue) / 100);
+    } else if (discountType === 'fixed') {
+      return Math.min(parseFloat(discountValue), subtotal);
+    }
+    return 0;
+  };
+
+  // Calculate cart total after discount
+  const calculateCartTotal = () => {
+    const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
+    const discount = calculateDiscount();
+    return subtotal - discount;
   };
 
   const placeOrder = async () => {
@@ -149,34 +199,60 @@ const POSScreen = () => {
       return;
     }
 
-    const total = cart.reduce((sum, item) => sum + item.total, 0);
+    const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
 
     try {
       const order = await orderAPI.create({
         items: cart,
-        total_amount: total,
+        total_amount: subtotal,
+        table_id: selectedTable || null,
+        order_notes: orderNotes || null,
+        discount_type: discountType || null,
+        discount_value: discountValue ? parseFloat(discountValue) : 0,
+        discount_reason: discountReason || null,
       });
       
-      // Try thermal printer first
-      if (printerConnected) {
-        try {
-          await printerService.printKitchenReceipt(order);
-          toast.success('Order placed! Kitchen receipt printed.');
-        } catch (error) {
-          console.error('Thermal print failed:', error);
-          // Fallback to PDF
+      // Print kitchen receipt via ESC/POS API
+      try {
+        const printResult = await printerAPI.printKitchenReceipt(order.id);
+        console.log('Kitchen receipt ESC/POS commands generated:', printResult);
+        
+        // If we have a connected thermal printer, send the commands
+        if (printerConnected && printerService.isConnected()) {
+          await printerService.printRaw(printResult.commands);
+          toast.success(`Order #${order.order_number} placed! Kitchen receipt printed.`);
+        } else {
+          // Fallback to PDF download
           const kitchenReceipt = await orderAPI.printKitchenReceipt(order.id);
           downloadPDF(kitchenReceipt, `kitchen_${String(order.order_number).padStart(3, '0')}.pdf`);
-          toast.success('Order placed! Kitchen receipt downloaded.');
+          toast.success(`Order #${order.order_number} placed! Kitchen receipt downloaded.`);
         }
-      } else {
-        // Download PDF
-        const kitchenReceipt = await orderAPI.printKitchenReceipt(order.id);
-        downloadPDF(kitchenReceipt, `kitchen_${String(order.order_number).padStart(3, '0')}.pdf`);
-        toast.success('Order placed! Kitchen receipt downloaded.');
+      } catch (printError) {
+        console.error('Print failed, falling back to PDF:', printError);
+        try {
+          const kitchenReceipt = await orderAPI.printKitchenReceipt(order.id);
+          downloadPDF(kitchenReceipt, `kitchen_${String(order.order_number).padStart(3, '0')}.pdf`);
+          toast.success(`Order #${order.order_number} placed! Kitchen receipt downloaded.`);
+        } catch (pdfError) {
+          toast.success(`Order #${order.order_number} placed!`);
+        }
       }
       
+      // Update table status if assigned
+      if (selectedTable) {
+        await tableAPI.assignOrder(selectedTable, order.id);
+        loadTables();
+      }
+      
+      // Clear cart and all related states
       setCart([]);
+      setSelectedTable(null);
+      setOrderNotes('');
+      setDiscountType('');
+      setDiscountValue('');
+      setDiscountReason('');
+      setShowDiscountPanel(false);
+      setShowNotesPanel(false);
       loadPendingOrders();
     } catch (error) {
       toast.error('Failed to place order');
@@ -199,6 +275,9 @@ const POSScreen = () => {
     setTipPercentage(0);
     setCustomTip('');
     setSplitCount(1);
+    setSplitPaymentMode(false);
+    setCashAmount('');
+    setCardAmount('');
     setShowPaymentDialog(true);
   };
 
@@ -210,7 +289,8 @@ const POSScreen = () => {
     }
     
     if (tipPercentage > 0) {
-      return (selectedOrderToComplete.subtotal * tipPercentage) / 100;
+      const baseAmount = (selectedOrderToComplete.subtotal || 0) - (selectedOrderToComplete.discount_amount || 0);
+      return (baseAmount * tipPercentage) / 100;
     }
     
     return 0;
@@ -218,17 +298,43 @@ const POSScreen = () => {
 
   const calculateGrandTotal = () => {
     if (!selectedOrderToComplete) return 0;
-    return selectedOrderToComplete.subtotal + calculateTipAmount();
+    const baseAmount = (selectedOrderToComplete.subtotal || 0) - (selectedOrderToComplete.discount_amount || 0);
+    return baseAmount + calculateTipAmount();
   };
 
   const calculatePerPersonAmount = () => {
     return calculateGrandTotal() / splitCount;
   };
 
+  // Auto-calculate remaining amount for split payment
+  const calculateRemainingAmount = () => {
+    const total = calculateGrandTotal();
+    const cash = parseFloat(cashAmount) || 0;
+    const card = parseFloat(cardAmount) || 0;
+    return total - cash - card;
+  };
+
   const completeOrder = async (paymentMethod) => {
     if (!selectedOrderToComplete) return;
 
     const tipAmount = calculateTipAmount();
+    const grandTotal = calculateGrandTotal();
+    
+    // Handle split payment validation
+    let paymentDetails = null;
+    if (splitPaymentMode) {
+      const cash = parseFloat(cashAmount) || 0;
+      const card = parseFloat(cardAmount) || 0;
+      const totalPaid = cash + card;
+      
+      if (Math.abs(totalPaid - grandTotal) > 0.02) {
+        toast.error(`Payment total ($${totalPaid.toFixed(2)}) doesn't match order total ($${grandTotal.toFixed(2)})`);
+        return;
+      }
+      
+      paymentMethod = 'split';
+      paymentDetails = { cash, card };
+    }
 
     try {
       const completedOrder = await orderAPI.complete(
@@ -236,26 +342,45 @@ const POSScreen = () => {
         paymentMethod,
         tipPercentage,
         tipAmount,
-        splitCount
+        splitCount,
+        paymentDetails
       );
       
-      // Try thermal printer first
-      if (printerConnected) {
-        try {
-          await printerService.printCustomerReceipt(completedOrder);
-          toast.success(`Order completed with ${paymentMethod}! Customer receipt printed.`);
-        } catch (error) {
-          console.error('Thermal print failed:', error);
-          // Fallback to PDF
+      // Print customer receipt via ESC/POS API
+      try {
+        const printResult = await printerAPI.printCustomerReceipt(selectedOrderToComplete.id);
+        console.log('Customer receipt ESC/POS commands generated:', printResult);
+        
+        // If we have a connected thermal printer, send the commands
+        if (printerConnected && printerService.isConnected()) {
+          await printerService.printRaw(printResult.commands);
+          toast.success(`Payment complete! Customer receipt printed.`);
+        } else {
+          // Fallback to PDF download
           const customerReceipt = await orderAPI.printCustomerReceipt(selectedOrderToComplete.id);
-          downloadPDF(customerReceipt, `receipt_${selectedOrderToComplete.id.slice(0, 8)}.pdf`);
-          toast.success(`Order completed with ${paymentMethod}! Customer receipt downloaded.`);
+          downloadPDF(customerReceipt, `receipt_${String(selectedOrderToComplete.order_number).padStart(3, '0')}.pdf`);
+          toast.success(`Payment complete! Customer receipt downloaded.`);
         }
-      } else {
-        // Download PDF
-        const customerReceipt = await orderAPI.printCustomerReceipt(selectedOrderToComplete.id);
-        downloadPDF(customerReceipt, `receipt_${selectedOrderToComplete.id.slice(0, 8)}.pdf`);
-        toast.success(`Order completed with ${paymentMethod}! Customer receipt downloaded.`);
+      } catch (printError) {
+        console.error('Print failed, falling back to PDF:', printError);
+        try {
+          const customerReceipt = await orderAPI.printCustomerReceipt(selectedOrderToComplete.id);
+          downloadPDF(customerReceipt, `receipt_${String(selectedOrderToComplete.order_number).padStart(3, '0')}.pdf`);
+          toast.success(`Payment complete! Customer receipt downloaded.`);
+        } catch (pdfError) {
+          toast.success(`Order completed with ${paymentMethod}!`);
+        }
+      }
+      
+      // Clear the table if this order had a table assigned
+      if (selectedOrderToComplete.table_id) {
+        try {
+          await tableAPI.clear(selectedOrderToComplete.table_id);
+          console.log('Table cleared after payment');
+          loadTables();
+        } catch (clearError) {
+          console.error('Failed to clear table:', clearError);
+        }
       }
       
       setShowPaymentDialog(false);
@@ -348,12 +473,21 @@ const POSScreen = () => {
               {pendingOrders.length === 0 ? (
                 <div className="text-center py-12 text-muted-foreground">No pending orders</div>
               ) : (
-                pendingOrders.map((order) => (
+                pendingOrders.map((order) => {
+                  const orderTable = order.table_id ? tables.find(t => t.id === order.table_id) : null;
+                  return (
                   <Card key={order.id} data-testid={`pending-order-${order.id}`}>
                     <CardContent className="p-6">
                       <div className="flex justify-between items-start mb-4">
                         <div>
-                          <div className="text-lg font-bold">Order #{String(order.order_number).padStart(3, '0')}</div>
+                          <div className="text-lg font-bold flex items-center gap-2">
+                            Order #{String(order.order_number).padStart(3, '0')}
+                            {orderTable && (
+                              <span className="text-sm bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                                Table {orderTable.number}
+                              </span>
+                            )}
+                          </div>
                           <div className="text-sm text-muted-foreground">
                             {new Date(order.created_at).toLocaleString()}
                           </div>
@@ -384,7 +518,7 @@ const POSScreen = () => {
                       </Button>
                     </CardContent>
                   </Card>
-                ))
+                )})
               )}
             </div>
           ) : products.length === 0 ? (
@@ -432,6 +566,37 @@ const POSScreen = () => {
               </Button>
             )}
           </div>
+        </div>
+
+        {/* Table Selection */}
+        <div className="px-6 py-3 border-b bg-slate-50">
+          <Label className="text-xs font-medium text-muted-foreground mb-2 block">Assign to Table</Label>
+          <Select value={selectedTable || "no-table"} onValueChange={(v) => setSelectedTable(v === "no-table" ? null : v)}>
+            <SelectTrigger data-testid="table-selector" className="w-full">
+              <SelectValue placeholder="Select table (optional)" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="no-table">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-muted-foreground" />
+                  No Table (Takeaway)
+                </div>
+              </SelectItem>
+              {tables.filter(t => t.status === 'available' || t.status === 'occupied').map((table) => (
+                <SelectItem key={table.id} value={table.id}>
+                  <div className="flex items-center gap-2">
+                    <Users className="w-4 h-4" />
+                    Table {table.number}
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${
+                      table.status === 'available' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                    }`}>
+                      {table.status === 'available' ? 'Free' : 'Occupied'}
+                    </span>
+                  </div>
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <ScrollArea className="flex-1 p-6">
@@ -493,15 +658,128 @@ const POSScreen = () => {
         </ScrollArea>
 
         <div className="p-6 border-t space-y-4">
+          {/* Discount and Notes Buttons */}
+          <div className="flex gap-2">
+            <Button
+              variant={showDiscountPanel ? "secondary" : "outline"}
+              size="sm"
+              className="flex-1"
+              onClick={() => { setShowDiscountPanel(!showDiscountPanel); setShowNotesPanel(false); }}
+              data-testid="toggle-discount-btn"
+            >
+              <Percent className="w-4 h-4 mr-1" />
+              Discount
+              {discountValue && <span className="ml-1 text-emerald-600">✓</span>}
+            </Button>
+            <Button
+              variant={showNotesPanel ? "secondary" : "outline"}
+              size="sm"
+              className="flex-1"
+              onClick={() => { setShowNotesPanel(!showNotesPanel); setShowDiscountPanel(false); }}
+              data-testid="toggle-notes-btn"
+            >
+              <MessageSquare className="w-4 h-4 mr-1" />
+              Notes
+              {orderNotes && <span className="ml-1 text-emerald-600">✓</span>}
+            </Button>
+          </div>
+
+          {/* Discount Panel */}
+          {showDiscountPanel && (
+            <div className="p-3 bg-slate-50 rounded-lg space-y-3">
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  variant={discountType === 'percentage' ? 'default' : 'outline'}
+                  onClick={() => setDiscountType('percentage')}
+                  className="flex-1"
+                >
+                  <Percent className="w-3 h-3 mr-1" />
+                  Percentage
+                </Button>
+                <Button
+                  size="sm"
+                  variant={discountType === 'fixed' ? 'default' : 'outline'}
+                  onClick={() => setDiscountType('fixed')}
+                  className="flex-1"
+                >
+                  <Tag className="w-3 h-3 mr-1" />
+                  Fixed
+                </Button>
+              </div>
+              {discountType && (
+                <>
+                  <div>
+                    <Input
+                      type="number"
+                      placeholder={discountType === 'percentage' ? 'Enter %' : 'Enter $'}
+                      value={discountValue}
+                      onChange={(e) => setDiscountValue(e.target.value)}
+                      data-testid="discount-value-input"
+                    />
+                  </div>
+                  <div>
+                    <Input
+                      placeholder="Reason (optional)"
+                      value={discountReason}
+                      onChange={(e) => setDiscountReason(e.target.value)}
+                      data-testid="discount-reason-input"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => { setDiscountType(''); setDiscountValue(''); setDiscountReason(''); }} className="flex-1">
+                      Clear
+                    </Button>
+                    <Button size="sm" onClick={() => setShowDiscountPanel(false)} className="flex-1">
+                      Apply
+                    </Button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
+          {/* Notes Panel */}
+          {showNotesPanel && (
+            <div className="p-3 bg-slate-50 rounded-lg space-y-3">
+              <Textarea
+                placeholder="Order notes for kitchen (allergies, special requests...)"
+                value={orderNotes}
+                onChange={(e) => setOrderNotes(e.target.value)}
+                rows={3}
+                data-testid="order-notes-input"
+              />
+              <div className="flex gap-2">
+                <Button size="sm" variant="outline" onClick={() => setOrderNotes('')} className="flex-1">
+                  Clear
+                </Button>
+                <Button size="sm" onClick={() => setShowNotesPanel(false)} className="flex-1">
+                  Done
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Order Summary */}
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Items</span>
               <span className="font-medium">{cart.reduce((sum, item) => sum + item.quantity, 0)}</span>
             </div>
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Subtotal</span>
+              <span className="font-mono">${cart.reduce((sum, item) => sum + item.total, 0).toFixed(2)}</span>
+            </div>
+            {calculateDiscount() > 0 && (
+              <div className="flex justify-between text-sm text-emerald-600">
+                <span>Discount ({discountType === 'percentage' ? `${discountValue}%` : `$${discountValue}`})</span>
+                <span className="font-mono">-${calculateDiscount().toFixed(2)}</span>
+              </div>
+            )}
             <Separator />
             <div className="flex justify-between text-xl font-bold">
               <span>Total</span>
-              <span className="font-mono text-2xl">${totalAmount.toFixed(2)}</span>
+              <span className="font-mono text-2xl">${calculateCartTotal().toFixed(2)}</span>
             </div>
           </div>
           <Button
@@ -520,9 +798,19 @@ const POSScreen = () => {
       <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Complete Payment</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              Complete Payment
+              {selectedOrderToComplete?.table_id && (
+                <span className="text-sm font-normal bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                  Table {tables.find(t => t.id === selectedOrderToComplete.table_id)?.number || '?'}
+                </span>
+              )}
+            </DialogTitle>
             <DialogDescription>
-              Order #{selectedOrderToComplete?.id.slice(0, 8).toUpperCase()}
+              Order #{String(selectedOrderToComplete?.order_number || '').padStart(3, '0')}
+              {selectedOrderToComplete?.items?.length > 0 && (
+                <span className="ml-2">• {selectedOrderToComplete.items.length} items</span>
+              )}
             </DialogDescription>
           </DialogHeader>
           
@@ -639,28 +927,133 @@ const POSScreen = () => {
                   ${calculateGrandTotal().toFixed(2)}
                 </span>
               </div>
+              
+              {/* Table info if assigned */}
+              {selectedOrderToComplete?.table_id && (
+                <div className="mt-2 p-2 bg-blue-50 rounded-lg text-sm text-blue-700 flex items-center gap-2">
+                  <Users className="w-4 h-4" />
+                  Table will be cleared after payment
+                </div>
+              )}
             </div>
             
-            {/* Payment Method Buttons */}
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                className="h-20 flex flex-col gap-2"
-                data-testid="payment-cash-button"
-                onClick={() => completeOrder('cash')}
-              >
-                <DollarSign className="w-8 h-8" />
-                <span className="text-base font-bold">Cash</span>
-              </Button>
-              <Button
-                className="h-20 flex flex-col gap-2"
-                variant="secondary"
-                data-testid="payment-card-button"
-                onClick={() => completeOrder('card')}
-              >
-                <CreditCard className="w-8 h-8" />
-                <span className="text-base font-bold">Card</span>
-              </Button>
+            {/* Split Payment Method Toggle */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant={splitPaymentMode ? "default" : "outline"}
+                  onClick={() => setSplitPaymentMode(!splitPaymentMode)}
+                  data-testid="toggle-split-payment-mode"
+                  className="w-full"
+                >
+                  <Banknote className="w-4 h-4 mr-2" />
+                  {splitPaymentMode ? "Split Payment Mode ON" : "Pay with Multiple Methods"}
+                </Button>
+              </div>
+              
+              {/* Split Payment Method Inputs */}
+              {splitPaymentMode && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg space-y-3">
+                  <div className="text-sm font-medium text-amber-800">Enter amounts for each payment method:</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-1">
+                      <Label className="text-xs flex items-center gap-1">
+                        <DollarSign className="w-3 h-3" /> Cash
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={cashAmount}
+                        onChange={(e) => setCashAmount(e.target.value)}
+                        data-testid="split-cash-input"
+                        className="h-10"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs flex items-center gap-1">
+                        <CreditCard className="w-3 h-3" /> Card
+                      </Label>
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0.00"
+                        value={cardAmount}
+                        onChange={(e) => setCardAmount(e.target.value)}
+                        data-testid="split-card-input"
+                        className="h-10"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex justify-between text-sm pt-2 border-t">
+                    <span>Total Entered:</span>
+                    <span className={`font-mono font-bold ${Math.abs((parseFloat(cashAmount) || 0) + (parseFloat(cardAmount) || 0) - calculateGrandTotal()) <= 0.02 ? 'text-emerald-600' : 'text-red-600'}`}>
+                      ${((parseFloat(cashAmount) || 0) + (parseFloat(cardAmount) || 0)).toFixed(2)}
+                    </span>
+                  </div>
+                  {calculateRemainingAmount() > 0.02 && (
+                    <div className="text-xs text-amber-700">
+                      Remaining: ${calculateRemainingAmount().toFixed(2)}
+                    </div>
+                  )}
+                  <Button
+                    className="w-full h-12 bg-emerald-600 hover:bg-emerald-700"
+                    data-testid="complete-split-payment"
+                    onClick={() => completeOrder('split')}
+                    disabled={Math.abs((parseFloat(cashAmount) || 0) + (parseFloat(cardAmount) || 0) - calculateGrandTotal()) > 0.02}
+                  >
+                    Complete Split Payment
+                  </Button>
+                </div>
+              )}
             </div>
+            
+            {/* Single Payment Method Buttons */}
+            {!splitPaymentMode && (
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  className="h-20 flex flex-col gap-2"
+                  data-testid="payment-cash-button"
+                  onClick={() => completeOrder('cash')}
+                >
+                  <DollarSign className="w-8 h-8" />
+                  <span className="text-base font-bold">Cash</span>
+                  {splitCount > 1 && (
+                    <span className="text-xs opacity-75">${calculatePerPersonAmount().toFixed(2)} each</span>
+                  )}
+                </Button>
+                <Button
+                  className="h-20 flex flex-col gap-2"
+                  variant="secondary"
+                  data-testid="payment-card-button"
+                  onClick={() => completeOrder('card')}
+                >
+                  <CreditCard className="w-8 h-8" />
+                  <span className="text-base font-bold">Card</span>
+                  {splitCount > 1 && (
+                    <span className="text-xs opacity-75">${calculatePerPersonAmount().toFixed(2)} each</span>
+                  )}
+                </Button>
+              </div>
+            )}
+            
+            {/* Split Bill Summary */}
+            {splitCount > 1 && (
+              <div className="mt-3 p-3 bg-slate-100 rounded-lg">
+                <div className="text-sm font-semibold mb-2">Split Summary</div>
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  {Array.from({ length: splitCount }, (_, i) => (
+                    <div key={i} className="flex justify-between p-2 bg-white rounded border">
+                      <span>Person {i + 1}</span>
+                      <span className="font-mono font-medium">${calculatePerPersonAmount().toFixed(2)}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

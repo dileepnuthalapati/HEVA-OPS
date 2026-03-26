@@ -23,16 +23,15 @@ const Login = () => {
       const response = await login(username, password);
       toast.success(`Welcome back, ${response.user.username}!`);
       
-      // Navigate based on role
+      // Route based on role
       if (response.user.role === 'platform_owner') {
-        navigate('/restaurants');
+        navigate('/platform/dashboard');
       } else if (response.user.role === 'admin') {
         navigate('/dashboard');
       } else {
         navigate('/pos');
       }
     } catch (error) {
-      console.error('Login error:', error);
       toast.error('Invalid username or password');
     } finally {
       setLoading(false);
@@ -90,13 +89,15 @@ const Login = () => {
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
-          <div className="mt-6 text-center text-sm text-muted-foreground border-t pt-4">
-            <p className="font-semibold">Demo Credentials:</p>
-            <div className="mt-2 grid grid-cols-1 gap-1 font-mono text-[10px] text-left bg-slate-50 p-2 rounded">
-              <p><span className="font-bold">Platform:</span> platform_owner / admin123</p>
-              <p><span className="font-bold">Rest. Admin:</span> restaurant_admin / admin123</p>
-              <p><span className="font-bold">Staff:</span> user / user123</p>
-            </div>
+          <div className="mt-6 text-center text-sm text-muted-foreground">
+            <p>Demo Accounts:</p>
+            <p className="mt-2 font-mono text-xs">
+              Platform Owner: platform_owner / admin123
+              <br />
+              Restaurant Admin: restaurant_admin / admin123
+              <br />
+              Staff: user / user123
+            </p>
           </div>
         </CardContent>
       </Card>

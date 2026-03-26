@@ -3,40 +3,86 @@ import { authAPI } from '../services/api';
 
 const AuthContext = createContext();
 
-// DEMO_MODE must be false to use the real login screen.
-const DEMO_MODE = false;
+// DEMO MODE: Auto-login bypass for testing
+const DEMO_MODE = false; // Disabled - using real auth now
+const DEMO_PLATFORM_OWNER = {
+  id: 'platform_owner_1',
+  username: 'admin',
+  role: 'platform_owner', // New role!
+  restaurant_id: null, // Platform owner has no specific restaurant
+  created_at: new Date().toISOString()
+};
+
+const DEMO_RESTAURANT_ADMIN = {
+  id: 'restaurant_admin_1',
+  username: 'restaurant_admin',
+  role: 'admin',
+  restaurant_id: 'rest_demo_1', // Pizza Palace
+  created_at: new Date().toISOString()
+};
+
+const DEMO_RESTAURANT_USER = {
+  id: 'restaurant_user_1',
+  username: 'user',
+  role: 'user',
+  restaurant_id: 'rest_demo_1', // Pizza Palace
+  created_at: new Date().toISOString()
+};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Normal auth check on app load
+    // DEMO MODE: Auto-login based on URL param or default
+    if (DEMO_MODE) {
+      const urlParams = new URLSearchParams(window.location.search);
+      const role = urlParams.get('role');
+      
+      let demoUser;
+      if (role === 'restaurant_admin') {
+        demoUser = DEMO_RESTAURANT_ADMIN;
+      } else if (role === 'user') {
+        demoUser = DEMO_RESTAURANT_USER;
+      } else {
+        demoUser = DEMO_PLATFORM_OWNER; // Default: platform owner
+      }
+      
+      console.log(`🎭 DEMO MODE: Auto-logged in as ${demoUser.role}`);
+      setUser(demoUser);
+      localStorage.setItem('demo_user', JSON.stringify(demoUser));
+      setLoading(false);
+      return;
+    }
+    
+    // Normal auth check
     const token = localStorage.getItem('auth_token');
     const savedUser = localStorage.getItem('user');
-
     if (token && savedUser) {
-      try {
-        setUser(JSON.parse(savedUser));
-      } catch (e) {
-        console.error("Error parsing saved user", e);
-        localStorage.removeItem('user');
-        localStorage.removeItem('auth_token');
-      }
+      setUser(JSON.parse(savedUser));
     }
     setLoading(false);
   }, []);
 
   const login = async (username, password) => {
-    // Perform actual login via API
+    // DEMO MODE: Return different users based on username
+    if (DEMO_MODE) {
+      let demoUser;
+      if (username === 'restaurant_admin' || username === 'rest_admin') {
+        demoUser = DEMO_RESTAURANT_ADMIN;
+      } else if (username === 'user' || username === 'staff') {
+        demoUser = DEMO_RESTAURANT_USER;
+      } else {
+        demoUser = DEMO_PLATFORM_OWNER;
+      }
+      setUser(demoUser);
+      return { user: demoUser };
+    }
+    
+    // Normal login
     const response = await authAPI.login(username, password);
-    const userData = response.user;
-
-    // Store in state and localStorage
-    setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData));
-    // auth_token is handled by authAPI.login calling setAuthToken in api.js
-
+    setUser(response.user);
+    localStorage.setItem('user', JSON.stringify(response.user));
     return response;
   };
 
@@ -51,7 +97,7 @@ export const AuthProvider = ({ children }) => {
   const isPlatformOwner = user?.role === 'platform_owner';
   const isRestaurantAdmin = user?.role === 'admin';
   const isRestaurantUser = user?.role === 'user';
-  const canAccessRestaurants = isPlatformOwner;
+  const canAccessRestaurants = isPlatformOwner; // Only platform owner
 
   return (
     <AuthContext.Provider value={{ 

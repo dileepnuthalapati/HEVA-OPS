@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link, useLocation } from 'react-router-dom';
-import { useAuth } from '../context/AuthContext';
+import Sidebar from '../components/Sidebar';
 import { restaurantAPI } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -8,46 +7,9 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
-import { LayoutDashboard, Package, FolderTree, ShoppingCart, FileText, LogOut, Wallet, Settings, Plus, Store } from 'lucide-react';
-
-const Sidebar = ({ active }) => {
-  const { logout } = useAuth();
-
-  const menuItems = [
-    { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { path: '/restaurants', icon: Store, label: 'Restaurants' },
-    { path: '/categories', icon: FolderTree, label: 'Categories' },
-    { path: '/products', icon: Package, label: 'Products' },
-    { path: '/orders', icon: ShoppingCart, label: 'Orders' },
-    { path: '/reports', icon: FileText, label: 'Reports' },
-    { path: '/cash-drawer', icon: Wallet, label: 'Cash Drawer' },
-    { path: '/settings', icon: Settings, label: 'Settings' },
-  ];
-
-  return (
-    <div className="sidebar">
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight">HevaPOS</h1>
-        <p className="text-sm text-muted-foreground mt-1">Admin Panel</p>
-      </div>
-      <nav className="space-y-2">
-        {menuItems.map((item) => (
-          <Link key={item.path} to={item.path} className={`sidebar-link ${active === item.path ? 'active' : ''}`}>
-            <item.icon className="w-5 h-5" />
-            <span>{item.label}</span>
-          </Link>
-        ))}
-      </nav>
-      <div className="mt-auto pt-8">
-        <Button variant="outline" className="w-full justify-start" onClick={logout}>
-          <LogOut className="w-5 h-5 mr-3" />
-          Logout
-        </Button>
-      </div>
-    </div>
-  );
-};
+import { Plus, Store, Building2, Mail, Phone, MapPin, DollarSign, User, Users, Trash2, Key } from 'lucide-react';
 
 const CURRENCY_OPTIONS = [
   { value: 'GBP', label: '£ GBP - British Pound', symbol: '£' },
@@ -59,10 +21,12 @@ const CURRENCY_OPTIONS = [
 ];
 
 const RestaurantManagement = () => {
-  const location = useLocation();
   const [restaurants, setRestaurants] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAddDialog, setShowAddDialog] = useState(false);
+  const [showUserDialog, setShowUserDialog] = useState(false);
+  const [selectedRestaurant, setSelectedRestaurant] = useState(null);
+  const [restaurantUsers, setRestaurantUsers] = useState([]);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
@@ -77,6 +41,14 @@ const RestaurantManagement = () => {
     receipt_footer: '',
     subscription_price: '',
     currency: 'GBP',
+    // Admin user for the restaurant
+    admin_username: '',
+    admin_password: '',
+  });
+  const [newUserData, setNewUserData] = useState({
+    username: '',
+    password: '',
+    role: 'user'
   });
 
   useEffect(() => {
@@ -99,11 +71,39 @@ const RestaurantManagement = () => {
     setSaving(true);
 
     try {
-      await restaurantAPI.create({
-        ...formData,
+      // Create restaurant first
+      const restaurant = await restaurantAPI.create({
+        name: formData.name,
+        address_line1: formData.address_line1,
+        address_line2: formData.address_line2,
+        city: formData.city,
+        postcode: formData.postcode,
+        phone: formData.phone,
+        email: formData.email,
+        website: formData.website,
+        vat_number: formData.vat_number,
+        receipt_footer: formData.receipt_footer,
         subscription_price: parseFloat(formData.subscription_price),
+        currency: formData.currency,
       });
-      toast.success('Restaurant added successfully!');
+      
+      // Create admin user for the restaurant if provided
+      if (formData.admin_username && formData.admin_password) {
+        try {
+          await restaurantAPI.createUser(restaurant.id, {
+            username: formData.admin_username,
+            password: formData.admin_password,
+            role: 'admin',
+            restaurant_id: restaurant.id
+          });
+          toast.success(`Restaurant and admin user "${formData.admin_username}" created!`);
+        } catch (userError) {
+          toast.warning(`Restaurant created, but user creation failed: ${userError.response?.data?.detail || 'Unknown error'}`);
+        }
+      } else {
+        toast.success('Restaurant added successfully!');
+      }
+      
       setShowAddDialog(false);
       resetForm();
       loadRestaurants();
@@ -111,6 +111,49 @@ const RestaurantManagement = () => {
       toast.error(error.response?.data?.detail || 'Failed to add restaurant');
     } finally {
       setSaving(false);
+    }
+  };
+
+  const openUserManagement = async (restaurant) => {
+    setSelectedRestaurant(restaurant);
+    try {
+      const users = await restaurantAPI.getUsers(restaurant.id);
+      setRestaurantUsers(users);
+    } catch (error) {
+      setRestaurantUsers([]);
+    }
+    setShowUserDialog(true);
+  };
+
+  const handleAddUser = async (e) => {
+    e.preventDefault();
+    if (!selectedRestaurant) return;
+    
+    try {
+      await restaurantAPI.createUser(selectedRestaurant.id, {
+        ...newUserData,
+        restaurant_id: selectedRestaurant.id
+      });
+      toast.success(`User "${newUserData.username}" created!`);
+      setNewUserData({ username: '', password: '', role: 'user' });
+      // Refresh users
+      const users = await restaurantAPI.getUsers(selectedRestaurant.id);
+      setRestaurantUsers(users);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to create user');
+    }
+  };
+
+  const handleDeleteUser = async (userId, username) => {
+    if (!window.confirm(`Delete user "${username}"?`)) return;
+    
+    try {
+      await restaurantAPI.deleteUser(selectedRestaurant.id, userId);
+      toast.success('User deleted');
+      const users = await restaurantAPI.getUsers(selectedRestaurant.id);
+      setRestaurantUsers(users);
+    } catch (error) {
+      toast.error('Failed to delete user');
     }
   };
 
@@ -128,6 +171,8 @@ const RestaurantManagement = () => {
       receipt_footer: '',
       subscription_price: '',
       currency: 'GBP',
+      admin_username: '',
+      admin_password: '',
     });
   };
 
@@ -147,7 +192,7 @@ const RestaurantManagement = () => {
   if (loading) {
     return (
       <div className="flex">
-        <Sidebar active={location.pathname} />
+        <Sidebar />
         <div className="flex-1 p-8">
           <div className="text-center py-12">Loading...</div>
         </div>
@@ -157,7 +202,7 @@ const RestaurantManagement = () => {
 
   return (
     <div className="flex">
-      <Sidebar active={location.pathname} />
+      <Sidebar />
       <div className="flex-1 p-8">
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-8">
@@ -283,6 +328,35 @@ const RestaurantManagement = () => {
                         />
                       </div>
                     </div>
+
+                    <div className="col-span-2 border-t pt-4 mt-2">
+                      <h3 className="font-semibold mb-1 flex items-center gap-2">
+                        <Key className="w-4 h-4" />
+                        Admin User (Optional)
+                      </h3>
+                      <p className="text-xs text-muted-foreground mb-3">Create an admin account for this restaurant</p>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="admin_username">Admin Username</Label>
+                      <Input
+                        id="admin_username"
+                        value={formData.admin_username}
+                        onChange={(e) => handleChange('admin_username', e.target.value)}
+                        placeholder="e.g., admin_pizzapalace"
+                      />
+                    </div>
+
+                    <div>
+                      <Label htmlFor="admin_password">Admin Password</Label>
+                      <Input
+                        id="admin_password"
+                        type="password"
+                        value={formData.admin_password}
+                        onChange={(e) => handleChange('admin_password', e.target.value)}
+                        placeholder="Min 6 characters"
+                      />
+                    </div>
                   </div>
 
                   <div className="flex gap-2 pt-4">
@@ -297,6 +371,96 @@ const RestaurantManagement = () => {
               </DialogContent>
             </Dialog>
           </div>
+
+          {/* User Management Dialog */}
+          <Dialog open={showUserDialog} onOpenChange={setShowUserDialog}>
+            <DialogContent className="max-w-lg">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <Users className="w-5 h-5" />
+                  Manage Users - {selectedRestaurant?.business_info?.name}
+                </DialogTitle>
+                <DialogDescription>
+                  Create and manage users for this restaurant
+                </DialogDescription>
+              </DialogHeader>
+              
+              <div className="space-y-4 mt-4">
+                {/* Add New User Form */}
+                <form onSubmit={handleAddUser} className="space-y-3 p-4 bg-slate-50 rounded-lg">
+                  <h4 className="font-medium text-sm">Add New User</h4>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label className="text-xs">Username</Label>
+                      <Input
+                        value={newUserData.username}
+                        onChange={(e) => setNewUserData({...newUserData, username: e.target.value})}
+                        placeholder="username"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Password</Label>
+                      <Input
+                        type="password"
+                        value={newUserData.password}
+                        onChange={(e) => setNewUserData({...newUserData, password: e.target.value})}
+                        placeholder="password"
+                        required
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Select value={newUserData.role} onValueChange={(v) => setNewUserData({...newUserData, role: v})}>
+                      <SelectTrigger className="w-32">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="admin">Admin</SelectItem>
+                        <SelectItem value="user">Staff</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Button type="submit" size="sm" className="flex-1">
+                      <Plus className="w-3 h-3 mr-1" />
+                      Add User
+                    </Button>
+                  </div>
+                </form>
+
+                {/* Existing Users */}
+                <div>
+                  <h4 className="font-medium text-sm mb-2">Existing Users ({restaurantUsers.length})</h4>
+                  {restaurantUsers.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No users yet</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {restaurantUsers.map((user) => (
+                        <div key={user.id} className="flex items-center justify-between p-3 border rounded-lg">
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+                              <User className="w-4 h-4 text-primary" />
+                            </div>
+                            <div>
+                              <div className="font-medium text-sm">{user.username}</div>
+                              <div className="text-xs text-muted-foreground capitalize">{user.role}</div>
+                            </div>
+                          </div>
+                          <Button 
+                            size="sm" 
+                            variant="ghost" 
+                            className="text-red-500 hover:text-red-700"
+                            onClick={() => handleDeleteUser(user.id, user.username)}
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
 
           {/* Stats Overview */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
@@ -388,7 +552,15 @@ const RestaurantManagement = () => {
                         <div className="text-2xl font-bold font-mono text-emerald-600">
                           {getCurrencySymbol(restaurant.currency)}{restaurant.price.toFixed(2)}
                         </div>
-                        <div className="text-xs text-muted-foreground">per month</div>
+                        <div className="text-xs text-muted-foreground mb-3">per month</div>
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => openUserManagement(restaurant)}
+                        >
+                          <Users className="w-4 h-4 mr-1" />
+                          Manage Users
+                        </Button>
                       </div>
                     </div>
                   </CardContent>

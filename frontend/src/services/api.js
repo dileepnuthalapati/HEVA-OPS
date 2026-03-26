@@ -158,12 +158,13 @@ export const orderAPI = {
       throw error;
     }
   },
-  complete: async (orderId, paymentMethod, tipPercentage = 0, tipAmount = 0, splitCount = 1) => {
+  complete: async (orderId, paymentMethod, tipPercentage = 0, tipAmount = 0, splitCount = 1, paymentDetails = null) => {
     const response = await api.put(`/orders/${orderId}/complete`, { 
       payment_method: paymentMethod,
       tip_percentage: tipPercentage,
       tip_amount: tipAmount,
-      split_count: splitCount
+      split_count: splitCount,
+      payment_details: paymentDetails
     });
     await saveToIndexedDB('orders', response.data);
     return response.data;
@@ -243,6 +244,124 @@ export const restaurantAPI = {
   },
   create: async (data) => {
     const response = await api.post('/restaurants', data);
+    return response.data;
+  },
+  // Restaurant User Management
+  getUsers: async (restaurantId) => {
+    const response = await api.get(`/restaurants/${restaurantId}/users`);
+    return response.data;
+  },
+  createUser: async (restaurantId, userData) => {
+    const response = await api.post(`/restaurants/${restaurantId}/users`, userData);
+    return response.data;
+  },
+  deleteUser: async (restaurantId, userId) => {
+    const response = await api.delete(`/restaurants/${restaurantId}/users/${userId}`);
+    return response.data;
+  },
+};
+
+// Tables API
+export const tableAPI = {
+  getAll: async () => {
+    const response = await api.get('/tables');
+    return response.data;
+  },
+  create: async (data) => {
+    const response = await api.post('/tables', data);
+    return response.data;
+  },
+  update: async (id, data) => {
+    const response = await api.put(`/tables/${id}`, data);
+    return response.data;
+  },
+  delete: async (id) => {
+    const response = await api.delete(`/tables/${id}`);
+    return response.data;
+  },
+  assignOrder: async (tableId, orderId) => {
+    const response = await api.post(`/tables/${tableId}/assign-order?order_id=${orderId}`);
+    return response.data;
+  },
+  clear: async (tableId) => {
+    const response = await api.post(`/tables/${tableId}/clear`);
+    return response.data;
+  },
+  merge: async (tableIds) => {
+    const response = await api.post('/tables/merge', { table_ids: tableIds });
+    return response.data;
+  },
+  unmerge: async (tableId) => {
+    const response = await api.post(`/tables/${tableId}/unmerge`);
+    return response.data;
+  },
+  splitBill: async (tableId, orderId, splits) => {
+    const response = await api.post(`/tables/${tableId}/split-bill`, { order_id: orderId, splits });
+    return response.data;
+  },
+};
+
+// Reservations API
+export const reservationAPI = {
+  getAll: async (date = null, status = null) => {
+    let url = '/reservations';
+    const params = [];
+    if (date) params.push(`date=${date}`);
+    if (status) params.push(`status=${status}`);
+    if (params.length > 0) url += '?' + params.join('&');
+    const response = await api.get(url);
+    return response.data;
+  },
+  create: async (data) => {
+    const response = await api.post('/reservations', data);
+    return response.data;
+  },
+  update: async (id, data) => {
+    const response = await api.put(`/reservations/${id}`, data);
+    return response.data;
+  },
+  cancel: async (id) => {
+    const response = await api.delete(`/reservations/${id}`);
+    return response.data;
+  },
+  seat: async (id) => {
+    const response = await api.post(`/reservations/${id}/seat`);
+    return response.data;
+  },
+  complete: async (id) => {
+    const response = await api.post(`/reservations/${id}/complete`);
+    return response.data;
+  },
+};
+
+// Printers API
+export const printerAPI = {
+  getAll: async () => {
+    const response = await api.get('/printers');
+    return response.data;
+  },
+  create: async (data) => {
+    const response = await api.post('/printers', data);
+    return response.data;
+  },
+  update: async (id, data) => {
+    const response = await api.put(`/printers/${id}`, data);
+    return response.data;
+  },
+  delete: async (id) => {
+    const response = await api.delete(`/printers/${id}`);
+    return response.data;
+  },
+  test: async (id) => {
+    const response = await api.post(`/printers/${id}/test`);
+    return response.data;
+  },
+  printKitchenReceipt: async (orderId) => {
+    const response = await api.post(`/print/kitchen/${orderId}`);
+    return response.data;
+  },
+  printCustomerReceipt: async (orderId) => {
+    const response = await api.post(`/print/customer/${orderId}`);
     return response.data;
   },
 };
