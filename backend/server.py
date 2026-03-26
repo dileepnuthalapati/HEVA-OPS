@@ -992,32 +992,6 @@ async def get_status_checks():
     
     return status_checks
 
-# Include the router in the main app
-app.include_router(api_router)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=5000)
-
-@app.on_event("shutdown")
-async def shutdown_db_client():
-    client.close()
-
 # ===== ONE-TIME SEED ENDPOINT =====
 @api_router.post("/seed-database")
 async def seed_database_endpoint(secret: str = None):
@@ -1062,3 +1036,29 @@ async def seed_database_endpoint(secret: str = None):
     ])
     
     return {"message": "Database seeded!", "seeded": True, "credentials": {"platform_owner": "admin123", "restaurant_admin": "admin123", "staff_user": "user123"}}
+
+# Include the router in the main app
+app.include_router(api_router)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_credentials=True,
+    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=5000)
+
+@app.on_event("shutdown")
+async def shutdown_db_client():
+    client.close()
