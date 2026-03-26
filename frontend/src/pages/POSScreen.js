@@ -231,7 +231,7 @@ const POSScreen = () => {
         discount_reason: discountReason || null,
       });
       
-      // Print kitchen receipt via ESC/POS API
+      // Try to print kitchen receipt (silently fail if no printer)
       try {
         const printResult = await printerAPI.printKitchenReceipt(order.id);
         console.log('Kitchen receipt ESC/POS commands generated:', printResult);
@@ -239,29 +239,23 @@ const POSScreen = () => {
         // If we have a connected thermal printer, send the commands
         if (printerConnected && printerService.isConnected()) {
           await printerService.printRaw(printResult.commands);
-          toast.success(`Order #${order.order_number} placed! Kitchen receipt printed.`);
-        } else {
-          // Fallback to PDF download
-          const kitchenReceipt = await orderAPI.printKitchenReceipt(order.id);
-          downloadPDF(kitchenReceipt, `kitchen_${String(order.order_number).padStart(3, '0')}.pdf`);
-          toast.success(`Order #${order.order_number} placed! Kitchen receipt downloaded.`);
         }
       } catch (printError) {
-        console.error('Print failed, falling back to PDF:', printError);
-        try {
-          const kitchenReceipt = await orderAPI.printKitchenReceipt(order.id);
-          downloadPDF(kitchenReceipt, `kitchen_${String(order.order_number).padStart(3, '0')}.pdf`);
-          toast.success(`Order #${order.order_number} placed! Kitchen receipt downloaded.`);
-        } catch (pdfError) {
-          toast.success(`Order #${order.order_number} placed!`);
-        }
+        // Silently handle print errors - receipt printing is optional
+        console.log('Kitchen receipt printing skipped:', printError.message);
       }
       
       // Update table status if assigned
       if (selectedTable) {
-        await tableAPI.assignOrder(selectedTable, order.id);
-        loadTables();
+        try {
+          await tableAPI.assignOrder(selectedTable, order.id);
+          loadTables();
+        } catch (tableError) {
+          console.error('Failed to assign table:', tableError);
+        }
       }
+      
+      toast.success(`Order #${order.order_number} placed!`);
       
       // Clear cart and all related states
       setCart([]);
@@ -365,7 +359,7 @@ const POSScreen = () => {
         paymentDetails
       );
       
-      // Print customer receipt via ESC/POS API
+      // Try to print customer receipt (silently fail if no printer)
       try {
         const printResult = await printerAPI.printCustomerReceipt(selectedOrderToComplete.id);
         console.log('Customer receipt ESC/POS commands generated:', printResult);
@@ -373,22 +367,10 @@ const POSScreen = () => {
         // If we have a connected thermal printer, send the commands
         if (printerConnected && printerService.isConnected()) {
           await printerService.printRaw(printResult.commands);
-          toast.success(`Payment complete! Customer receipt printed.`);
-        } else {
-          // Fallback to PDF download
-          const customerReceipt = await orderAPI.printCustomerReceipt(selectedOrderToComplete.id);
-          downloadPDF(customerReceipt, `receipt_${String(selectedOrderToComplete.order_number).padStart(3, '0')}.pdf`);
-          toast.success(`Payment complete! Customer receipt downloaded.`);
         }
       } catch (printError) {
-        console.error('Print failed, falling back to PDF:', printError);
-        try {
-          const customerReceipt = await orderAPI.printCustomerReceipt(selectedOrderToComplete.id);
-          downloadPDF(customerReceipt, `receipt_${String(selectedOrderToComplete.order_number).padStart(3, '0')}.pdf`);
-          toast.success(`Payment complete! Customer receipt downloaded.`);
-        } catch (pdfError) {
-          toast.success(`Order completed with ${paymentMethod}!`);
-        }
+        // Silently handle print errors - receipt printing is optional
+        console.log('Receipt printing skipped:', printError.message);
       }
       
       // Clear the table if this order had a table assigned
@@ -402,6 +384,7 @@ const POSScreen = () => {
         }
       }
       
+      toast.success(`Order completed with ${paymentMethod}!`);
       setShowPaymentDialog(false);
       setSelectedOrderToComplete(null);
       setTipPercentage(0);
