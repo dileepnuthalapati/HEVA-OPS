@@ -961,7 +961,7 @@ const POSScreen = () => {
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
-              <span className="font-mono">${cart.reduce((sum, item) => sum + item.total, 0).toFixed(2)}</span>
+              <span className="font-mono">{getCurrencySymbol(currency)}{cart.reduce((sum, item) => sum + item.total, 0).toFixed(2)}</span>
             </div>
             {calculateDiscount() > 0 && (
               <div className="flex justify-between text-sm text-emerald-600">
@@ -1039,7 +1039,7 @@ const POSScreen = () => {
             <div className="p-4 bg-muted rounded-lg">
               <div className="flex justify-between text-sm mb-2">
                 <span>Subtotal:</span>
-                <span className="font-mono">${selectedOrderToComplete?.subtotal?.toFixed(2)}</span>
+                <span className="font-mono">{getCurrencySymbol(currency)}{selectedOrderToComplete?.subtotal?.toFixed(2)}</span>
               </div>
               
               {/* Tip Section */}
@@ -1268,7 +1268,7 @@ const POSScreen = () => {
                   {Array.from({ length: splitCount }, (_, i) => (
                     <div key={i} className="flex justify-between p-2 bg-white rounded border">
                       <span>Person {i + 1}</span>
-                      <span className="font-mono font-medium">${calculatePerPersonAmount().toFixed(2)}</span>
+                      <span className="font-mono font-medium">{getCurrencySymbol(currency)}{calculatePerPersonAmount().toFixed(2)}</span>
                     </div>
                   ))}
                 </div>

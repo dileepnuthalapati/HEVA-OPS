@@ -1,18 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import { reportAPI } from '../services/api';
+import { reportAPI, restaurantAPI } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { TrendingUp, DollarSign, ShoppingBag, Package } from 'lucide-react';
 import { toast } from 'sonner';
 
+// Currency helper
+const getCurrencySymbol = (currency) => {
+  const symbols = { 'GBP': '£', 'USD': '$', 'EUR': '€', 'INR': '₹' };
+  return symbols[currency] || currency || '£';
+};
+
 const AdminDashboard = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [currency, setCurrency] = useState('GBP');
 
   useEffect(() => {
     loadStats();
+    loadCurrency();
   }, []);
+
+  const loadCurrency = async () => {
+    try {
+      const restaurant = await restaurantAPI.getMy();
+      if (restaurant?.currency) {
+        setCurrency(restaurant.currency);
+      }
+    } catch (error) {
+      // Use default currency
+    }
+  };
 
   const loadStats = async () => {
     try {
@@ -52,7 +71,7 @@ const AdminDashboard = () => {
                     <div className="flex items-center gap-3">
                       <DollarSign className="w-8 h-8 text-emerald-500" />
                       <div className="text-3xl font-bold font-mono">
-                        ${stats?.total_sales?.toFixed(2) || '0.00'}
+                        {getCurrencySymbol(currency)}{stats?.total_sales?.toFixed(2) || '0.00'}
                       </div>
                     </div>
                   </CardContent>
@@ -82,7 +101,7 @@ const AdminDashboard = () => {
                     <div className="flex items-center gap-3">
                       <TrendingUp className="w-8 h-8 text-amber-500" />
                       <div className="text-3xl font-bold font-mono">
-                        ${stats?.avg_order_value?.toFixed(2) || '0.00'}
+                        {getCurrencySymbol(currency)}{stats?.avg_order_value?.toFixed(2) || '0.00'}
                       </div>
                     </div>
                   </CardContent>
@@ -132,7 +151,7 @@ const AdminDashboard = () => {
                           </div>
                           <div className="text-right">
                             <div className="text-xl font-bold font-mono text-emerald-600">
-                              ${product.revenue.toFixed(2)}
+                              {getCurrencySymbol(currency)}{product.revenue.toFixed(2)}
                             </div>
                             <div className="text-xs text-muted-foreground">Revenue</div>
                           </div>

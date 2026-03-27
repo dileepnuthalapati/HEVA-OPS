@@ -1,17 +1,36 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import { orderAPI } from '../services/api';
+import { orderAPI, restaurantAPI } from '../services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
 import { Calendar } from 'lucide-react';
 
+// Currency helper
+const getCurrencySymbol = (currency) => {
+  const symbols = { 'GBP': '£', 'USD': '$', 'EUR': '€', 'INR': '₹' };
+  return symbols[currency] || currency || '£';
+};
+
 const OrderHistory = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [currency, setCurrency] = useState('GBP');
 
   useEffect(() => {
     loadOrders();
+    loadCurrency();
   }, []);
+
+  const loadCurrency = async () => {
+    try {
+      const restaurant = await restaurantAPI.getMy();
+      if (restaurant?.currency) {
+        setCurrency(restaurant.currency);
+      }
+    } catch (error) {
+      // Use default currency
+    }
+  };
 
   const loadOrders = async () => {
     try {
@@ -78,7 +97,7 @@ const OrderHistory = () => {
                       </div>
                       <div className="text-right">
                         <div className="text-2xl font-bold font-mono text-emerald-600">
-                          ${order.total_amount.toFixed(2)}
+                          {getCurrencySymbol(currency)}{order.total_amount.toFixed(2)}
                         </div>
                         <div className="text-xs text-muted-foreground">by {order.created_by}</div>
                       </div>
@@ -95,10 +114,10 @@ const OrderHistory = () => {
                           <div className="flex-1">
                             <div className="font-medium">{item.product_name}</div>
                             <div className="text-sm text-muted-foreground">
-                              ${item.unit_price.toFixed(2)} × {item.quantity}
+                              {getCurrencySymbol(currency)}{item.unit_price.toFixed(2)} × {item.quantity}
                             </div>
                           </div>
-                          <div className="font-bold font-mono">${item.total.toFixed(2)}</div>
+                          <div className="font-bold font-mono">{getCurrencySymbol(currency)}{item.total.toFixed(2)}</div>
                         </div>
                       ))}
                     </div>

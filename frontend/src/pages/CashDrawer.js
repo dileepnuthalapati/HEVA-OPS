@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import { cashDrawerAPI } from '../services/api';
+import { cashDrawerAPI, restaurantAPI } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -9,6 +9,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { Wallet, TrendingUp, TrendingDown } from 'lucide-react';
+
+// Currency helper
+const getCurrencySymbol = (currency) => {
+  const symbols = { 'GBP': '£', 'USD': '$', 'EUR': '€', 'INR': '₹' };
+  return symbols[currency] || currency || '£';
+};
 
 const CashDrawer = () => {
   const [currentDrawer, setCurrentDrawer] = useState(null);
@@ -19,10 +25,23 @@ const CashDrawer = () => {
   const [openingBalance, setOpeningBalance] = useState('');
   const [actualCash, setActualCash] = useState('');
   const [notes, setNotes] = useState('');
+  const [currency, setCurrency] = useState('GBP');
 
   useEffect(() => {
     loadData();
+    loadCurrency();
   }, []);
+
+  const loadCurrency = async () => {
+    try {
+      const restaurant = await restaurantAPI.getMy();
+      if (restaurant?.currency) {
+        setCurrency(restaurant.currency);
+      }
+    } catch (error) {
+      // Use default currency
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -117,7 +136,7 @@ const CashDrawer = () => {
                   </DialogHeader>
                   <div className="space-y-4 mt-4">
                     <div>
-                      <Label htmlFor="opening-balance">Opening Balance ($)</Label>
+                      <Label htmlFor="opening-balance">Opening Balance ({getCurrencySymbol(currency)})</Label>
                       <Input
                         id="opening-balance"
                         data-testid="opening-balance-input"
@@ -157,19 +176,19 @@ const CashDrawer = () => {
                     <div className="p-4 rounded-lg border bg-card">
                       <div className="text-sm text-muted-foreground mb-2">Opening Balance</div>
                       <div className="text-2xl font-bold font-mono">
-                        ${currentDrawer.opening_balance.toFixed(2)}
+                        {getCurrencySymbol(currency)}{currentDrawer.opening_balance.toFixed(2)}
                       </div>
                     </div>
                     <div className="p-4 rounded-lg border bg-card">
                       <div className="text-sm text-muted-foreground mb-2">Cash Sales Today</div>
                       <div className="text-2xl font-bold font-mono text-emerald-600">
-                        +${(currentDrawer.expected_cash - currentDrawer.opening_balance).toFixed(2)}
+                        +{getCurrencySymbol(currency)}{(currentDrawer.expected_cash - currentDrawer.opening_balance).toFixed(2)}
                       </div>
                     </div>
                     <div className="p-4 rounded-lg border bg-card">
                       <div className="text-sm text-muted-foreground mb-2">Expected Cash</div>
                       <div className="text-2xl font-bold font-mono text-blue-600">
-                        ${currentDrawer.expected_cash.toFixed(2)}
+                        {getCurrencySymbol(currency)}{currentDrawer.expected_cash.toFixed(2)}
                       </div>
                     </div>
                   </div>
@@ -192,13 +211,13 @@ const CashDrawer = () => {
                           <div className="flex justify-between text-sm mb-2">
                             <span>Expected Cash:</span>
                             <span className="font-mono font-bold">
-                              ${currentDrawer.expected_cash.toFixed(2)}
+                              {getCurrencySymbol(currency)}{currentDrawer.expected_cash.toFixed(2)}
                             </span>
                           </div>
                         </div>
                         
                         <div>
-                          <Label htmlFor="actual-cash">Actual Cash ($)</Label>
+                          <Label htmlFor="actual-cash">Actual Cash ({getCurrencySymbol(currency)})</Label>
                           <Input
                             id="actual-cash"
                             data-testid="actual-cash-input"
@@ -223,7 +242,7 @@ const CashDrawer = () => {
                                 }`}
                               >
                                 {parseFloat(actualCash) - currentDrawer.expected_cash >= 0 ? '+' : ''}
-                                ${(parseFloat(actualCash) - currentDrawer.expected_cash).toFixed(2)}
+                                {getCurrencySymbol(currency)}{(parseFloat(actualCash) - currentDrawer.expected_cash).toFixed(2)}
                               </span>
                             </div>
                           </div>
@@ -303,7 +322,7 @@ const CashDrawer = () => {
                                   drawer.difference >= 0 ? 'text-emerald-600' : 'text-red-600'
                                 }`}
                               >
-                                {drawer.difference >= 0 ? '+' : ''}${drawer.difference.toFixed(2)}
+                                {drawer.difference >= 0 ? '+' : ''}{getCurrencySymbol(currency)}{drawer.difference.toFixed(2)}
                               </span>
                             </div>
                             <div className="text-xs text-muted-foreground">Difference</div>
@@ -315,20 +334,20 @@ const CashDrawer = () => {
                         <div>
                           <div className="text-muted-foreground">Opening</div>
                           <div className="font-mono font-semibold">
-                            ${drawer.opening_balance.toFixed(2)}
+                            {getCurrencySymbol(currency)}{drawer.opening_balance.toFixed(2)}
                           </div>
                         </div>
                         <div>
                           <div className="text-muted-foreground">Expected</div>
                           <div className="font-mono font-semibold">
-                            ${drawer.expected_cash.toFixed(2)}
+                            {getCurrencySymbol(currency)}{drawer.expected_cash.toFixed(2)}
                           </div>
                         </div>
                         {drawer.status === 'closed' && (
                           <div>
                             <div className="text-muted-foreground">Actual</div>
                             <div className="font-mono font-semibold">
-                              ${drawer.actual_cash.toFixed(2)}
+                              {getCurrencySymbol(currency)}{drawer.actual_cash.toFixed(2)}
                             </div>
                           </div>
                         )}
