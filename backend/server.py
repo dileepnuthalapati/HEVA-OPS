@@ -205,6 +205,16 @@ class ReportRequest(BaseModel):
     start_date: str
     end_date: str
 
+# ===== PASSWORD & ADMIN MODELS =====
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+class PlatformAdminCreate(BaseModel):
+    username: str
+    password: str
+    email: Optional[str] = None
+
 # ===== PRINTER MODELS =====
 class Printer(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -395,6 +405,81 @@ async def login(credentials: UserLogin):
 @api_router.get("/auth/me", response_model=User)
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+# ===== PASSWORD & PLATFORM ADMIN MANAGEMENT =====
+
+@api_router.post("/auth/change-password")
+async def change_password(password_data: PasswordChange, current_user: User = Depends(get_current_user)):
+    """Change current user's password"""
+    # Get user from database
+    user = await db.users.find_one({"username": current_user.username})
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Verify current password
+    if not verify_password(password_data.current_password, user["password"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    
+    # Hash new password and update
+    new_hashed = get_password_hash(password_data.new_password)
+    await db.users.update_one(
+        {"username": current_user.username},
+        {"$set": {"password": new_hashed}}
+    )
+    
+    return {"message": "Password changed successfully"}
+
+@api_router.get("/platform/admins")
+async def get_platform_admins(current_user: User = Depends(require_platform_owner)):
+    """Get all platform administrators"""
+    admins = await db.users.find(
+        {"role": "platform_owner"},
+        {"_id": 0, "password": 0}
+    ).to_list(100)
+    return admins
+
+@api_router.post("/platform/admins")
+async def create_platform_admin(admin_data: PlatformAdminCreate, current_user: User = Depends(require_platform_owner)):
+    """Create a new platform administrator"""
+    # Check username is unique
+    existing = await db.users.find_one({"username": admin_data.username})
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    
+    user_id = f"admin_{datetime.now(timezone.utc).timestamp()}"
+    hashed_password = get_password_hash(admin_data.password)
+    user_dict = {
+        "id": user_id,
+        "username": admin_data.username,
+        "password": hashed_password,
+        "role": "platform_owner",
+        "email": admin_data.email,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.users.insert_one(user_dict)
+    
+    return {
+        "id": user_id,
+        "username": admin_data.username,
+        "role": "platform_owner",
+        "email": admin_data.email,
+        "created_at": user_dict["created_at"]
+    }
+
+@api_router.delete("/platform/admins/{admin_id}")
+async def delete_platform_admin(admin_id: str, current_user: User = Depends(require_platform_owner)):
+    """Delete a platform administrator (cannot delete yourself)"""
+    # Find admin to delete
+    admin = await db.users.find_one({"id": admin_id, "role": "platform_owner"})
+    if not admin:
+        raise HTTPException(status_code=404, detail="Admin not found")
+    
+    # Cannot delete yourself
+    if admin["username"] == current_user.username:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    
+    await db.users.delete_one({"id": admin_id})
+    return {"message": "Admin deleted successfully"}
 
 # ===== RESTAURANT USER MANAGEMENT =====
 
