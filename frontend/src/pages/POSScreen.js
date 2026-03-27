@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { categoryAPI, productAPI, orderAPI, tableAPI, printerAPI, restaurantAPI } from '../services/api';
 import printerService from '../services/printer';
@@ -12,7 +13,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, DollarSign, CreditCard, Users, Percent, Tag, MessageSquare, Banknote, Search, PackagePlus } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, DollarSign, CreditCard, Users, Percent, Tag, MessageSquare, Banknote, Search, PackagePlus, ArrowLeft } from 'lucide-react';
 
 // Currency helper
 const getCurrencySymbol = (currency) => {
@@ -21,6 +22,7 @@ const getCurrencySymbol = (currency) => {
 };
 
 const POSScreen = () => {
+  const navigate = useNavigate();
   const { user, logout } = useAuth();
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
@@ -531,9 +533,23 @@ const POSScreen = () => {
       <div className="flex-1 flex flex-col">
         {/* Top Bar */}
         <div className="bg-card border-b px-6 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold tracking-tight">HevaPOS</h1>
-            <p className="text-base text-muted-foreground">Welcome, {user?.username}</p>
+          <div className="flex items-center gap-4">
+            {/* Back button for admins */}
+            {(user?.role === 'admin' || user?.role === 'platform_owner') && (
+              <Button
+                variant="outline"
+                data-testid="back-to-dashboard-button"
+                onClick={() => navigate(user?.role === 'platform_owner' ? '/platform' : '/admin')}
+                className="h-12 text-base"
+              >
+                <ArrowLeft className="w-5 h-5 mr-2" />
+                Dashboard
+              </Button>
+            )}
+            <div>
+              <h1 className="text-3xl font-bold tracking-tight">HevaPOS</h1>
+              <p className="text-base text-muted-foreground">Welcome, {user?.username}</p>
+            </div>
           </div>
           <div className="flex gap-3">
             {printerService.isSupported() && !printerConnected && (
