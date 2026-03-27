@@ -95,9 +95,10 @@ const POSScreen = () => {
     try {
       await printerService.connect();
       setPrinterConnected(true);
-      toast.success('Printer connected successfully');
+      // Printer connected - no toast to avoid distraction
+      console.log('Printer connected successfully');
     } catch (error) {
-      toast.error('Failed to connect printer');
+      console.error('Failed to connect printer:', error);
     }
   };
 
@@ -118,7 +119,7 @@ const POSScreen = () => {
       setCategories(cats);
       setProducts(prods);
     } catch (error) {
-      toast.error('Failed to load data');
+      console.error('Failed to load data:', error);
     } finally {
       setLoading(false);
     }
@@ -186,13 +187,13 @@ const POSScreen = () => {
   // Add custom/temporary product to cart
   const addCustomProductToCart = () => {
     if (!customProductName.trim() || !customProductPrice) {
-      toast.error('Please enter product name and price');
+      // Visual feedback via dialog staying open
       return;
     }
     
     const price = parseFloat(customProductPrice);
     if (isNaN(price) || price <= 0) {
-      toast.error('Please enter a valid price');
+      // Visual feedback via dialog staying open
       return;
     }
     
@@ -209,7 +210,7 @@ const POSScreen = () => {
       },
     ]);
     
-    toast.success(`Added "${customProductName}" to cart`);
+    // Custom item added - cart updates visually
     setCustomProductName('');
     setCustomProductPrice('');
     setShowCustomProductDialog(false);
@@ -242,7 +243,7 @@ const POSScreen = () => {
 
   const removeFromCart = (productId) => {
     setCart(cart.filter((item) => item.product_id !== productId));
-    toast.info('Item removed from cart');
+    // Cart updates visually - no toast needed
   };
 
   const clearCart = () => {
@@ -252,7 +253,7 @@ const POSScreen = () => {
     setDiscountValue('');
     setDiscountReason('');
     setEditingOrder(null);
-    toast.info('Cart cleared');
+    // Cart clears visually - no toast needed
   };
 
   // Edit a pending order - load items into cart
@@ -276,7 +277,7 @@ const POSScreen = () => {
     
     // Close pending orders panel
     setShowPendingOrders(false);
-    toast.info(`Editing Order #${order.order_number} - Add items and update`);
+    // Editing banner shows - no toast needed
   };
 
   // Update an existing order
@@ -296,7 +297,7 @@ const POSScreen = () => {
         discount_reason: discountReason || null,
       });
       
-      toast.success(`Order #${updatedOrder.order_number} updated!`);
+      // Order updated - visual feedback via cart clearing
       
       // Clear cart and states
       setCart([]);
@@ -310,7 +311,7 @@ const POSScreen = () => {
       setShowNotesPanel(false);
       loadPendingOrders();
     } catch (error) {
-      toast.error('Failed to update order');
+      console.error('Failed to update order:', error);
     }
   };
 
@@ -335,7 +336,7 @@ const POSScreen = () => {
 
   const placeOrder = async () => {
     if (cart.length === 0) {
-      toast.error('Cart is empty');
+      // Cart is empty - button should be disabled anyway
       return;
     }
 
@@ -376,7 +377,7 @@ const POSScreen = () => {
         }
       }
       
-      toast.success(`Order #${order.order_number} placed!`);
+      // Order placed - cart clears as visual feedback
       
       // Clear cart and all related states
       setCart([]);
@@ -389,7 +390,7 @@ const POSScreen = () => {
       setShowNotesPanel(false);
       loadPendingOrders();
     } catch (error) {
-      toast.error('Failed to place order');
+      console.error('Failed to place order:', error);
     }
   };
 
@@ -462,7 +463,7 @@ const POSScreen = () => {
       const totalPaid = cash + card;
       
       if (Math.abs(totalPaid - grandTotal) > 0.02) {
-        toast.error(`Payment total ($${totalPaid.toFixed(2)}) doesn't match order total ($${grandTotal.toFixed(2)})`);
+        // Payment mismatch - dialog stays open, amounts shown in red
         return;
       }
       
@@ -505,7 +506,7 @@ const POSScreen = () => {
         }
       }
       
-      toast.success(`Order completed with ${paymentMethod}!`);
+      // Order completed - dialog closes as visual feedback
       setShowPaymentDialog(false);
       setSelectedOrderToComplete(null);
       setTipPercentage(0);
@@ -519,7 +520,7 @@ const POSScreen = () => {
       // Return to POS view (hide pending orders panel)
       setShowPendingOrders(false);
     } catch (error) {
-      toast.error('Failed to complete order');
+      console.error('Failed to complete order:', error);
     }
   };
 
