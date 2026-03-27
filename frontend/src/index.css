@@ -301,18 +301,20 @@ code {
 }
 
 .product-name {
-    font-size: 1.1rem;
-    font-weight: 600;
+    font-size: 1.25rem;
+    font-weight: 700;
     line-height: 1.3;
+    color: #1a1a1a;
 }
 
 .product-price {
-    font-size: 1.35rem;
-    font-weight: 700;
+    font-size: 1.5rem;
+    font-weight: 800;
 }
 
 .product-category {
-    font-size: 0.85rem;
+    font-size: 0.9rem;
+    font-weight: 500;
 }
 
 /* Cart items - larger text */

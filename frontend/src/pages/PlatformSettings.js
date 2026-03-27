@@ -1,12 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Switch } from '../components/ui/switch';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { Settings, Bell, Shield, CreditCard, Mail, Globe } from 'lucide-react';
+import { authAPI, platformAdminAPI } from '../services/api';
+import { Settings, Bell, Shield, CreditCard, Mail, Globe, Key, UserPlus, Trash2, Users } from 'lucide-react';
 
 const PlatformSettings = () => {
   const [settings, setSettings] = useState({
@@ -24,6 +26,36 @@ const PlatformSettings = () => {
   });
 
   const [saving, setSaving] = useState(false);
+  
+  // Password change state
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [changingPassword, setChangingPassword] = useState(false);
+  
+  // Platform admins state
+  const [admins, setAdmins] = useState([]);
+  const [loadingAdmins, setLoadingAdmins] = useState(true);
+  const [showAddAdmin, setShowAddAdmin] = useState(false);
+  const [newAdminUsername, setNewAdminUsername] = useState('');
+  const [newAdminPassword, setNewAdminPassword] = useState('');
+  const [newAdminEmail, setNewAdminEmail] = useState('');
+  const [addingAdmin, setAddingAdmin] = useState(false);
+
+  useEffect(() => {
+    loadAdmins();
+  }, []);
+
+  const loadAdmins = async () => {
+    try {
+      const data = await platformAdminAPI.getAll();
+      setAdmins(data);
+    } catch (error) {
+      console.error('Failed to load admins:', error);
+    } finally {
+      setLoadingAdmins(false);
+    }
+  };
 
   const handleSave = async () => {
     setSaving(true);
@@ -38,6 +70,74 @@ const PlatformSettings = () => {
     }
   };
 
+  const handleChangePassword = async () => {
+    if (!currentPassword || !newPassword) {
+      toast.error('Please fill in all password fields');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      toast.error('New passwords do not match');
+      return;
+    }
+    if (newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+
+    setChangingPassword(true);
+    try {
+      await authAPI.changePassword(currentPassword, newPassword);
+      toast.success('Password changed successfully!');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to change password');
+    } finally {
+      setChangingPassword(false);
+    }
+  };
+
+  const handleAddAdmin = async () => {
+    if (!newAdminUsername || !newAdminPassword) {
+      toast.error('Username and password are required');
+      return;
+    }
+    if (newAdminPassword.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+
+    setAddingAdmin(true);
+    try {
+      await platformAdminAPI.create(newAdminUsername, newAdminPassword, newAdminEmail);
+      toast.success(`Admin "${newAdminUsername}" created successfully!`);
+      setShowAddAdmin(false);
+      setNewAdminUsername('');
+      setNewAdminPassword('');
+      setNewAdminEmail('');
+      loadAdmins();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to create admin');
+    } finally {
+      setAddingAdmin(false);
+    }
+  };
+
+  const handleDeleteAdmin = async (admin) => {
+    if (!confirm(`Are you sure you want to delete admin "${admin.username}"?`)) {
+      return;
+    }
+
+    try {
+      await platformAdminAPI.delete(admin.id);
+      toast.success('Admin deleted successfully');
+      loadAdmins();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to delete admin');
+    }
+  };
+
   return (
     <div className="flex">
       <Sidebar />
@@ -48,6 +148,101 @@ const PlatformSettings = () => {
             <h1 className="text-4xl font-bold tracking-tight mb-2">Platform Settings</h1>
             <p className="text-muted-foreground">Configure global platform settings and preferences</p>
           </div>
+
+          {/* Change Password */}
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Key className="w-5 h-5" />
+                Change Password
+              </CardTitle>
+              <CardDescription>Update your account password</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="currentPassword">Current Password</Label>
+                  <Input
+                    id="currentPassword"
+                    type="password"
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Enter current password"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="newPassword">New Password</Label>
+                  <Input
+                    id="newPassword"
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Enter new password"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="confirmPassword">Confirm New Password</Label>
+                  <Input
+                    id="confirmPassword"
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="Confirm new password"
+                  />
+                </div>
+              </div>
+              <Button onClick={handleChangePassword} disabled={changingPassword}>
+                {changingPassword ? 'Changing...' : 'Change Password'}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Platform Administrators */}
+          <Card className="mb-6">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <Users className="w-5 h-5" />
+                    Platform Administrators
+                  </CardTitle>
+                  <CardDescription>Manage platform admin accounts</CardDescription>
+                </div>
+                <Button onClick={() => setShowAddAdmin(true)}>
+                  <UserPlus className="w-4 h-4 mr-2" />
+                  Add Admin
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {loadingAdmins ? (
+                <div className="text-center py-4">Loading...</div>
+              ) : admins.length === 0 ? (
+                <div className="text-center py-4 text-muted-foreground">No administrators found</div>
+              ) : (
+                <div className="space-y-3">
+                  {admins.map((admin) => (
+                    <div key={admin.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div>
+                        <div className="font-semibold">{admin.username}</div>
+                        <div className="text-sm text-muted-foreground">
+                          {admin.email || 'No email'} • Created: {new Date(admin.created_at).toLocaleDateString()}
+                        </div>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleDeleteAdmin(admin)}
+                        className="text-red-500 hover:text-red-700 hover:bg-red-50"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
 
           {/* General Settings */}
           <Card className="mb-6">
@@ -225,6 +420,57 @@ const PlatformSettings = () => {
           </div>
         </div>
       </div>
+
+      {/* Add Admin Dialog */}
+      <Dialog open={showAddAdmin} onOpenChange={setShowAddAdmin}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Platform Administrator</DialogTitle>
+            <DialogDescription>
+              Create a new admin account with full platform access
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-4">
+            <div>
+              <Label htmlFor="adminUsername">Username</Label>
+              <Input
+                id="adminUsername"
+                value={newAdminUsername}
+                onChange={(e) => setNewAdminUsername(e.target.value)}
+                placeholder="Enter username"
+              />
+            </div>
+            <div>
+              <Label htmlFor="adminPassword">Password</Label>
+              <Input
+                id="adminPassword"
+                type="password"
+                value={newAdminPassword}
+                onChange={(e) => setNewAdminPassword(e.target.value)}
+                placeholder="Enter password (min 6 characters)"
+              />
+            </div>
+            <div>
+              <Label htmlFor="adminEmail">Email (Optional)</Label>
+              <Input
+                id="adminEmail"
+                type="email"
+                value={newAdminEmail}
+                onChange={(e) => setNewAdminEmail(e.target.value)}
+                placeholder="Enter email"
+              />
+            </div>
+            <div className="flex gap-2 pt-4">
+              <Button variant="outline" className="flex-1" onClick={() => setShowAddAdmin(false)}>
+                Cancel
+              </Button>
+              <Button className="flex-1" onClick={handleAddAdmin} disabled={addingAdmin}>
+                {addingAdmin ? 'Creating...' : 'Create Admin'}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

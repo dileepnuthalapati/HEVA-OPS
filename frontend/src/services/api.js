@@ -54,6 +54,28 @@ export const authAPI = {
     const response = await api.get('/auth/me');
     return response.data;
   },
+  changePassword: async (currentPassword, newPassword) => {
+    const response = await api.post('/auth/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword
+    });
+    return response.data;
+  },
+};
+
+export const platformAdminAPI = {
+  getAll: async () => {
+    const response = await api.get('/platform/admins');
+    return response.data;
+  },
+  create: async (username, password, email) => {
+    const response = await api.post('/platform/admins', { username, password, email });
+    return response.data;
+  },
+  delete: async (adminId) => {
+    const response = await api.delete(`/platform/admins/${adminId}`);
+    return response.data;
+  },
 };
 
 export const categoryAPI = {

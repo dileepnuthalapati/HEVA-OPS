@@ -3,7 +3,7 @@ import Sidebar from '../components/Sidebar';
 import { reportAPI, restaurantAPI } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { TrendingUp, DollarSign, ShoppingBag, Package } from 'lucide-react';
+import { TrendingUp, DollarSign, ShoppingBag, Package, Coins } from 'lucide-react';
 import { toast } from 'sonner';
 
 // Currency helper
@@ -69,7 +69,7 @@ const AdminDashboard = () => {
                   </CardHeader>
                   <CardContent>
                     <div className="flex items-center gap-3">
-                      <DollarSign className="w-8 h-8 text-emerald-500" />
+                      <Coins className="w-8 h-8 text-emerald-500" />
                       <div className="text-3xl font-bold font-mono">
                         {getCurrencySymbol(currency)}{stats?.total_sales?.toFixed(2) || '0.00'}
                       </div>
