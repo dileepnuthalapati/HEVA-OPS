@@ -177,7 +177,7 @@ const POSScreen = () => {
         },
       ]);
     }
-    toast.success(`Added ${product.name} to cart`);
+    // Removed toast notification - too distracting during fast ordering
     
     // Reset after short delay
     setTimeout(() => setIsAddingToCart(false), 300);
@@ -511,7 +511,13 @@ const POSScreen = () => {
       setTipPercentage(0);
       setCustomTip('');
       setSplitCount(1);
+      setSplitPaymentMode(false);
+      setCashAmount('');
+      setCardAmount('');
       loadPendingOrders();
+      
+      // Return to POS view (hide pending orders panel)
+      setShowPendingOrders(false);
     } catch (error) {
       toast.error('Failed to complete order');
     }
@@ -539,7 +545,7 @@ const POSScreen = () => {
               <Button
                 variant="outline"
                 data-testid="back-to-dashboard-button"
-                onClick={() => navigate(user?.role === 'platform_owner' ? '/platform' : '/admin')}
+                onClick={() => navigate(user?.role === 'platform_owner' ? '/platform/dashboard' : '/dashboard')}
                 className="h-12 text-base"
               >
                 <ArrowLeft className="w-5 h-5 mr-2" />
