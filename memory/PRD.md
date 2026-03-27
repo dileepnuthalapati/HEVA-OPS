@@ -46,6 +46,9 @@ Build a multi-tenant SaaS POS system called "HevaPOS" with:
 - [x] Railway Deployment (Backend)
 - [x] Capacitor Configuration (APK)
 - [x] White-labeling (Emergent badge removed)
+- [x] **Product Search** - Real-time search/filter in POS
+- [x] **Custom/Temporary Items** - Add items not in menu to cart
+- [x] **Double-click prevention** - Fixed duplicate item additions
 
 ### In Progress
 - None
@@ -74,14 +77,14 @@ Build a multi-tenant SaaS POS system called "HevaPOS" with:
 
 ### Key Files
 - `/app/backend/server.py` - Monolithic API (~2100 lines)
-- `/app/frontend/src/pages/POSScreen.js` - Main POS UI
+- `/app/frontend/src/pages/POSScreen.js` - Main POS UI (with search, custom items)
 - `/app/frontend/src/components/Sidebar.js` - Role-based navigation
 - `/app/frontend/capacitor.config.json` - APK configuration
 
 ### Database Schema
 - `restaurants`: {id, business_info, currency, users}
 - `users`: {id, username, role, restaurant_id}
-- `orders`: {notes, discount, payment_details, status}
+- `orders`: {notes, discount, payment_details, status, items (includes is_custom flag)}
 - `tables`, `printers`, `reservations`
 
 ### Key API Endpoints
@@ -102,3 +105,9 @@ Build a multi-tenant SaaS POS system called "HevaPOS" with:
 - MongoDB Atlas requires IP whitelist (currently `0.0.0.0/0`)
 - APK built locally by user using Capacitor
 - User syncs code to GitHub for Railway auto-deployment
+
+## Latest Changes (March 27, 2026)
+1. Added product search bar with real-time filtering
+2. Added "Custom Item" button to add temporary products to cart
+3. Fixed double-click bug causing multiple item additions
+4. Custom items display with "Custom" badge in cart

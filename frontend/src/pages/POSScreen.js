@@ -12,7 +12,7 @@ import { Textarea } from '../components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, DollarSign, CreditCard, Users, Percent, Tag, MessageSquare, Banknote } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, DollarSign, CreditCard, Users, Percent, Tag, MessageSquare, Banknote, Search, PackagePlus } from 'lucide-react';
 
 // Currency helper
 const getCurrencySymbol = (currency) => {
@@ -54,6 +54,17 @@ const POSScreen = () => {
   const [splitPaymentMode, setSplitPaymentMode] = useState(false);
   const [cashAmount, setCashAmount] = useState('');
   const [cardAmount, setCardAmount] = useState('');
+  
+  // Product search
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Custom/Temporary product dialog
+  const [showCustomProductDialog, setShowCustomProductDialog] = useState(false);
+  const [customProductName, setCustomProductName] = useState('');
+  const [customProductPrice, setCustomProductPrice] = useState('');
+  
+  // Debounce for preventing double clicks
+  const [isAddingToCart, setIsAddingToCart] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -139,6 +150,10 @@ const POSScreen = () => {
   };
 
   const addToCart = (product) => {
+    // Prevent double-clicks
+    if (isAddingToCart) return;
+    setIsAddingToCart(true);
+    
     const existing = cart.find((item) => item.product_id === product.id);
     if (existing) {
       setCart(
@@ -161,7 +176,48 @@ const POSScreen = () => {
       ]);
     }
     toast.success(`Added ${product.name} to cart`);
+    
+    // Reset after short delay
+    setTimeout(() => setIsAddingToCart(false), 300);
   };
+  
+  // Add custom/temporary product to cart
+  const addCustomProductToCart = () => {
+    if (!customProductName.trim() || !customProductPrice) {
+      toast.error('Please enter product name and price');
+      return;
+    }
+    
+    const price = parseFloat(customProductPrice);
+    if (isNaN(price) || price <= 0) {
+      toast.error('Please enter a valid price');
+      return;
+    }
+    
+    const customId = `custom_${Date.now()}`;
+    setCart([
+      ...cart,
+      {
+        product_id: customId,
+        product_name: customProductName.trim(),
+        quantity: 1,
+        unit_price: price,
+        total: price,
+        is_custom: true,
+      },
+    ]);
+    
+    toast.success(`Added "${customProductName}" to cart`);
+    setCustomProductName('');
+    setCustomProductPrice('');
+    setShowCustomProductDialog(false);
+  };
+  
+  // Filter products by search query
+  const filteredProducts = products.filter(product => 
+    product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (product.category_name && product.category_name.toLowerCase().includes(searchQuery.toLowerCase()))
+  );
 
   const updateQuantity = (productId, delta) => {
     setCart(
@@ -505,6 +561,41 @@ const POSScreen = () => {
           </div>
         </div>
 
+        {/* Search Bar */}
+        <div className="px-6 py-3 border-b bg-slate-50">
+          <div className="flex gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+              <Input
+                placeholder="Search products..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-10 h-10"
+                data-testid="product-search-input"
+              />
+              {searchQuery && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-8 w-8 p-0"
+                  onClick={() => setSearchQuery('')}
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => setShowCustomProductDialog(true)}
+              data-testid="add-custom-product-btn"
+              className="h-10 whitespace-nowrap"
+            >
+              <PackagePlus className="w-4 h-4 mr-2" />
+              Custom Item
+            </Button>
+          </div>
+        </div>
+
         {/* Categories */}
         <div className="px-6 py-4 border-b">
           <div className="flex gap-3 overflow-x-auto scrollbar-hide">
@@ -597,16 +688,35 @@ const POSScreen = () => {
                 )})
               )}
             </div>
-          ) : products.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">No products available</div>
+          ) : filteredProducts.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground">
+              {searchQuery ? (
+                <>
+                  <Search className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>No products found for "{searchQuery}"</p>
+                  <Button variant="link" onClick={() => setSearchQuery('')}>Clear search</Button>
+                </>
+              ) : (
+                <p>No products available</p>
+              )}
+            </div>
           ) : (
             <div className="pos-grid">
-              {products.map((product) => (
+              {searchQuery && (
+                <div className="col-span-full mb-4 text-sm text-muted-foreground">
+                  Found {filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''} for "{searchQuery}"
+                </div>
+              )}
+              {filteredProducts.map((product) => (
                 <Card
                   key={product.id}
                   data-testid={`product-card-${product.id}`}
-                  className="product-card"
-                  onClick={() => addToCart(product)}
+                  className="product-card cursor-pointer select-none"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    addToCart(product);
+                  }}
                 >
                   {product.image_url ? (
                     <img src={product.image_url} alt={product.name} className="w-full h-32 object-cover" />
@@ -688,7 +798,14 @@ const POSScreen = () => {
                   <CardContent className="p-4">
                     <div className="flex justify-between items-start mb-3">
                       <div className="flex-1">
-                        <div className="font-semibold">{item.product_name}</div>
+                        <div className="font-semibold flex items-center gap-2">
+                          {item.product_name}
+                          {item.is_custom && (
+                            <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
+                              Custom
+                            </span>
+                          )}
+                        </div>
                         <div className="text-sm text-muted-foreground font-mono">
                           {getCurrencySymbol(currency)}{item.unit_price.toFixed(2)} each
                         </div>
@@ -844,7 +961,7 @@ const POSScreen = () => {
             </div>
             <div className="flex justify-between text-sm">
               <span className="text-muted-foreground">Subtotal</span>
-              <span className="font-mono">${cart.reduce((sum, item) => sum + item.total, 0).toFixed(2)}</span>
+              <span className="font-mono">{getCurrencySymbol(currency)}{cart.reduce((sum, item) => sum + item.total, 0).toFixed(2)}</span>
             </div>
             {calculateDiscount() > 0 && (
               <div className="flex justify-between text-sm text-emerald-600">
@@ -922,7 +1039,7 @@ const POSScreen = () => {
             <div className="p-4 bg-muted rounded-lg">
               <div className="flex justify-between text-sm mb-2">
                 <span>Subtotal:</span>
-                <span className="font-mono">${selectedOrderToComplete?.subtotal?.toFixed(2)}</span>
+                <span className="font-mono">{getCurrencySymbol(currency)}{selectedOrderToComplete?.subtotal?.toFixed(2)}</span>
               </div>
               
               {/* Tip Section */}
@@ -1151,12 +1268,77 @@ const POSScreen = () => {
                   {Array.from({ length: splitCount }, (_, i) => (
                     <div key={i} className="flex justify-between p-2 bg-white rounded border">
                       <span>Person {i + 1}</span>
-                      <span className="font-mono font-medium">${calculatePerPersonAmount().toFixed(2)}</span>
+                      <span className="font-mono font-medium">{getCurrencySymbol(currency)}{calculatePerPersonAmount().toFixed(2)}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Custom Product Dialog */}
+      <Dialog open={showCustomProductDialog} onOpenChange={setShowCustomProductDialog}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <PackagePlus className="w-5 h-5" />
+              Add Custom Item
+            </DialogTitle>
+            <DialogDescription>
+              Add a temporary item that's not in the menu
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4 mt-4">
+            <div className="space-y-2">
+              <Label htmlFor="custom-name">Item Name</Label>
+              <Input
+                id="custom-name"
+                placeholder="e.g., Special Request, Extra Sauce"
+                value={customProductName}
+                onChange={(e) => setCustomProductName(e.target.value)}
+                data-testid="custom-product-name-input"
+                autoFocus
+              />
+            </div>
+            
+            <div className="space-y-2">
+              <Label htmlFor="custom-price">Price ({getCurrencySymbol(currency)})</Label>
+              <Input
+                id="custom-price"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0.00"
+                value={customProductPrice}
+                onChange={(e) => setCustomProductPrice(e.target.value)}
+                data-testid="custom-product-price-input"
+              />
+            </div>
+            
+            <div className="flex gap-2 pt-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => {
+                  setShowCustomProductDialog(false);
+                  setCustomProductName('');
+                  setCustomProductPrice('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={addCustomProductToCart}
+                data-testid="add-custom-product-confirm-btn"
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                Add to Cart
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
