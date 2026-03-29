@@ -44,6 +44,9 @@ const POSScreen = () => {
   // Edit order state
   const [editingOrder, setEditingOrder] = useState(null);
   
+  // Last placed order number for display
+  const [lastOrderNumber, setLastOrderNumber] = useState(null);
+  
   // New states for discounts, notes, and split payment
   const [orderNotes, setOrderNotes] = useState('');
   const [discountType, setDiscountType] = useState('');
@@ -279,6 +282,18 @@ const POSScreen = () => {
     setShowPendingOrders(false);
     // Editing banner shows - no toast needed
   };
+  
+  // Cancel a pending order
+  const cancelPendingOrder = async (orderId) => {
+    if (!confirm('Are you sure you want to cancel this order?')) return;
+    
+    try {
+      await orderAPI.cancel(orderId);
+      loadPendingOrders();
+    } catch (error) {
+      console.error('Failed to cancel order:', error);
+    }
+  };
 
   // Update an existing order
   const updateOrder = async () => {
@@ -378,6 +393,7 @@ const POSScreen = () => {
       }
       
       // Order placed - cart clears as visual feedback
+      setLastOrderNumber(order.order_number);
       
       // Clear cart and all related states
       setCart([]);
@@ -389,6 +405,9 @@ const POSScreen = () => {
       setShowDiscountPanel(false);
       setShowNotesPanel(false);
       loadPendingOrders();
+      
+      // Clear order number after 5 seconds
+      setTimeout(() => setLastOrderNumber(null), 5000);
     } catch (error) {
       console.error('Failed to place order:', error);
     }
@@ -692,20 +711,30 @@ const POSScreen = () => {
                       <div className="flex gap-2">
                         <Button
                           variant="outline"
-                          className="flex-1"
+                          size="sm"
                           data-testid={`edit-order-${order.id}`}
                           onClick={() => editPendingOrder(order)}
                         >
-                          <Plus className="w-4 h-4 mr-2" />
-                          Edit / Add Items
+                          <Plus className="w-4 h-4 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 hover:bg-red-50"
+                          data-testid={`cancel-order-${order.id}`}
+                          onClick={() => cancelPendingOrder(order.id)}
+                        >
+                          <X className="w-4 h-4 mr-1" />
+                          Cancel
                         </Button>
                         <Button
                           className="flex-1 btn-success"
                           data-testid={`complete-order-${order.id}`}
                           onClick={() => openCompleteDialog(order)}
                         >
-                          <DollarSign className="w-4 h-4 mr-2" />
-                          Complete
+                          <CreditCard className="w-4 h-4 mr-2" />
+                          Complete Payment
                         </Button>
                       </div>
                     </CardContent>
@@ -759,12 +788,17 @@ const POSScreen = () => {
       </div>
 
       {/* Cart Sidebar */}
-      <div className="w-[420px] bg-card border-l flex flex-col">
-        <div className="p-6 border-b">
+      <div className="w-[380px] bg-card border-l flex flex-col cart-sidebar">
+        <div className="p-4 border-b">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <ShoppingCart className="w-7 h-7" />
-              <h2 className="text-2xl font-bold">Current Order</h2>
+            <div className="flex items-center gap-2">
+              <ShoppingCart className="w-6 h-6" />
+              <h2 className="text-xl font-bold">Cart</h2>
+              {lastOrderNumber && (
+                <span className="text-sm bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full animate-pulse">
+                  Order #{lastOrderNumber} sent!
+                </span>
+              )}
             </div>
             {cart.length > 0 && (
               <Button variant="ghost" size="sm" data-testid="clear-cart-button" onClick={clearCart}>
@@ -774,29 +808,27 @@ const POSScreen = () => {
           </div>
         </div>
 
-        {/* Table Selection */}
-        <div className="px-6 py-3 border-b bg-slate-50">
-          <Label className="text-sm font-medium text-muted-foreground mb-2 block">Assign to Table</Label>
+        {/* Table Selection - More Compact */}
+        <div className="px-4 py-2 border-b bg-slate-50">
           <Select value={selectedTable || "no-table"} onValueChange={(v) => setSelectedTable(v === "no-table" ? null : v)}>
-            <SelectTrigger data-testid="table-selector" className="w-full h-12 text-base">
+            <SelectTrigger data-testid="table-selector" className="w-full h-10 text-sm">
               <SelectValue placeholder="Select table (optional)" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="no-table">
-                <div className="flex items-center gap-2 text-base">
-                  <Users className="w-5 h-5 text-muted-foreground" />
-                  No Table (Takeaway)
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-muted-foreground" />
+                  Takeaway
                 </div>
               </SelectItem>
               {tables.filter(t => t.status === 'available' || t.status === 'occupied').map((table) => (
                 <SelectItem key={table.id} value={table.id}>
-                  <div className="flex items-center gap-2 text-base">
-                    <Users className="w-5 h-5" />
+                  <div className="flex items-center gap-2">
                     Table {table.number}
-                    <span className={`text-sm px-2 py-0.5 rounded ${
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${
                       table.status === 'available' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                     }`}>
-                      {table.status === 'available' ? 'Free' : 'Occupied'}
+                      {table.status === 'available' ? 'Free' : 'In Use'}
                     </span>
                   </div>
                 </SelectItem>
@@ -805,66 +837,65 @@ const POSScreen = () => {
           </Select>
         </div>
 
-        <ScrollArea className="flex-1 p-6">
+        <ScrollArea className="flex-1 p-4">
           {cart.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <ShoppingCart className="w-16 h-16 mx-auto mb-3 opacity-50" />
-              <p className="text-lg">Your cart is empty</p>
+            <div className="text-center py-8 text-muted-foreground">
+              <ShoppingCart className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p>Cart empty</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {cart.map((item) => (
-                <Card key={item.product_id} data-testid={`cart-item-${item.product_id}`}>
-                  <CardContent className="p-4">
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex-1">
-                        <div className="cart-item-name flex items-center gap-2">
-                          {item.product_name}
-                          {item.is_custom && (
-                            <span className="text-sm bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
-                              Custom
-                            </span>
-                          )}
-                        </div>
-                        <div className="cart-item-price text-muted-foreground font-mono">
-                          {getCurrencySymbol(currency)}{item.unit_price.toFixed(2)} each
-                        </div>
+                <div key={item.product_id} data-testid={`cart-item-${item.product_id}`} className="p-3 bg-slate-50 rounded-lg">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm truncate flex items-center gap-1">
+                        {item.product_name}
+                        {item.is_custom && (
+                          <span className="text-xs bg-amber-100 text-amber-700 px-1 rounded">Custom</span>
+                        )}
                       </div>
+                      <div className="text-xs text-muted-foreground font-mono">
+                        {getCurrencySymbol(currency)}{item.unit_price.toFixed(2)} × {item.quantity}
+                      </div>
+                    </div>
+                    <div className="font-bold font-mono text-emerald-600 ml-2">
+                      {getCurrencySymbol(currency)}{item.total.toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
                       <Button
-                        variant="ghost"
                         size="sm"
-                        data-testid={`remove-item-${item.product_id}`}
-                        onClick={() => removeFromCart(item.product_id)}
+                        variant="outline"
+                        data-testid={`decrease-qty-${item.product_id}`}
+                        onClick={() => updateQuantity(item.product_id, -1)}
+                        className="h-8 w-8 p-0"
                       >
-                        <Trash2 className="w-5 h-5 text-destructive" />
+                        <Minus className="w-4 h-4" />
+                      </Button>
+                      <span className="font-mono font-bold w-6 text-center">{item.quantity}</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        data-testid={`increase-qty-${item.product_id}`}
+                        onClick={() => updateQuantity(item.product_id, 1)}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Plus className="w-4 h-4" />
                       </Button>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          data-testid={`decrease-qty-${item.product_id}`}
-                          onClick={() => updateQuantity(item.product_id, -1)}
-                          className="cart-qty-btn"
-                        >
-                          <Minus className="w-5 h-5" />
-                        </Button>
-                        <span className="cart-qty-display font-mono font-bold text-center">{item.quantity}</span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          data-testid={`increase-qty-${item.product_id}`}
-                          onClick={() => updateQuantity(item.product_id, 1)}
-                          className="cart-qty-btn"
-                        >
-                          <Plus className="w-5 h-5" />
-                        </Button>
-                      </div>
-                      <div className="cart-item-total font-mono text-emerald-600">{getCurrencySymbol(currency)}{item.total.toFixed(2)}</div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      data-testid={`remove-item-${item.product_id}`}
+                      onClick={() => removeFromCart(item.product_id)}
+                      className="h-8 w-8 p-0 text-red-500 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
               ))}
             </div>
           )}

@@ -364,3 +364,89 @@ code {
     }
 }
 
+/* Mobile POS Layout */
+@media (max-width: 768px) {
+    .pos-screen {
+        flex-direction: column;
+        font-size: 1rem;
+    }
+    
+    .pos-screen > div:first-child {
+        flex: none;
+        height: auto;
+        max-height: 55vh;
+        overflow-y: auto;
+    }
+    
+    .pos-screen .cart-sidebar {
+        width: 100% !important;
+        height: 45vh;
+        border-left: none;
+        border-top: 2px solid #e5e7eb;
+    }
+    
+    .pos-grid {
+        grid-template-columns: repeat(3, 1fr);
+        gap: 0.5rem;
+    }
+    
+    .product-name {
+        font-size: 0.95rem;
+    }
+    
+    .product-price {
+        font-size: 1.1rem;
+    }
+    
+    .product-category {
+        font-size: 0.75rem;
+    }
+    
+    .category-btn {
+        font-size: 0.9rem;
+        padding: 0.5rem 1rem;
+        min-height: 40px;
+    }
+    
+    .cart-item-name {
+        font-size: 1rem;
+    }
+    
+    .cart-item-total {
+        font-size: 1.1rem;
+    }
+    
+    .cart-qty-btn {
+        min-width: 36px;
+        min-height: 36px;
+    }
+    
+    .cart-total {
+        font-size: 1.4rem;
+    }
+    
+    .place-order-btn {
+        font-size: 1rem;
+        min-height: 52px;
+    }
+    
+    /* Compact cart items for mobile */
+    .cart-compact .cart-item {
+        padding: 0.5rem;
+    }
+}
+
+@media (max-width: 480px) {
+    .pos-grid {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    
+    .product-name {
+        font-size: 0.9rem;
+    }
+    
+    .product-price {
+        font-size: 1rem;
+    }
+}
+
