@@ -39,6 +39,7 @@ const POSScreen = () => {
   const [customTip, setCustomTip] = useState('');
   const [splitCount, setSplitCount] = useState(1);
   const [printerConnected, setPrinterConnected] = useState(false);
+  const [connectedPrinterName, setConnectedPrinterName] = useState(null);
   const [currency, setCurrency] = useState('GBP');
   
   // Edit order state
@@ -96,12 +97,31 @@ const POSScreen = () => {
 
   const connectPrinter = async () => {
     try {
-      await printerService.connect();
+      // Try Bluetooth discovery first (works on Android/Chrome)
+      const device = await printerService.connect(true);
       setPrinterConnected(true);
-      // Printer connected - no toast to avoid distraction
-      console.log('Printer connected successfully');
+      setConnectedPrinterName(device.name);
+      console.log('Printer connected:', device.name);
     } catch (error) {
       console.error('Failed to connect printer:', error);
+    }
+  };
+
+  const disconnectPrinter = async () => {
+    try {
+      await printerService.disconnect();
+      setPrinterConnected(false);
+      setConnectedPrinterName(null);
+    } catch (error) {
+      console.error('Failed to disconnect printer:', error);
+    }
+  };
+
+  const testPrinter = async () => {
+    try {
+      await printerService.testPrint();
+    } catch (error) {
+      console.error('Test print failed:', error);
     }
   };
 
@@ -586,8 +606,32 @@ const POSScreen = () => {
                 className="h-12 text-base"
               >
                 <Printer className="w-5 h-5 mr-2" />
-                Connect Printer
+                Find Printer
               </Button>
+            )}
+            {printerConnected && (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+                  <Printer className="w-4 h-4 text-emerald-600" />
+                  <span className="text-sm text-emerald-700 font-medium">{connectedPrinterName || 'Printer'}</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={testPrinter}
+                  className="h-10"
+                >
+                  Test
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={disconnectPrinter}
+                  className="h-10 text-red-500 hover:bg-red-50"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             )}
             <Button
               variant="outline"
@@ -794,11 +838,6 @@ const POSScreen = () => {
             <div className="flex items-center gap-2">
               <ShoppingCart className="w-6 h-6" />
               <h2 className="text-xl font-bold">Cart</h2>
-              {lastOrderNumber && (
-                <span className="text-sm bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full animate-pulse">
-                  Order #{lastOrderNumber} sent!
-                </span>
-              )}
             </div>
             {cart.length > 0 && (
               <Button variant="ghost" size="sm" data-testid="clear-cart-button" onClick={clearCart}>
@@ -1000,28 +1039,31 @@ const POSScreen = () => {
             </div>
           )}
 
-          {/* Order Summary */}
-          <div className="space-y-3">
-            <div className="flex justify-between cart-subtotal">
-              <span className="text-muted-foreground">Items</span>
-              <span className="font-medium">{cart.reduce((sum, item) => sum + item.quantity, 0)}</span>
-            </div>
-            <div className="flex justify-between cart-subtotal">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span className="font-mono">{getCurrencySymbol(currency)}{cart.reduce((sum, item) => sum + item.total, 0).toFixed(2)}</span>
-            </div>
+          {/* Order Summary - Compact */}
+          <div className="space-y-2">
             {calculateDiscount() > 0 && (
-              <div className="flex justify-between cart-subtotal text-emerald-600">
+              <div className="flex justify-between text-sm text-emerald-600">
                 <span>Discount ({discountType === 'percentage' ? `${discountValue}%` : `${getCurrencySymbol(currency)}${discountValue}`})</span>
                 <span className="font-mono">-{getCurrencySymbol(currency)}{calculateDiscount().toFixed(2)}</span>
               </div>
             )}
-            <Separator />
-            <div className="flex justify-between items-center">
-              <span className="text-xl font-bold">Total</span>
+            <div className="flex justify-between items-center pt-2 border-t">
+              <div>
+                <span className="text-xl font-bold">Total</span>
+                <span className="text-sm text-muted-foreground ml-2">({cart.reduce((sum, item) => sum + item.quantity, 0)} items)</span>
+              </div>
               <span className="cart-total font-mono text-emerald-600">{getCurrencySymbol(currency)}{calculateCartTotal().toFixed(2)}</span>
             </div>
           </div>
+          
+          {/* Last Order Confirmation */}
+          {lastOrderNumber && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-center animate-pulse">
+              <div className="font-bold text-emerald-700 text-lg">
+                ✓ Order #{lastOrderNumber} Sent to Kitchen!
+              </div>
+            </div>
+          )}
           
           {/* Editing Order Banner */}
           {editingOrder && (
