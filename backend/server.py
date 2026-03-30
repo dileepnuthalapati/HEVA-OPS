@@ -6,6 +6,8 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import socket
+import base64
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
@@ -240,6 +242,11 @@ class PrinterUpdate(BaseModel):
     address: Optional[str] = None
     is_default: Optional[bool] = None
     paper_width: Optional[int] = None
+
+class PrinterSendData(BaseModel):
+    ip: str
+    port: int = 9100
+    data: str  # Base64 encoded data
 
 # ===== TABLE MODELS =====
 class Table(BaseModel):
@@ -1515,6 +1522,33 @@ async def test_printer(printer_id: str, current_user: User = Depends(require_adm
         "commands": test_commands,  # Base64 encoded ESC/POS commands
         "instructions": "Send these commands to the printer via Bluetooth or TCP socket"
     }
+
+@api_router.post("/printer/send")
+async def send_to_wifi_printer(data: PrinterSendData, current_user: User = Depends(get_current_user)):
+    """Send raw data to a WiFi/network printer"""
+    try:
+        # Decode base64 data
+        raw_data = base64.b64decode(data.data)
+        
+        # Create socket and connect to printer
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)  # 5 second timeout
+        
+        try:
+            sock.connect((data.ip, data.port))
+            sock.sendall(raw_data)
+            sock.close()
+            return {"success": True, "message": f"Data sent to {data.ip}:{data.port}"}
+        except socket.timeout:
+            raise HTTPException(status_code=408, detail=f"Connection timeout to {data.ip}:{data.port}")
+        except ConnectionRefusedError:
+            raise HTTPException(status_code=503, detail=f"Connection refused by {data.ip}:{data.port}. Check if printer is on and IP is correct.")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Socket error: {str(e)}")
+        finally:
+            sock.close()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to send to printer: {str(e)}")
 
 @api_router.post("/print/kitchen/{order_id}")
 async def print_kitchen_receipt_escpos(order_id: str, printer_id: Optional[str] = None, current_user: User = Depends(get_current_user)):
