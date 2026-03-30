@@ -39,10 +39,18 @@ const POSScreen = () => {
   const [customTip, setCustomTip] = useState('');
   const [splitCount, setSplitCount] = useState(1);
   const [printerConnected, setPrinterConnected] = useState(false);
+  const [connectedPrinterName, setConnectedPrinterName] = useState(null);
+  const [showPrinterDialog, setShowPrinterDialog] = useState(false);
+  const [wifiPrinterIp, setWifiPrinterIp] = useState('');
+  const [wifiPrinterPort, setWifiPrinterPort] = useState('9100');
+  const [connectingPrinter, setConnectingPrinter] = useState(false);
   const [currency, setCurrency] = useState('GBP');
   
   // Edit order state
   const [editingOrder, setEditingOrder] = useState(null);
+  
+  // Last placed order number for display
+  const [lastOrderNumber, setLastOrderNumber] = useState(null);
   
   // New states for discounts, notes, and split payment
   const [orderNotes, setOrderNotes] = useState('');
@@ -91,14 +99,57 @@ const POSScreen = () => {
     }
   };
 
-  const connectPrinter = async () => {
+  const connectBluetoothPrinter = async () => {
+    setConnectingPrinter(true);
     try {
-      await printerService.connect();
+      const device = await printerService.discoverBluetoothPrinter();
       setPrinterConnected(true);
-      // Printer connected - no toast to avoid distraction
-      console.log('Printer connected successfully');
+      setConnectedPrinterName(device.name);
+      setShowPrinterDialog(false);
     } catch (error) {
-      console.error('Failed to connect printer:', error);
+      console.error('Bluetooth connection failed:', error);
+      alert('Bluetooth connection failed: ' + error.message);
+    } finally {
+      setConnectingPrinter(false);
+    }
+  };
+
+  const connectWifiPrinter = async () => {
+    if (!wifiPrinterIp) {
+      alert('Please enter printer IP address');
+      return;
+    }
+    setConnectingPrinter(true);
+    try {
+      const device = await printerService.connectWifi(wifiPrinterIp, parseInt(wifiPrinterPort) || 9100);
+      setPrinterConnected(true);
+      setConnectedPrinterName(device.name);
+      setShowPrinterDialog(false);
+      setWifiPrinterIp('');
+    } catch (error) {
+      console.error('WiFi printer connection failed:', error);
+      alert('WiFi connection failed: ' + error.message);
+    } finally {
+      setConnectingPrinter(false);
+    }
+  };
+
+  const disconnectPrinter = async () => {
+    try {
+      await printerService.disconnect();
+      setPrinterConnected(false);
+      setConnectedPrinterName(null);
+    } catch (error) {
+      console.error('Failed to disconnect printer:', error);
+    }
+  };
+
+  const testPrinter = async () => {
+    try {
+      await printerService.testPrint();
+    } catch (error) {
+      console.error('Test print failed:', error);
+      alert('Test print failed: ' + error.message);
     }
   };
 
@@ -279,6 +330,18 @@ const POSScreen = () => {
     setShowPendingOrders(false);
     // Editing banner shows - no toast needed
   };
+  
+  // Cancel a pending order
+  const cancelPendingOrder = async (orderId) => {
+    if (!confirm('Are you sure you want to cancel this order?')) return;
+    
+    try {
+      await orderAPI.cancel(orderId);
+      loadPendingOrders();
+    } catch (error) {
+      console.error('Failed to cancel order:', error);
+    }
+  };
 
   // Update an existing order
   const updateOrder = async () => {
@@ -378,6 +441,7 @@ const POSScreen = () => {
       }
       
       // Order placed - cart clears as visual feedback
+      setLastOrderNumber(order.order_number);
       
       // Clear cart and all related states
       setCart([]);
@@ -389,6 +453,9 @@ const POSScreen = () => {
       setShowDiscountPanel(false);
       setShowNotesPanel(false);
       loadPendingOrders();
+      
+      // Clear order number after 5 seconds
+      setTimeout(() => setLastOrderNumber(null), 5000);
     } catch (error) {
       console.error('Failed to place order:', error);
     }
@@ -559,16 +626,40 @@ const POSScreen = () => {
             </div>
           </div>
           <div className="flex gap-3">
-            {printerService.isSupported() && !printerConnected && (
+            {!printerConnected && (
               <Button
                 variant="outline"
                 data-testid="connect-printer-button"
-                onClick={connectPrinter}
+                onClick={() => setShowPrinterDialog(true)}
                 className="h-12 text-base"
               >
                 <Printer className="w-5 h-5 mr-2" />
-                Connect Printer
+                Setup Printer
               </Button>
+            )}
+            {printerConnected && (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
+                  <Printer className="w-4 h-4 text-emerald-600" />
+                  <span className="text-sm text-emerald-700 font-medium truncate max-w-[150px]">{connectedPrinterName}</span>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={testPrinter}
+                  className="h-10"
+                >
+                  Test
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={disconnectPrinter}
+                  className="h-10 text-red-500 hover:bg-red-50"
+                >
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
             )}
             <Button
               variant="outline"
@@ -692,20 +783,30 @@ const POSScreen = () => {
                       <div className="flex gap-2">
                         <Button
                           variant="outline"
-                          className="flex-1"
+                          size="sm"
                           data-testid={`edit-order-${order.id}`}
                           onClick={() => editPendingOrder(order)}
                         >
-                          <Plus className="w-4 h-4 mr-2" />
-                          Edit / Add Items
+                          <Plus className="w-4 h-4 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600 hover:bg-red-50"
+                          data-testid={`cancel-order-${order.id}`}
+                          onClick={() => cancelPendingOrder(order.id)}
+                        >
+                          <X className="w-4 h-4 mr-1" />
+                          Cancel
                         </Button>
                         <Button
                           className="flex-1 btn-success"
                           data-testid={`complete-order-${order.id}`}
                           onClick={() => openCompleteDialog(order)}
                         >
-                          <DollarSign className="w-4 h-4 mr-2" />
-                          Complete
+                          <CreditCard className="w-4 h-4 mr-2" />
+                          Complete Payment
                         </Button>
                       </div>
                     </CardContent>
@@ -759,12 +860,12 @@ const POSScreen = () => {
       </div>
 
       {/* Cart Sidebar */}
-      <div className="w-[420px] bg-card border-l flex flex-col">
-        <div className="p-6 border-b">
+      <div className="w-[380px] bg-card border-l flex flex-col cart-sidebar">
+        <div className="p-4 border-b">
           <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <ShoppingCart className="w-7 h-7" />
-              <h2 className="text-2xl font-bold">Current Order</h2>
+            <div className="flex items-center gap-2">
+              <ShoppingCart className="w-6 h-6" />
+              <h2 className="text-xl font-bold">Cart</h2>
             </div>
             {cart.length > 0 && (
               <Button variant="ghost" size="sm" data-testid="clear-cart-button" onClick={clearCart}>
@@ -774,29 +875,27 @@ const POSScreen = () => {
           </div>
         </div>
 
-        {/* Table Selection */}
-        <div className="px-6 py-3 border-b bg-slate-50">
-          <Label className="text-sm font-medium text-muted-foreground mb-2 block">Assign to Table</Label>
+        {/* Table Selection - More Compact */}
+        <div className="px-4 py-2 border-b bg-slate-50">
           <Select value={selectedTable || "no-table"} onValueChange={(v) => setSelectedTable(v === "no-table" ? null : v)}>
-            <SelectTrigger data-testid="table-selector" className="w-full h-12 text-base">
+            <SelectTrigger data-testid="table-selector" className="w-full h-10 text-sm">
               <SelectValue placeholder="Select table (optional)" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="no-table">
-                <div className="flex items-center gap-2 text-base">
-                  <Users className="w-5 h-5 text-muted-foreground" />
-                  No Table (Takeaway)
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-muted-foreground" />
+                  Takeaway
                 </div>
               </SelectItem>
               {tables.filter(t => t.status === 'available' || t.status === 'occupied').map((table) => (
                 <SelectItem key={table.id} value={table.id}>
-                  <div className="flex items-center gap-2 text-base">
-                    <Users className="w-5 h-5" />
+                  <div className="flex items-center gap-2">
                     Table {table.number}
-                    <span className={`text-sm px-2 py-0.5 rounded ${
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${
                       table.status === 'available' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
                     }`}>
-                      {table.status === 'available' ? 'Free' : 'Occupied'}
+                      {table.status === 'available' ? 'Free' : 'In Use'}
                     </span>
                   </div>
                 </SelectItem>
@@ -805,66 +904,65 @@ const POSScreen = () => {
           </Select>
         </div>
 
-        <ScrollArea className="flex-1 p-6">
+        <ScrollArea className="flex-1 p-4">
           {cart.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
-              <ShoppingCart className="w-16 h-16 mx-auto mb-3 opacity-50" />
-              <p className="text-lg">Your cart is empty</p>
+            <div className="text-center py-8 text-muted-foreground">
+              <ShoppingCart className="w-12 h-12 mx-auto mb-2 opacity-50" />
+              <p>Cart empty</p>
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="space-y-2">
               {cart.map((item) => (
-                <Card key={item.product_id} data-testid={`cart-item-${item.product_id}`}>
-                  <CardContent className="p-4">
-                    <div className="flex justify-between items-start mb-3">
-                      <div className="flex-1">
-                        <div className="cart-item-name flex items-center gap-2">
-                          {item.product_name}
-                          {item.is_custom && (
-                            <span className="text-sm bg-amber-100 text-amber-700 px-2 py-0.5 rounded">
-                              Custom
-                            </span>
-                          )}
-                        </div>
-                        <div className="cart-item-price text-muted-foreground font-mono">
-                          {getCurrencySymbol(currency)}{item.unit_price.toFixed(2)} each
-                        </div>
+                <div key={item.product_id} data-testid={`cart-item-${item.product_id}`} className="p-3 bg-slate-50 rounded-lg">
+                  <div className="flex justify-between items-center mb-2">
+                    <div className="flex-1 min-w-0">
+                      <div className="font-semibold text-sm truncate flex items-center gap-1">
+                        {item.product_name}
+                        {item.is_custom && (
+                          <span className="text-xs bg-amber-100 text-amber-700 px-1 rounded">Custom</span>
+                        )}
                       </div>
+                      <div className="text-xs text-muted-foreground font-mono">
+                        {getCurrencySymbol(currency)}{item.unit_price.toFixed(2)} × {item.quantity}
+                      </div>
+                    </div>
+                    <div className="font-bold font-mono text-emerald-600 ml-2">
+                      {getCurrencySymbol(currency)}{item.total.toFixed(2)}
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
                       <Button
-                        variant="ghost"
                         size="sm"
-                        data-testid={`remove-item-${item.product_id}`}
-                        onClick={() => removeFromCart(item.product_id)}
+                        variant="outline"
+                        data-testid={`decrease-qty-${item.product_id}`}
+                        onClick={() => updateQuantity(item.product_id, -1)}
+                        className="h-8 w-8 p-0"
                       >
-                        <Trash2 className="w-5 h-5 text-destructive" />
+                        <Minus className="w-4 h-4" />
+                      </Button>
+                      <span className="font-mono font-bold w-6 text-center">{item.quantity}</span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        data-testid={`increase-qty-${item.product_id}`}
+                        onClick={() => updateQuantity(item.product_id, 1)}
+                        className="h-8 w-8 p-0"
+                      >
+                        <Plus className="w-4 h-4" />
                       </Button>
                     </div>
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          data-testid={`decrease-qty-${item.product_id}`}
-                          onClick={() => updateQuantity(item.product_id, -1)}
-                          className="cart-qty-btn"
-                        >
-                          <Minus className="w-5 h-5" />
-                        </Button>
-                        <span className="cart-qty-display font-mono font-bold text-center">{item.quantity}</span>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          data-testid={`increase-qty-${item.product_id}`}
-                          onClick={() => updateQuantity(item.product_id, 1)}
-                          className="cart-qty-btn"
-                        >
-                          <Plus className="w-5 h-5" />
-                        </Button>
-                      </div>
-                      <div className="cart-item-total font-mono text-emerald-600">{getCurrencySymbol(currency)}{item.total.toFixed(2)}</div>
-                    </div>
-                  </CardContent>
-                </Card>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      data-testid={`remove-item-${item.product_id}`}
+                      onClick={() => removeFromCart(item.product_id)}
+                      className="h-8 w-8 p-0 text-red-500 hover:bg-red-50"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
               ))}
             </div>
           )}
@@ -969,28 +1067,31 @@ const POSScreen = () => {
             </div>
           )}
 
-          {/* Order Summary */}
-          <div className="space-y-3">
-            <div className="flex justify-between cart-subtotal">
-              <span className="text-muted-foreground">Items</span>
-              <span className="font-medium">{cart.reduce((sum, item) => sum + item.quantity, 0)}</span>
-            </div>
-            <div className="flex justify-between cart-subtotal">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span className="font-mono">{getCurrencySymbol(currency)}{cart.reduce((sum, item) => sum + item.total, 0).toFixed(2)}</span>
-            </div>
+          {/* Order Summary - Compact */}
+          <div className="space-y-2">
             {calculateDiscount() > 0 && (
-              <div className="flex justify-between cart-subtotal text-emerald-600">
+              <div className="flex justify-between text-sm text-emerald-600">
                 <span>Discount ({discountType === 'percentage' ? `${discountValue}%` : `${getCurrencySymbol(currency)}${discountValue}`})</span>
                 <span className="font-mono">-{getCurrencySymbol(currency)}{calculateDiscount().toFixed(2)}</span>
               </div>
             )}
-            <Separator />
-            <div className="flex justify-between items-center">
-              <span className="text-xl font-bold">Total</span>
+            <div className="flex justify-between items-center pt-2 border-t">
+              <div>
+                <span className="text-xl font-bold">Total</span>
+                <span className="text-sm text-muted-foreground ml-2">({cart.reduce((sum, item) => sum + item.quantity, 0)} items)</span>
+              </div>
               <span className="cart-total font-mono text-emerald-600">{getCurrencySymbol(currency)}{calculateCartTotal().toFixed(2)}</span>
             </div>
           </div>
+          
+          {/* Last Order Confirmation */}
+          {lastOrderNumber && (
+            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-center animate-pulse">
+              <div className="font-bold text-emerald-700 text-lg">
+                ✓ Order #{lastOrderNumber} Sent to Kitchen!
+              </div>
+            </div>
+          )}
           
           {/* Editing Order Banner */}
           {editingOrder && (
@@ -1353,6 +1454,82 @@ const POSScreen = () => {
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Add to Cart
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Printer Setup Dialog */}
+      <Dialog open={showPrinterDialog} onOpenChange={setShowPrinterDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Printer className="w-5 h-5" />
+              Setup Printer
+            </DialogTitle>
+            <DialogDescription>
+              Connect to a Bluetooth or WiFi thermal printer
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-6 mt-4">
+            {/* Bluetooth Option */}
+            <div className="p-4 border rounded-lg">
+              <div className="font-semibold mb-2">Bluetooth Printer</div>
+              <p className="text-sm text-muted-foreground mb-3">
+                Discover nearby Bluetooth printers (Works on Android/Chrome)
+              </p>
+              <Button
+                className="w-full"
+                onClick={connectBluetoothPrinter}
+                disabled={connectingPrinter}
+              >
+                {connectingPrinter ? 'Searching...' : 'Find Bluetooth Printer'}
+              </Button>
+            </div>
+
+            {/* WiFi Option */}
+            <div className="p-4 border rounded-lg">
+              <div className="font-semibold mb-2">WiFi / Network Printer</div>
+              <p className="text-sm text-muted-foreground mb-3">
+                Enter the printer's IP address (check printer settings)
+              </p>
+              <div className="space-y-3">
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <Label htmlFor="printer-ip" className="text-xs">IP Address</Label>
+                    <Input
+                      id="printer-ip"
+                      placeholder="192.168.1.100"
+                      value={wifiPrinterIp}
+                      onChange={(e) => setWifiPrinterIp(e.target.value)}
+                    />
+                  </div>
+                  <div className="w-24">
+                    <Label htmlFor="printer-port" className="text-xs">Port</Label>
+                    <Input
+                      id="printer-port"
+                      placeholder="9100"
+                      value={wifiPrinterPort}
+                      onChange={(e) => setWifiPrinterPort(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <Button
+                  className="w-full"
+                  variant="outline"
+                  onClick={connectWifiPrinter}
+                  disabled={connectingPrinter || !wifiPrinterIp}
+                >
+                  {connectingPrinter ? 'Connecting...' : 'Connect WiFi Printer'}
+                </Button>
+              </div>
+            </div>
+
+            <div className="text-center">
+              <Button variant="ghost" onClick={() => setShowPrinterDialog(false)}>
+                Cancel
               </Button>
             </div>
           </div>

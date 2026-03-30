@@ -7,6 +7,8 @@ from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 import os
 import logging
+import socket
+import base64
 from pathlib import Path
 from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional
@@ -253,6 +255,11 @@ class PrinterUpdate(BaseModel):
     address: Optional[str] = None
     is_default: Optional[bool] = None
     paper_width: Optional[int] = None
+
+class PrinterSendData(BaseModel):
+    ip: str
+    port: int = 9100
+    data: str  # Base64 encoded data
 
 # ===== TABLE MODELS =====
 class Table(BaseModel):
@@ -940,6 +947,37 @@ async def complete_order(order_id: str, complete_data: OrderComplete, current_us
     updated = await db.orders.find_one({"id": order_id}, {"_id": 0})
     return Order(**updated)
 
+@api_router.put("/orders/{order_id}/cancel")
+async def cancel_order(order_id: str, current_user: User = Depends(get_current_user)):
+    """Cancel a pending order"""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    if order["status"] == "completed":
+        raise HTTPException(status_code=400, detail="Cannot cancel a completed order")
+    
+    if order["status"] == "cancelled":
+        raise HTTPException(status_code=400, detail="Order already cancelled")
+    
+    # Clear the table if assigned
+    if order.get("table_id"):
+        await db.tables.update_one(
+            {"id": order["table_id"]},
+            {"$set": {"status": "available", "current_order_id": None}}
+        )
+    
+    result = await db.orders.update_one(
+        {"id": order_id},
+        {"$set": {
+            "status": "cancelled",
+            "cancelled_at": datetime.now(timezone.utc).isoformat(),
+            "cancelled_by": current_user.username
+        }}
+    )
+    
+    return {"message": "Order cancelled successfully", "order_id": order_id}
+
 @api_router.get("/orders/pending", response_model=List[Order])
 async def get_pending_orders(current_user: User = Depends(get_current_user)):
     query = {"status": "pending"}
@@ -1342,21 +1380,29 @@ async def get_cash_drawer_history(current_user: User = Depends(require_admin)):
 
 @api_router.get("/reports/stats")
 async def get_report_stats(start_date: str, end_date: str, current_user: User = Depends(require_admin)):
-    start_dt = datetime.fromisoformat(start_date)
-    end_dt = datetime.fromisoformat(end_date)
+    # Parse dates and make end_date inclusive of the whole day
+    start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00') if 'Z' in start_date else start_date)
+    end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00') if 'Z' in end_date else end_date)
+    
+    # Make end date inclusive (end of day)
+    end_dt_str = (end_dt + timedelta(days=1)).isoformat()
+    start_dt_str = start_dt.isoformat()
     
     orders = await db.orders.find(
-        {"created_at": {"$gte": start_dt.isoformat(), "$lte": end_dt.isoformat()}},
+        {
+            "created_at": {"$gte": start_dt_str, "$lt": end_dt_str},
+            "status": "completed"  # Only count completed orders
+        },
         {"_id": 0}
     ).to_list(10000)
     
-    total_sales = sum(order["total_amount"] for order in orders)
+    total_sales = sum(order.get("total_amount", 0) for order in orders)
     total_orders = len(orders)
     avg_order_value = total_sales / total_orders if total_orders > 0 else 0
     
     product_sales = {}
     for order in orders:
-        for item in order["items"]:
+        for item in order.get("items", []):
             if item["product_name"] not in product_sales:
                 product_sales[item["product_name"]] = {"quantity": 0, "revenue": 0}
             product_sales[item["product_name"]]["quantity"] += item["quantity"]
@@ -1369,6 +1415,45 @@ async def get_report_stats(start_date: str, end_date: str, current_user: User = 
         "total_orders": total_orders,
         "avg_order_value": round(avg_order_value, 2),
         "top_products": [{"name": name, "quantity": data["quantity"], "revenue": round(data["revenue"], 2)} for name, data in top_products]
+    }
+
+@api_router.get("/reports/today")
+async def get_today_stats(current_user: User = Depends(require_admin)):
+    """Get today's sales statistics for dashboard"""
+    # Get today's date range in UTC
+    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+    tomorrow = today + timedelta(days=1)
+    
+    orders = await db.orders.find(
+        {
+            "created_at": {"$gte": today.isoformat(), "$lt": tomorrow.isoformat()},
+            "status": "completed"
+        },
+        {"_id": 0}
+    ).to_list(1000)
+    
+    total_sales = sum(order.get("total_amount", 0) for order in orders)
+    total_orders = len(orders)
+    avg_order_value = total_sales / total_orders if total_orders > 0 else 0
+    
+    # Calculate top selling products today
+    product_sales = {}
+    for order in orders:
+        for item in order.get("items", []):
+            name = item["product_name"]
+            if name not in product_sales:
+                product_sales[name] = {"quantity": 0, "revenue": 0}
+            product_sales[name]["quantity"] += item["quantity"]
+            product_sales[name]["revenue"] += item["total"]
+    
+    top_products = sorted(product_sales.items(), key=lambda x: x[1]["quantity"], reverse=True)[:5]
+    
+    return {
+        "total_sales": round(total_sales, 2),
+        "total_orders": total_orders,
+        "avg_order_value": round(avg_order_value, 2),
+        "top_products": [{"name": name, "quantity": data["quantity"], "revenue": round(data["revenue"], 2)} for name, data in top_products],
+        "date": today.date().isoformat()
     }
 
 # ===== PRINTER API ENDPOINTS =====
@@ -1457,6 +1542,33 @@ async def test_printer(printer_id: str, current_user: User = Depends(require_adm
         "commands": test_commands,  # Base64 encoded ESC/POS commands
         "instructions": "Send these commands to the printer via Bluetooth or TCP socket"
     }
+
+@api_router.post("/printer/send")
+async def send_to_wifi_printer(data: PrinterSendData, current_user: User = Depends(get_current_user)):
+    """Send raw data to a WiFi/network printer"""
+    try:
+        # Decode base64 data
+        raw_data = base64.b64decode(data.data)
+        
+        # Create socket and connect to printer
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.settimeout(5)  # 5 second timeout
+        
+        try:
+            sock.connect((data.ip, data.port))
+            sock.sendall(raw_data)
+            sock.close()
+            return {"success": True, "message": f"Data sent to {data.ip}:{data.port}"}
+        except socket.timeout:
+            raise HTTPException(status_code=408, detail=f"Connection timeout to {data.ip}:{data.port}")
+        except ConnectionRefusedError:
+            raise HTTPException(status_code=503, detail=f"Connection refused by {data.ip}:{data.port}. Check if printer is on and IP is correct.")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Socket error: {str(e)}")
+        finally:
+            sock.close()
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Failed to send to printer: {str(e)}")
 
 @api_router.post("/print/kitchen/{order_id}")
 async def print_kitchen_receipt_escpos(order_id: str, printer_id: Optional[str] = None, current_user: User = Depends(get_current_user)):

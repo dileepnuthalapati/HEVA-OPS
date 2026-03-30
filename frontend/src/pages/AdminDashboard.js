@@ -3,8 +3,7 @@ import Sidebar from '../components/Sidebar';
 import { reportAPI, restaurantAPI } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { TrendingUp, DollarSign, ShoppingBag, Package, Coins } from 'lucide-react';
-import { toast } from 'sonner';
+import { TrendingUp, ShoppingBag, Package, Coins, Calendar } from 'lucide-react';
 
 // Currency helper
 const getCurrencySymbol = (currency) => {
@@ -35,16 +34,22 @@ const AdminDashboard = () => {
 
   const loadStats = async () => {
     try {
-      const today = new Date().toISOString().split('T')[0];
-      const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
-      const data = await reportAPI.getStats(weekAgo, today);
+      // Load TODAY's stats for dashboard
+      const data = await reportAPI.getTodayStats();
       setStats(data);
     } catch (error) {
-      toast.error('Failed to load dashboard stats');
+      console.error('Failed to load dashboard stats:', error);
     } finally {
       setLoading(false);
     }
   };
+
+  const today = new Date().toLocaleDateString('en-GB', { 
+    weekday: 'long', 
+    year: 'numeric', 
+    month: 'long', 
+    day: 'numeric' 
+  });
 
   return (
     <div className="flex">
@@ -52,8 +57,11 @@ const AdminDashboard = () => {
       <div className="flex-1 p-8">
         <div className="max-w-7xl mx-auto">
           <div className="mb-8">
-            <h1 className="text-4xl font-bold tracking-tight mb-2">Dashboard</h1>
-            <p className="text-muted-foreground">Overview of your restaurant performance</p>
+            <h1 className="text-4xl font-bold tracking-tight mb-2">Today's Dashboard</h1>
+            <p className="text-muted-foreground flex items-center gap-2">
+              <Calendar className="w-4 h-4" />
+              {today} • Stats reset daily at midnight
+            </p>
           </div>
 
           {loading ? (
@@ -64,7 +72,7 @@ const AdminDashboard = () => {
                 <Card className="metric-card" data-testid="metric-total-sales">
                   <CardHeader className="pb-2">
                     <CardDescription className="text-sm font-medium uppercase tracking-wider">
-                      Total Sales
+                      Today's Sales
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -80,7 +88,7 @@ const AdminDashboard = () => {
                 <Card className="metric-card" data-testid="metric-total-orders">
                   <CardHeader className="pb-2">
                     <CardDescription className="text-sm font-medium uppercase tracking-wider">
-                      Total Orders
+                      Today's Orders
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
@@ -127,8 +135,8 @@ const AdminDashboard = () => {
               {stats?.top_products && stats.top_products.length > 0 && (
                 <Card data-testid="top-products-card">
                   <CardHeader>
-                    <CardTitle className="text-2xl font-semibold">Top Selling Products</CardTitle>
-                    <CardDescription>Best performers in the last 7 days</CardDescription>
+                    <CardTitle className="text-2xl font-semibold">Today's Top Selling</CardTitle>
+                    <CardDescription>Best performers today</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-4">
@@ -145,7 +153,7 @@ const AdminDashboard = () => {
                             <div>
                               <div className="font-semibold text-lg">{product.name}</div>
                               <div className="text-sm text-muted-foreground">
-                                {product.quantity} units sold
+                                {product.quantity} sold today
                               </div>
                             </div>
                           </div>

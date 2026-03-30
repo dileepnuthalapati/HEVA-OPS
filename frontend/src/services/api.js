@@ -196,6 +196,10 @@ export const orderAPI = {
     await saveToIndexedDB('orders', response.data);
     return response.data;
   },
+  cancel: async (orderId) => {
+    const response = await api.put(`/orders/${orderId}/cancel`);
+    return response.data;
+  },
   printKitchenReceipt: async (orderId) => {
     const response = await api.post(`/orders/${orderId}/print-kitchen-receipt`, {}, { responseType: 'blob' });
     return response.data;
@@ -226,6 +230,10 @@ export const orderAPI = {
 export const reportAPI = {
   getStats: async (startDate, endDate) => {
     const response = await api.get(`/reports/stats?start_date=${startDate}&end_date=${endDate}`);
+    return response.data;
+  },
+  getTodayStats: async () => {
+    const response = await api.get('/reports/today');
     return response.data;
   },
   generatePDF: async (startDate, endDate) => {
