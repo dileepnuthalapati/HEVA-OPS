@@ -110,6 +110,7 @@ body {
 .flex-1 {
   flex: 1;
   min-width: 0;
+  max-width: 100%;
 }
 
 /* ===== POS SCREEN ===== */
@@ -215,12 +216,12 @@ body {
 }
 
 @media (max-width: 768px) {
-  /* Hide sidebar on mobile - use hamburger menu later */
+  /* Hide sidebar on mobile - use hamburger menu */
   .sidebar {
     display: none;
   }
   
-  /* Main content takes full width */
+  /* Main content takes full width on mobile */
   .flex-1 {
     width: 100%;
   }
@@ -238,7 +239,7 @@ body {
   .pos-screen {
     flex-direction: column;
     height: 100vh;
-    height: 100dvh; /* Dynamic viewport height for mobile browsers */
+    height: 100dvh;
   }
   
   .pos-screen > div:first-child {
@@ -253,6 +254,47 @@ body {
     border-left: none;
     border-top: 2px solid #e5e7eb;
     overflow-y: auto;
+  }
+
+  /* POS top bar mobile */
+  .pos-screen .bg-card.border-b {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .pos-screen .bg-card.border-b > div {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .pos-screen .bg-card.border-b h1 {
+    font-size: 1.25rem !important;
+  }
+  
+  .pos-screen .bg-card.border-b p {
+    font-size: 0.75rem !important;
+  }
+
+  .pos-screen .bg-card.border-b .h-12 {
+    height: 2.25rem;
+    font-size: 0.8rem;
+    padding-left: 0.5rem;
+    padding-right: 0.5rem;
+  }
+  
+  .pos-screen .bg-card.border-b .h-12 svg {
+    width: 1rem;
+    height: 1rem;
+    margin-right: 0.25rem;
+  }
+
+  /* POS search bar mobile */
+  .pos-screen .bg-slate-50 {
+    padding: 0.5rem 0.75rem;
+  }
+
+  .pos-screen .pos-search {
+    height: 2.5rem;
+    font-size: 0.9rem;
   }
   
   .pos-grid {

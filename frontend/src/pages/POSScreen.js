@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { categoryAPI, productAPI, orderAPI, tableAPI, printerAPI, restaurantAPI } from '../services/api';
-import printerService from '../services/printer';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { ScrollArea } from '../components/ui/scroll-area';
@@ -38,8 +37,6 @@ const POSScreen = () => {
   const [tipPercentage, setTipPercentage] = useState(0);
   const [customTip, setCustomTip] = useState('');
   const [splitCount, setSplitCount] = useState(1);
-  const [printerConnected, setPrinterConnected] = useState(false);
-  const [connectedPrinterName, setConnectedPrinterName] = useState(null);
   const [currency, setCurrency] = useState('GBP');
   
   // Edit order state
@@ -77,12 +74,7 @@ const POSScreen = () => {
     loadPendingOrders();
     loadRestaurantCurrency();
     loadTables();
-    checkPrinterSupport();
   }, []);
-
-  const checkPrinterSupport = () => {
-    setPrinterConnected(printerService.isSupported());
-  };
 
   const loadRestaurantCurrency = async () => {
     try {
@@ -92,36 +84,6 @@ const POSScreen = () => {
       }
     } catch (error) {
       // Use default currency
-    }
-  };
-
-  const connectBluetoothPrinter = async () => {
-    try {
-      const device = await printerService.discoverBluetoothPrinter();
-      setPrinterConnected(true);
-      setConnectedPrinterName(device.name);
-    } catch (error) {
-      console.error('Bluetooth connection failed:', error);
-      alert('Bluetooth connection failed: ' + error.message);
-    }
-  };
-
-  const disconnectPrinter = async () => {
-    try {
-      await printerService.disconnect();
-      setPrinterConnected(false);
-      setConnectedPrinterName(null);
-    } catch (error) {
-      console.error('Failed to disconnect printer:', error);
-    }
-  };
-
-  const testPrinter = async () => {
-    try {
-      await printerService.testPrint();
-    } catch (error) {
-      console.error('Test print failed:', error);
-      alert('Test print failed: ' + error.message);
     }
   };
 
@@ -392,11 +354,6 @@ const POSScreen = () => {
       try {
         const printResult = await printerAPI.printKitchenReceipt(order.id);
         console.log('Kitchen receipt ESC/POS commands generated:', printResult);
-        
-        // If we have a connected thermal printer, send the commands
-        if (printerConnected && printerService.isConnected()) {
-          await printerService.printRaw(printResult.commands);
-        }
       } catch (printError) {
         // Silently handle print errors - receipt printing is optional
         console.log('Kitchen receipt printing skipped:', printError.message);
@@ -524,11 +481,6 @@ const POSScreen = () => {
       try {
         const printResult = await printerAPI.printCustomerReceipt(selectedOrderToComplete.id);
         console.log('Customer receipt ESC/POS commands generated:', printResult);
-        
-        // If we have a connected thermal printer, send the commands
-        if (printerConnected && printerService.isConnected()) {
-          await printerService.printRaw(printResult.commands);
-        }
       } catch (printError) {
         // Silently handle print errors - receipt printing is optional
         console.log('Receipt printing skipped:', printError.message);
@@ -597,32 +549,7 @@ const POSScreen = () => {
               <p className="text-base text-muted-foreground">Welcome, {user?.username}</p>
             </div>
           </div>
-          <div className="flex gap-3">
-            {!printerConnected && (
-              <Button
-                variant="outline"
-                data-testid="connect-printer-button"
-                onClick={connectBluetoothPrinter}
-                className="h-12 text-base"
-              >
-                <Printer className="w-5 h-5 mr-2" />
-                Connect Printer
-              </Button>
-            )}
-            {printerConnected && (
-              <div className="flex items-center gap-2">
-                <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
-                  <Printer className="w-4 h-4 text-emerald-600" />
-                  <span className="text-sm text-emerald-700 font-medium truncate max-w-[120px]">{connectedPrinterName}</span>
-                </div>
-                <Button variant="outline" size="sm" onClick={testPrinter} className="h-10">
-                  Test
-                </Button>
-                <Button variant="ghost" size="sm" onClick={disconnectPrinter} className="h-10 text-red-500">
-                  <X className="w-4 h-4" />
-                </Button>
-              </div>
-            )}
+          <div className="flex gap-2 flex-wrap">
             <Button
               variant="outline"
               data-testid="pending-orders-button"

@@ -60,9 +60,10 @@ const Sidebar = ({ title = 'HevaPOS', subtitle = '' }) => {
     navigate('/login');
   };
 
-  const NavContent = ({ onItemClick }) => (
-    <>
-      <div className="mb-8">
+  // Mobile menu content - separate from desktop for better control
+  const MobileNavContent = ({ onItemClick }) => (
+    <div className="h-full flex flex-col">
+      <div className="mb-4 flex-shrink-0">
         <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
         <p className="text-sm text-muted-foreground mt-1 opacity-80">{subtitle || defaultSubtitle}</p>
         {user && (
@@ -72,7 +73,50 @@ const Sidebar = ({ title = 'HevaPOS', subtitle = '' }) => {
         )}
       </div>
       
-      <nav className="space-y-2 flex-1">
+      <div className="flex-1 overflow-y-auto -mx-4 px-4">
+        <nav className="space-y-1">
+          {menuItems.map((item) => (
+            <Link
+              key={item.path}
+              to={item.path}
+              onClick={onItemClick}
+              data-testid={`sidebar-link-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+              className={`sidebar-link ${location.pathname === item.path ? 'active' : ''}`}
+            >
+              <item.icon className="w-5 h-5" />
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </nav>
+      </div>
+      
+      <div className="flex-shrink-0 pt-4 border-t border-white/10">
+        <Button
+          variant="outline"
+          data-testid="logout-button"
+          className="w-full justify-start bg-transparent border-white/20 text-white hover:bg-white/10"
+          onClick={handleLogout}
+        >
+          <LogOut className="w-5 h-5 mr-3" />
+          Logout
+        </Button>
+      </div>
+    </div>
+  );
+
+  const NavContent = ({ onItemClick, isMobile = false }) => (
+    <div className="flex flex-col h-full">
+      <div className="mb-4 flex-shrink-0">
+        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+        <p className="text-sm text-muted-foreground mt-1 opacity-80">{subtitle || defaultSubtitle}</p>
+        {user && (
+          <p className="text-xs mt-2 opacity-60">
+            Logged in as: {user.username}
+          </p>
+        )}
+      </div>
+      
+      <nav className="flex-1 overflow-y-auto space-y-1 min-h-0">
         {menuItems.map((item) => (
           <Link
             key={item.path}
@@ -87,7 +131,7 @@ const Sidebar = ({ title = 'HevaPOS', subtitle = '' }) => {
         ))}
       </nav>
       
-      <div className="mt-auto pt-8">
+      <div className="flex-shrink-0 pt-4 border-t border-white/10">
         <Button
           variant="outline"
           data-testid="logout-button"
@@ -98,13 +142,13 @@ const Sidebar = ({ title = 'HevaPOS', subtitle = '' }) => {
           Logout
         </Button>
       </div>
-    </>
+    </div>
   );
 
   return (
     <>
       {/* Desktop Sidebar */}
-      <div className="sidebar hidden md:flex">
+      <div className="sidebar hidden md:flex flex-col">
         <NavContent />
       </div>
 
@@ -120,7 +164,7 @@ const Sidebar = ({ title = 'HevaPOS', subtitle = '' }) => {
               </Button>
             </SheetTrigger>
             <SheetContent side="right" className="w-[280px] bg-slate-900 text-white border-slate-700 p-4">
-              <NavContent onItemClick={() => setMobileMenuOpen(false)} />
+              <MobileNavContent onItemClick={() => setMobileMenuOpen(false)} />
             </SheetContent>
           </Sheet>
         </div>

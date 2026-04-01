@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { reportAPI, restaurantAPI } from '../services/api';
 import { Button } from '../components/ui/button';
@@ -12,6 +13,7 @@ const getCurrencySymbol = (currency) => {
 };
 
 const AdminDashboard = () => {
+  const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currency, setCurrency] = useState('GBP');
@@ -85,7 +87,7 @@ const AdminDashboard = () => {
                   </CardContent>
                 </Card>
 
-                <Card className="metric-card" data-testid="metric-total-orders">
+                <Card className="metric-card cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all" data-testid="metric-total-orders" onClick={() => navigate('/orders')}>
                   <CardHeader className="pb-2">
                     <CardDescription className="text-sm font-medium uppercase tracking-wider">
                       Today's Orders
@@ -96,6 +98,7 @@ const AdminDashboard = () => {
                       <ShoppingBag className="w-8 h-8 text-blue-500" />
                       <div className="text-3xl font-bold font-mono">{stats?.total_orders || 0}</div>
                     </div>
+                    <p className="text-xs text-muted-foreground mt-2">Click to view all orders</p>
                   </CardContent>
                 </Card>
 

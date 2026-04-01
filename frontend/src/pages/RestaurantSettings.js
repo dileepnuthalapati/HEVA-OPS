@@ -1,14 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import { restaurantAPI } from '../services/api';
-import printerService from '../services/printer';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
-import { Save, Printer, Wifi, Bluetooth, X, Check } from 'lucide-react';
+import { Save } from 'lucide-react';
 
 const RestaurantSettings = () => {
   const [restaurant, setRestaurant] = useState(null);
@@ -26,13 +25,6 @@ const RestaurantSettings = () => {
     vat_number: '',
     receipt_footer: '',
   });
-  
-  // Printer state
-  const [printerConnected, setPrinterConnected] = useState(false);
-  const [connectedPrinterName, setConnectedPrinterName] = useState(null);
-  const [connectingPrinter, setConnectingPrinter] = useState(false);
-  const [wifiPrinterIp, setWifiPrinterIp] = useState('');
-  const [wifiPrinterPort, setWifiPrinterPort] = useState('9100');
 
   useEffect(() => {
     loadRestaurant();
@@ -69,55 +61,6 @@ const RestaurantSettings = () => {
 
   const handleChange = (field, value) => {
     setFormData({ ...formData, [field]: value });
-  };
-
-  // Printer functions
-  const connectBluetoothPrinter = async () => {
-    setConnectingPrinter(true);
-    try {
-      const device = await printerService.discoverBluetoothPrinter();
-      setPrinterConnected(true);
-      setConnectedPrinterName(device.name);
-      toast.success(`Connected to ${device.name}`);
-    } catch (error) {
-      toast.error('Bluetooth connection failed: ' + error.message);
-    } finally {
-      setConnectingPrinter(false);
-    }
-  };
-
-  const connectWifiPrinter = async () => {
-    if (!wifiPrinterIp) {
-      toast.error('Please enter printer IP address');
-      return;
-    }
-    setConnectingPrinter(true);
-    try {
-      const device = await printerService.connectWifi(wifiPrinterIp, parseInt(wifiPrinterPort) || 9100);
-      setPrinterConnected(true);
-      setConnectedPrinterName(device.name);
-      toast.success(`Connected to WiFi printer at ${wifiPrinterIp}`);
-    } catch (error) {
-      toast.error('WiFi connection failed: ' + error.message);
-    } finally {
-      setConnectingPrinter(false);
-    }
-  };
-
-  const disconnectPrinter = async () => {
-    await printerService.disconnect();
-    setPrinterConnected(false);
-    setConnectedPrinterName(null);
-    toast.success('Printer disconnected');
-  };
-
-  const testPrinter = async () => {
-    try {
-      await printerService.testPrint();
-      toast.success('Test page sent to printer');
-    } catch (error) {
-      toast.error('Test print failed: ' + error.message);
-    }
   };
 
   if (loading) {
@@ -344,106 +287,6 @@ const RestaurantSettings = () => {
                   </Button>
                 </div>
               </form>
-            </CardContent>
-          </Card>
-
-          {/* Printer Setup Section */}
-          <Card className="mt-6">
-            <CardHeader>
-              <CardTitle className="text-xl font-semibold flex items-center gap-2">
-                <Printer className="w-5 h-5" />
-                Printer Setup
-              </CardTitle>
-              <CardDescription>
-                Connect your thermal receipt printer via Bluetooth or WiFi
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {printerConnected ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center">
-                        <Check className="w-5 h-5 text-emerald-600" />
-                      </div>
-                      <div>
-                        <div className="font-semibold text-emerald-800">{connectedPrinterName}</div>
-                        <div className="text-sm text-emerald-600">Connected and ready</div>
-                      </div>
-                    </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" onClick={testPrinter}>
-                        Test Print
-                      </Button>
-                      <Button variant="ghost" size="sm" onClick={disconnectPrinter} className="text-red-500">
-                        <X className="w-4 h-4 mr-1" />
-                        Disconnect
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Bluetooth Option */}
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Bluetooth className="w-5 h-5 text-blue-500" />
-                      <span className="font-semibold">Bluetooth Printer</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-4">
-                      Discover and connect to nearby Bluetooth printers. Works on Android tablets and Chrome browser.
-                    </p>
-                    <Button 
-                      className="w-full" 
-                      onClick={connectBluetoothPrinter}
-                      disabled={connectingPrinter}
-                    >
-                      {connectingPrinter ? 'Searching...' : 'Find Bluetooth Printer'}
-                    </Button>
-                  </div>
-
-                  {/* WiFi Option */}
-                  <div className="p-4 border rounded-lg">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Wifi className="w-5 h-5 text-emerald-500" />
-                      <span className="font-semibold">WiFi / Network Printer</span>
-                    </div>
-                    <p className="text-sm text-muted-foreground mb-3">
-                      Enter the printer's IP address (find it in printer settings or network config).
-                    </p>
-                    <div className="space-y-3">
-                      <div className="flex gap-2">
-                        <div className="flex-1">
-                          <Label htmlFor="printer-ip" className="text-xs">IP Address</Label>
-                          <Input
-                            id="printer-ip"
-                            placeholder="192.168.1.100"
-                            value={wifiPrinterIp}
-                            onChange={(e) => setWifiPrinterIp(e.target.value)}
-                          />
-                        </div>
-                        <div className="w-20">
-                          <Label htmlFor="printer-port" className="text-xs">Port</Label>
-                          <Input
-                            id="printer-port"
-                            placeholder="9100"
-                            value={wifiPrinterPort}
-                            onChange={(e) => setWifiPrinterPort(e.target.value)}
-                          />
-                        </div>
-                      </div>
-                      <Button 
-                        variant="outline" 
-                        className="w-full" 
-                        onClick={connectWifiPrinter}
-                        disabled={connectingPrinter || !wifiPrinterIp}
-                      >
-                        {connectingPrinter ? 'Connecting...' : 'Connect WiFi Printer'}
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              )}
             </CardContent>
           </Card>
 
