@@ -92,36 +92,38 @@ class ProductCreate(BaseModel):
     in_stock: bool = True
 
 class OrderItem(BaseModel):
+    model_config = ConfigDict(extra="ignore")
     product_id: str
-    product_name: str
-    quantity: int
-    unit_price: float
-    total: float
-    notes: Optional[str] = None  # Item-level notes for kitchen
+    product_name: str = ""
+    quantity: int = 1
+    unit_price: float = 0.0
+    total: float = 0.0
+    notes: Optional[str] = None
+    is_custom: Optional[bool] = False
 
 class Order(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
-    order_number: int
-    items: List[OrderItem]
-    subtotal: float
-    discount_type: Optional[str] = None  # "percentage" or "fixed"
-    discount_value: float = 0.0  # Percentage (e.g., 10) or fixed amount (e.g., 5.00)
-    discount_amount: float = 0.0  # Calculated discount
-    discount_reason: Optional[str] = None  # Reason for discount
+    order_number: int = 0
+    items: List[OrderItem] = []
+    subtotal: float = 0.0
+    discount_type: Optional[str] = None
+    discount_value: float = 0.0
+    discount_amount: float = 0.0
+    discount_reason: Optional[str] = None
     tip_amount: float = 0.0
     tip_percentage: int = 0
-    total_amount: float
-    created_by: str
-    created_at: str
+    total_amount: float = 0.0
+    created_by: str = "unknown"
+    created_at: str = ""
     synced: bool = True
     status: str = "pending"
-    payment_method: Optional[str] = None  # "cash", "card", or "split"
-    payment_details: Optional[dict] = None  # For split: {"cash": 10.00, "card": 15.00}
+    payment_method: Optional[str] = None
+    payment_details: Optional[dict] = None
     split_count: int = 1
     completed_at: Optional[str] = None
     table_id: Optional[str] = None
-    order_notes: Optional[str] = None  # General order notes
+    order_notes: Optional[str] = None
 
 class OrderCreate(BaseModel):
     items: List[OrderItem]

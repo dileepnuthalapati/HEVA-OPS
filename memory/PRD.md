@@ -26,12 +26,12 @@ Build a multi-tenant SaaS POS system called "HevaPOS" with:
 
 ## Implementation Status
 
-### Completed Features (as of March 2026)
+### Completed Features
 - [x] User Authentication (JWT-based)
 - [x] Restaurant Management (CRUD)
 - [x] Role-based architecture (shared Sidebar component)
 - [x] Table Management (CRUD + status tracking)
-- [x] Printer Management (WiFi/Bluetooth)
+- [x] Printer Management (WiFi/Bluetooth) - consolidated to PrinterSettings page
 - [x] Basic Reservations
 - [x] Table Selection in POS
 - [x] User Creation by Platform Owner
@@ -46,24 +46,31 @@ Build a multi-tenant SaaS POS system called "HevaPOS" with:
 - [x] Railway Deployment (Backend)
 - [x] Capacitor Configuration (APK)
 - [x] White-labeling (Emergent badge removed)
-- [x] **Product Search** - Real-time search/filter in POS
-- [x] **Custom/Temporary Items** - Add items not in menu to cart
-- [x] **Double-click prevention** - Fixed duplicate item additions
+- [x] Product Search - Real-time search/filter in POS
+- [x] Custom/Temporary Items - Add items not in menu to cart
+- [x] Double-click prevention - Fixed duplicate item additions
+- [x] Mobile responsive sidebar with hamburger menu (all menu items scrollable)
+- [x] Mobile responsive POS screen for staff
+- [x] Dashboard "Total Orders" card clickable → navigates to orders page
+- [x] Printer setup consolidated to Printers page only (removed from POS + RestaurantSettings)
+- [x] Orders API resilient to legacy data formats
 
-### In Progress
-- None
+### Upcoming Tasks (P0)
+- [ ] Bluetooth Printer Discovery fix for Android APK (Capacitor plugin)
 
 ### Upcoming Tasks (P1)
 - [ ] Subscription Management (trial → active/suspended logic)
 - [ ] Email Notifications (trial expiry alerts)
 
 ### Future Tasks (P2)
-- [ ] Revenue Dashboard for Platform Owner
 - [ ] Payment Gateway Integration (Stripe/Square/Razorpay)
+- [ ] Revenue Dashboard for Platform Owner
 - [ ] Kitchen Display System (KDS)
+- [ ] iOS App Build Prep
 
 ### Backlog
 - [ ] Backend refactoring (server.py split into routers)
+- [ ] POSScreen.js split into sub-components
 
 ---
 
@@ -76,9 +83,11 @@ Build a multi-tenant SaaS POS system called "HevaPOS" with:
 - **Hosting**: Railway (Backend)
 
 ### Key Files
-- `/app/backend/server.py` - Monolithic API (~2100 lines)
-- `/app/frontend/src/pages/POSScreen.js` - Main POS UI (with search, custom items)
-- `/app/frontend/src/components/Sidebar.js` - Role-based navigation
+- `/app/backend/server.py` - Monolithic API (~2400 lines)
+- `/app/frontend/src/pages/POSScreen.js` - Main POS UI
+- `/app/frontend/src/pages/PrinterSettings.js` - Consolidated printer management
+- `/app/frontend/src/components/Sidebar.js` - Role-based navigation with mobile hamburger
+- `/app/frontend/src/index.css` - Global styles with mobile responsive rules
 - `/app/frontend/capacitor.config.json` - APK configuration
 
 ### Database Schema
@@ -92,6 +101,8 @@ Build a multi-tenant SaaS POS system called "HevaPOS" with:
 - `PUT /api/restaurants/my/settings` - Update tenant settings
 - `PUT /api/orders/{order_id}` - Edit pending order
 - `PUT /api/orders/{order_id}/complete` - Complete with split payments
+- `GET /api/orders` - List all orders
+- `GET /api/dashboard/today` - Today's stats
 
 ---
 
@@ -105,9 +116,3 @@ Build a multi-tenant SaaS POS system called "HevaPOS" with:
 - MongoDB Atlas requires IP whitelist (currently `0.0.0.0/0`)
 - APK built locally by user using Capacitor
 - User syncs code to GitHub for Railway auto-deployment
-
-## Latest Changes (March 27, 2026)
-1. Added product search bar with real-time filtering
-2. Added "Custom Item" button to add temporary products to cart
-3. Fixed double-click bug causing multiple item additions
-4. Custom items display with "Custom" badge in cart
