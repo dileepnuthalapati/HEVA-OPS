@@ -1,6 +1,7 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import FastAPI, APIRouter
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -17,8 +18,9 @@ import jwt
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-from reportlab.platypus import SimpleDocTemplate, Table as ReportLabTable, TableStyle, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Table, TableStyle, Paragraph, Spacer
 from io import BytesIO
+from typing import List
 import uuid
 
 
@@ -32,6 +34,10 @@ db = client[os.environ['DB_NAME']]
 
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
+# Health check endpoint for Railway
+@app.get("/")
+async def health_check():
+    return {"status": "healthy"}
 
 security = HTTPBearer()
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -50,6 +56,7 @@ class UserCreate(BaseModel):
     username: str
     password: str
     role: str = "user"
+    restaurant_id: Optional[str] = None
 
 class UserLogin(BaseModel):
     username: str
@@ -66,12 +73,14 @@ class Category(BaseModel):
     name: str
     description: Optional[str] = None
     image_url: Optional[str] = None
+    restaurant_id: Optional[str] = None
     created_at: str
 
 class CategoryCreate(BaseModel):
     name: str
     description: Optional[str] = None
     image_url: Optional[str] = None
+    restaurant_id: Optional[str] = None
 
 class Product(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -82,6 +91,7 @@ class Product(BaseModel):
     price: float
     image_url: Optional[str] = None
     in_stock: bool = True
+    restaurant_id: Optional[str] = None
     created_at: str
 
 class ProductCreate(BaseModel):
@@ -90,6 +100,7 @@ class ProductCreate(BaseModel):
     price: float
     image_url: Optional[str] = None
     in_stock: bool = True
+    restaurant_id: Optional[str] = None
 
 class OrderItem(BaseModel):
     product_id: str
@@ -122,6 +133,7 @@ class Order(BaseModel):
     completed_at: Optional[str] = None
     table_id: Optional[str] = None
     order_notes: Optional[str] = None  # General order notes
+    restaurant_id: Optional[str] = None
 
 class OrderCreate(BaseModel):
     items: List[OrderItem]
@@ -153,6 +165,7 @@ class CashDrawer(BaseModel):
     opened_at: str
     closed_at: Optional[str] = None
     status: str = "open"
+    restaurant_id: Optional[str] = None
 
 class CashDrawerOpen(BaseModel):
     opening_balance: float
@@ -352,13 +365,19 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 
 async def get_current_restaurant(current_user: User = Depends(get_current_user)):
     """Get the restaurant associated with the current user"""
-    restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
+    if current_user.restaurant_id:
+        restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0})
+    else:
+        # Legacy/Fallback
+        restaurant = await db.restaurants.find_one({"users": current_user.username}, {"_id": 0})
+
     if not restaurant:
+        if current_user.role == "platform_owner":
+            return None # Platform owner might not have a restaurant
         raise HTTPException(status_code=404, detail="Restaurant not found for user")
     return Restaurant(**restaurant)
 
 def require_admin(current_user: User = Depends(get_current_user)):
-    """Require admin or platform_owner role"""
     if current_user.role not in ["admin", "platform_owner"]:
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
@@ -1289,7 +1308,8 @@ async def open_cash_drawer(drawer_data: CashDrawerOpen, current_user: User = Dep
         "closed_by": None,
         "opened_at": datetime.now(timezone.utc).isoformat(),
         "closed_at": None,
-        "status": "open"
+        "status": "open",
+        "restaurant_id": current_user.restaurant_id
     }
     await db.cash_drawers.insert_one(drawer_dict)
     return CashDrawer(**drawer_dict)
@@ -2253,6 +2273,55 @@ async def get_status_checks():
             check['timestamp'] = datetime.fromisoformat(check['timestamp'])
     
     return status_checks
+
+# ===== ONE-TIME SEED ENDPOINT =====
+@api_router.post("/seed-database")
+async def seed_database_endpoint(secret: str = None):
+    """One-time database seeding endpoint."""
+    if secret != "hevapos2026":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+    
+    # Clear existing data to ensure clean seed
+    await db.users.delete_many({})
+    await db.restaurants.delete_many({})
+    await db.categories.delete_many({})
+    await db.products.delete_many({})
+    await db.orders.delete_many({})
+    await db.cash_drawers.delete_many({})
+    
+    from datetime import timedelta
+    
+    # Platform Owner
+    await db.users.insert_one({"id": "platform_owner_1", "username": "platform_owner", "password": pwd_context.hash("admin123"), "role": "platform_owner", "restaurant_id": None, "created_at": datetime.now(timezone.utc).isoformat()})
+    
+    # Restaurant
+    trial_ends = datetime.now(timezone.utc) + timedelta(days=14)
+    await db.restaurants.insert_one({"id": "rest_demo_1", "owner_email": "demo@hevapos.com", "subscription_status": "trial", "price": 19.99, "currency": "GBP", "business_info": {"name": "Pizza Palace", "city": "London"}, "users": ["restaurant_admin", "user"], "created_at": datetime.now(timezone.utc).isoformat(), "trial_ends_at": trial_ends.isoformat()})
+    
+    # Admin & Staff
+    await db.users.insert_one({"id": "restaurant_admin_1", "username": "restaurant_admin", "password": pwd_context.hash("admin123"), "role": "admin", "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()})
+    await db.users.insert_one({"id": "restaurant_user_1", "username": "user", "password": pwd_context.hash("user123"), "role": "user", "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()})
+    
+    # Categories
+    await db.categories.insert_many([
+        {"id": "cat_1", "name": "Pizzas", "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "cat_2", "name": "Drinks", "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "cat_3", "name": "Sides", "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "cat_4", "name": "Desserts", "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+    ])
+    
+    # Products
+    await db.products.insert_many([
+        {"id": "prod_1", "name": "Margherita", "category_id": "cat_1", "category_name": "Pizzas", "price": 9.99, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_2", "name": "Pepperoni", "category_id": "cat_1", "category_name": "Pizzas", "price": 11.99, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_3", "name": "Hawaiian", "category_id": "cat_1", "category_name": "Pizzas", "price": 12.99, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_5", "name": "Coca-Cola", "category_id": "cat_2", "category_name": "Drinks", "price": 2.50, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_6", "name": "Sprite", "category_id": "cat_2", "category_name": "Drinks", "price": 2.50, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_8", "name": "Garlic Bread", "category_id": "cat_3", "category_name": "Sides", "price": 4.99, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_10", "name": "Chocolate Brownie", "category_id": "cat_4", "category_name": "Desserts", "price": 4.50, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+    ])
+    
+    return {"message": "Database seeded!", "seeded": True, "credentials": {"platform_owner": "admin123", "restaurant_admin": "admin123", "staff_user": "user123"}}
 
 # Include the router in the main app
 app.include_router(api_router)
