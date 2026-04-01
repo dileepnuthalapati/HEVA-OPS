@@ -40,10 +40,6 @@ const POSScreen = () => {
   const [splitCount, setSplitCount] = useState(1);
   const [printerConnected, setPrinterConnected] = useState(false);
   const [connectedPrinterName, setConnectedPrinterName] = useState(null);
-  const [showPrinterDialog, setShowPrinterDialog] = useState(false);
-  const [wifiPrinterIp, setWifiPrinterIp] = useState('');
-  const [wifiPrinterPort, setWifiPrinterPort] = useState('9100');
-  const [connectingPrinter, setConnectingPrinter] = useState(false);
   const [currency, setCurrency] = useState('GBP');
   
   // Edit order state
@@ -100,37 +96,13 @@ const POSScreen = () => {
   };
 
   const connectBluetoothPrinter = async () => {
-    setConnectingPrinter(true);
     try {
       const device = await printerService.discoverBluetoothPrinter();
       setPrinterConnected(true);
       setConnectedPrinterName(device.name);
-      setShowPrinterDialog(false);
     } catch (error) {
       console.error('Bluetooth connection failed:', error);
       alert('Bluetooth connection failed: ' + error.message);
-    } finally {
-      setConnectingPrinter(false);
-    }
-  };
-
-  const connectWifiPrinter = async () => {
-    if (!wifiPrinterIp) {
-      alert('Please enter printer IP address');
-      return;
-    }
-    setConnectingPrinter(true);
-    try {
-      const device = await printerService.connectWifi(wifiPrinterIp, parseInt(wifiPrinterPort) || 9100);
-      setPrinterConnected(true);
-      setConnectedPrinterName(device.name);
-      setShowPrinterDialog(false);
-      setWifiPrinterIp('');
-    } catch (error) {
-      console.error('WiFi printer connection failed:', error);
-      alert('WiFi connection failed: ' + error.message);
-    } finally {
-      setConnectingPrinter(false);
     }
   };
 
@@ -630,33 +602,23 @@ const POSScreen = () => {
               <Button
                 variant="outline"
                 data-testid="connect-printer-button"
-                onClick={() => setShowPrinterDialog(true)}
+                onClick={connectBluetoothPrinter}
                 className="h-12 text-base"
               >
                 <Printer className="w-5 h-5 mr-2" />
-                Setup Printer
+                Connect Printer
               </Button>
             )}
             {printerConnected && (
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-lg">
                   <Printer className="w-4 h-4 text-emerald-600" />
-                  <span className="text-sm text-emerald-700 font-medium truncate max-w-[150px]">{connectedPrinterName}</span>
+                  <span className="text-sm text-emerald-700 font-medium truncate max-w-[120px]">{connectedPrinterName}</span>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={testPrinter}
-                  className="h-10"
-                >
+                <Button variant="outline" size="sm" onClick={testPrinter} className="h-10">
                   Test
                 </Button>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={disconnectPrinter}
-                  className="h-10 text-red-500 hover:bg-red-50"
-                >
+                <Button variant="ghost" size="sm" onClick={disconnectPrinter} className="h-10 text-red-500">
                   <X className="w-4 h-4" />
                 </Button>
               </div>
@@ -1454,82 +1416,6 @@ const POSScreen = () => {
               >
                 <Plus className="w-4 h-4 mr-2" />
                 Add to Cart
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Printer Setup Dialog */}
-      <Dialog open={showPrinterDialog} onOpenChange={setShowPrinterDialog}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Printer className="w-5 h-5" />
-              Setup Printer
-            </DialogTitle>
-            <DialogDescription>
-              Connect to a Bluetooth or WiFi thermal printer
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-6 mt-4">
-            {/* Bluetooth Option */}
-            <div className="p-4 border rounded-lg">
-              <div className="font-semibold mb-2">Bluetooth Printer</div>
-              <p className="text-sm text-muted-foreground mb-3">
-                Discover nearby Bluetooth printers (Works on Android/Chrome)
-              </p>
-              <Button
-                className="w-full"
-                onClick={connectBluetoothPrinter}
-                disabled={connectingPrinter}
-              >
-                {connectingPrinter ? 'Searching...' : 'Find Bluetooth Printer'}
-              </Button>
-            </div>
-
-            {/* WiFi Option */}
-            <div className="p-4 border rounded-lg">
-              <div className="font-semibold mb-2">WiFi / Network Printer</div>
-              <p className="text-sm text-muted-foreground mb-3">
-                Enter the printer's IP address (check printer settings)
-              </p>
-              <div className="space-y-3">
-                <div className="flex gap-2">
-                  <div className="flex-1">
-                    <Label htmlFor="printer-ip" className="text-xs">IP Address</Label>
-                    <Input
-                      id="printer-ip"
-                      placeholder="192.168.1.100"
-                      value={wifiPrinterIp}
-                      onChange={(e) => setWifiPrinterIp(e.target.value)}
-                    />
-                  </div>
-                  <div className="w-24">
-                    <Label htmlFor="printer-port" className="text-xs">Port</Label>
-                    <Input
-                      id="printer-port"
-                      placeholder="9100"
-                      value={wifiPrinterPort}
-                      onChange={(e) => setWifiPrinterPort(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <Button
-                  className="w-full"
-                  variant="outline"
-                  onClick={connectWifiPrinter}
-                  disabled={connectingPrinter || !wifiPrinterIp}
-                >
-                  {connectingPrinter ? 'Connecting...' : 'Connect WiFi Printer'}
-                </Button>
-              </div>
-            </div>
-
-            <div className="text-center">
-              <Button variant="ghost" onClick={() => setShowPrinterDialog(false)}>
-                Cancel
               </Button>
             </div>
           </div>
