@@ -118,7 +118,7 @@ const PrinterSettings = () => {
 
   if (loading) {
     return (
-      <div className="flex">
+      <div className="flex flex-col md:flex-row min-h-screen">
         <Sidebar />
         <div className="flex-1 p-8">
           <div className="text-center py-12">Loading...</div>
@@ -128,14 +128,14 @@ const PrinterSettings = () => {
   }
 
   return (
-    <div className="flex">
+    <div className="flex flex-col md:flex-row min-h-screen">
       <Sidebar />
-      <div className="flex-1 p-8">
+      <div className="flex-1 min-w-0 p-4 md:p-8">
         <div className="max-w-5xl mx-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-4xl font-bold tracking-tight mb-2">Printer Settings</h1>
+              <h1 className="text-2xl md:text-4xl font-bold tracking-tight mb-1 md:mb-2">Printer Settings</h1>
               <p className="text-muted-foreground">Configure ESC/POS thermal printers for receipts</p>
             </div>
             <Dialog open={showAddPrinter} onOpenChange={(open) => { setShowAddPrinter(open); if (!open) resetForm(); }}>

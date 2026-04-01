@@ -528,54 +528,54 @@ const POSScreen = () => {
   return (
     <div className="flex h-screen pos-screen">
       {/* Main Product Area */}
-      <div className="flex-1 flex flex-col">
+      <div className="flex-1 flex flex-col min-w-0">
         {/* Top Bar */}
-        <div className="bg-card border-b px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            {/* Back button for admins */}
+        <div className="bg-card border-b px-3 py-2 md:px-6 md:py-4 flex items-center justify-between gap-2 flex-shrink-0">
+          <div className="flex items-center gap-2 md:gap-4 min-w-0">
             {(user?.role === 'admin' || user?.role === 'platform_owner') && (
               <Button
                 variant="outline"
                 data-testid="back-to-dashboard-button"
                 onClick={() => navigate(user?.role === 'platform_owner' ? '/platform/dashboard' : '/dashboard')}
-                className="h-12 text-base"
+                className="h-9 text-sm md:h-12 md:text-base shrink-0"
               >
-                <ArrowLeft className="w-5 h-5 mr-2" />
-                Dashboard
+                <ArrowLeft className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
+                <span className="hidden sm:inline">Dashboard</span>
+                <span className="sm:hidden">Back</span>
               </Button>
             )}
-            <div>
-              <h1 className="text-3xl font-bold tracking-tight">HevaPOS</h1>
-              <p className="text-base text-muted-foreground">Welcome, {user?.username}</p>
+            <div className="min-w-0">
+              <h1 className="text-lg md:text-3xl font-bold tracking-tight truncate">HevaPOS</h1>
+              <p className="text-xs md:text-base text-muted-foreground truncate">Welcome, {user?.username}</p>
             </div>
           </div>
-          <div className="flex gap-2 flex-wrap">
+          <div className="flex gap-1.5 md:gap-2 shrink-0">
             <Button
               variant="outline"
               data-testid="pending-orders-button"
               onClick={() => setShowPendingOrders(!showPendingOrders)}
-              className="h-12 text-base"
+              className="h-9 text-xs px-2 md:h-12 md:text-base md:px-4"
             >
-              <Receipt className="w-5 h-5 mr-2" />
-              Pending ({pendingOrders.length})
+              <Receipt className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
+              <span className="hidden sm:inline">Pending</span> ({pendingOrders.length})
             </Button>
-            <Button variant="outline" data-testid="pos-logout-button" onClick={logout} className="h-12 text-base">
-              <LogOut className="w-5 h-5 mr-2" />
-              Logout
+            <Button variant="outline" data-testid="pos-logout-button" onClick={logout} className="h-9 text-xs px-2 md:h-12 md:text-base md:px-4">
+              <LogOut className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
+              <span className="hidden sm:inline">Logout</span>
             </Button>
           </div>
         </div>
 
         {/* Search Bar */}
-        <div className="px-6 py-3 border-b bg-slate-50">
-          <div className="flex gap-3">
+        <div className="px-3 py-2 md:px-6 md:py-3 border-b bg-slate-50 flex-shrink-0">
+          <div className="flex gap-2 md:gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />
               <Input
                 placeholder="Search products..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-11 h-12 text-lg pos-search"
+                className="pl-10 md:pl-11 h-10 md:h-12 text-sm md:text-lg"
                 data-testid="product-search-input"
               />
               {searchQuery && (
@@ -593,22 +593,23 @@ const POSScreen = () => {
               variant="outline"
               onClick={() => setShowCustomProductDialog(true)}
               data-testid="add-custom-product-btn"
-              className="h-12 text-base whitespace-nowrap px-5"
+              className="h-10 md:h-12 text-sm md:text-base whitespace-nowrap px-3 md:px-5"
             >
-              <PackagePlus className="w-5 h-5 mr-2" />
-              Custom Item
+              <PackagePlus className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
+              <span className="hidden sm:inline">Custom Item</span>
+              <span className="sm:hidden">Custom</span>
             </Button>
           </div>
         </div>
 
         {/* Categories */}
-        <div className="px-6 py-4 border-b">
-          <div className="flex gap-3 overflow-x-auto scrollbar-hide">
+        <div className="px-3 py-2 md:px-6 md:py-4 border-b flex-shrink-0">
+          <div className="flex gap-2 md:gap-3 overflow-x-auto scrollbar-hide">
             <Button
               variant={selectedCategory === null ? 'default' : 'outline'}
               data-testid="category-all-button"
               onClick={() => setSelectedCategory(null)}
-              className="category-btn whitespace-nowrap"
+              className="whitespace-nowrap text-sm md:text-base h-9 md:h-11 px-3 md:px-5"
             >
               All Products
             </Button>
@@ -618,7 +619,7 @@ const POSScreen = () => {
                 variant={selectedCategory === category.id ? 'default' : 'outline'}
                 data-testid={`category-button-${category.id}`}
                 onClick={() => setSelectedCategory(category.id)}
-                className="category-btn whitespace-nowrap"
+                className="whitespace-nowrap text-sm md:text-base h-9 md:h-11 px-3 md:px-5"
               >
                 {category.name}
               </Button>
@@ -627,7 +628,7 @@ const POSScreen = () => {
         </div>
 
         {/* Products Grid or Pending Orders */}
-        <ScrollArea className="flex-1 p-6">
+        <ScrollArea className="flex-1 p-3 md:p-6">
           {showPendingOrders ? (
             <div className="space-y-4">
               <h2 className="text-2xl font-bold mb-4">Pending Orders</h2>

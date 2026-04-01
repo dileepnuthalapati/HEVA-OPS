@@ -2,11 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { reportAPI, restaurantAPI } from '../services/api';
-import { Button } from '../components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { TrendingUp, ShoppingBag, Package, Coins, Calendar } from 'lucide-react';
 
-// Currency helper
 const getCurrencySymbol = (currency) => {
   const symbols = { 'GBP': '£', 'USD': '$', 'EUR': '€', 'INR': '₹' };
   return symbols[currency] || currency || '£';
@@ -26,17 +24,12 @@ const AdminDashboard = () => {
   const loadCurrency = async () => {
     try {
       const restaurant = await restaurantAPI.getMy();
-      if (restaurant?.currency) {
-        setCurrency(restaurant.currency);
-      }
-    } catch (error) {
-      // Use default currency
-    }
+      if (restaurant?.currency) setCurrency(restaurant.currency);
+    } catch (error) {}
   };
 
   const loadStats = async () => {
     try {
-      // Load TODAY's stats for dashboard
       const data = await reportAPI.getTodayStats();
       setStats(data);
     } catch (error) {
@@ -47,22 +40,19 @@ const AdminDashboard = () => {
   };
 
   const today = new Date().toLocaleDateString('en-GB', { 
-    weekday: 'long', 
-    year: 'numeric', 
-    month: 'long', 
-    day: 'numeric' 
+    weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
   });
 
   return (
-    <div className="flex">
+    <div className="flex flex-col md:flex-row min-h-screen">
       <Sidebar />
-      <div className="flex-1 p-8">
+      <div className="flex-1 min-w-0 p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold tracking-tight mb-2">Today's Dashboard</h1>
-            <p className="text-muted-foreground flex items-center gap-2">
-              <Calendar className="w-4 h-4" />
-              {today} • Stats reset daily at midnight
+          <div className="mb-6 md:mb-8">
+            <h1 className="text-2xl md:text-4xl font-bold tracking-tight mb-1 md:mb-2" data-testid="dashboard-heading">Today's Dashboard</h1>
+            <p className="text-sm md:text-base text-muted-foreground flex items-center gap-2">
+              <Calendar className="w-4 h-4 shrink-0" />
+              <span>{today} &bull; Stats reset daily at midnight</span>
             </p>
           </div>
 
@@ -70,48 +60,52 @@ const AdminDashboard = () => {
             <div className="text-center py-12">Loading...</div>
           ) : (
             <>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
                 <Card className="metric-card" data-testid="metric-total-sales">
-                  <CardHeader className="pb-2">
-                    <CardDescription className="text-sm font-medium uppercase tracking-wider">
+                  <CardHeader className="pb-2 px-4 pt-4 md:px-6 md:pt-6">
+                    <CardDescription className="text-xs md:text-sm font-medium uppercase tracking-wider">
                       Today's Sales
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
                     <div className="flex items-center gap-3">
-                      <Coins className="w-8 h-8 text-emerald-500" />
-                      <div className="text-3xl font-bold font-mono">
+                      <Coins className="w-6 h-6 md:w-8 md:h-8 text-emerald-500 shrink-0" />
+                      <div className="text-xl md:text-3xl font-bold font-mono">
                         {getCurrencySymbol(currency)}{stats?.total_sales?.toFixed(2) || '0.00'}
                       </div>
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="metric-card cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all" data-testid="metric-total-orders" onClick={() => navigate('/orders')}>
-                  <CardHeader className="pb-2">
-                    <CardDescription className="text-sm font-medium uppercase tracking-wider">
+                <Card 
+                  className="metric-card cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all" 
+                  data-testid="metric-total-orders" 
+                  onClick={() => navigate('/orders')}
+                >
+                  <CardHeader className="pb-2 px-4 pt-4 md:px-6 md:pt-6">
+                    <CardDescription className="text-xs md:text-sm font-medium uppercase tracking-wider">
                       Today's Orders
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
                     <div className="flex items-center gap-3">
-                      <ShoppingBag className="w-8 h-8 text-blue-500" />
-                      <div className="text-3xl font-bold font-mono">{stats?.total_orders || 0}</div>
+                      <ShoppingBag className="w-6 h-6 md:w-8 md:h-8 text-blue-500 shrink-0" />
+                      <div className="text-xl md:text-3xl font-bold font-mono">{stats?.total_orders || 0}</div>
                     </div>
                     <p className="text-xs text-muted-foreground mt-2">Click to view all orders</p>
                   </CardContent>
                 </Card>
 
                 <Card className="metric-card" data-testid="metric-avg-order">
-                  <CardHeader className="pb-2">
-                    <CardDescription className="text-sm font-medium uppercase tracking-wider">
+                  <CardHeader className="pb-2 px-4 pt-4 md:px-6 md:pt-6">
+                    <CardDescription className="text-xs md:text-sm font-medium uppercase tracking-wider">
                       Avg Order Value
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
                     <div className="flex items-center gap-3">
-                      <TrendingUp className="w-8 h-8 text-amber-500" />
-                      <div className="text-3xl font-bold font-mono">
+                      <TrendingUp className="w-6 h-6 md:w-8 md:h-8 text-amber-500 shrink-0" />
+                      <div className="text-xl md:text-3xl font-bold font-mono">
                         {getCurrencySymbol(currency)}{stats?.avg_order_value?.toFixed(2) || '0.00'}
                       </div>
                     </div>
@@ -119,15 +113,15 @@ const AdminDashboard = () => {
                 </Card>
 
                 <Card className="metric-card" data-testid="metric-top-products">
-                  <CardHeader className="pb-2">
-                    <CardDescription className="text-sm font-medium uppercase tracking-wider">
+                  <CardHeader className="pb-2 px-4 pt-4 md:px-6 md:pt-6">
+                    <CardDescription className="text-xs md:text-sm font-medium uppercase tracking-wider">
                       Top Products
                     </CardDescription>
                   </CardHeader>
-                  <CardContent>
+                  <CardContent className="px-4 pb-4 md:px-6 md:pb-6">
                     <div className="flex items-center gap-3">
-                      <Package className="w-8 h-8 text-purple-500" />
-                      <div className="text-3xl font-bold font-mono">
+                      <Package className="w-6 h-6 md:w-8 md:h-8 text-purple-500 shrink-0" />
+                      <div className="text-xl md:text-3xl font-bold font-mono">
                         {stats?.top_products?.length || 0}
                       </div>
                     </div>
@@ -137,31 +131,31 @@ const AdminDashboard = () => {
 
               {stats?.top_products && stats.top_products.length > 0 && (
                 <Card data-testid="top-products-card">
-                  <CardHeader>
-                    <CardTitle className="text-2xl font-semibold">Today's Top Selling</CardTitle>
+                  <CardHeader className="px-4 md:px-6">
+                    <CardTitle className="text-lg md:text-2xl font-semibold">Today's Top Selling</CardTitle>
                     <CardDescription>Best performers today</CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    <div className="space-y-4">
+                  <CardContent className="px-4 md:px-6">
+                    <div className="space-y-3 md:space-y-4">
                       {stats.top_products.map((product, index) => (
                         <div
                           key={index}
-                          className="flex items-center justify-between p-4 rounded-lg border bg-card"
+                          className="flex items-center justify-between p-3 md:p-4 rounded-lg border bg-card"
                           data-testid={`top-product-${index}`}
                         >
-                          <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center font-bold text-primary">
+                          <div className="flex items-center gap-3 md:gap-4 min-w-0">
+                            <div className="w-8 h-8 md:w-10 md:h-10 rounded-lg bg-primary/10 flex items-center justify-center font-bold text-primary text-sm md:text-base shrink-0">
                               #{index + 1}
                             </div>
-                            <div>
-                              <div className="font-semibold text-lg">{product.name}</div>
-                              <div className="text-sm text-muted-foreground">
+                            <div className="min-w-0">
+                              <div className="font-semibold text-sm md:text-lg truncate">{product.name}</div>
+                              <div className="text-xs md:text-sm text-muted-foreground">
                                 {product.quantity} sold today
                               </div>
                             </div>
                           </div>
-                          <div className="text-right">
-                            <div className="text-xl font-bold font-mono text-emerald-600">
+                          <div className="text-right shrink-0 ml-2">
+                            <div className="text-base md:text-xl font-bold font-mono text-emerald-600">
                               {getCurrencySymbol(currency)}{product.revenue.toFixed(2)}
                             </div>
                             <div className="text-xs text-muted-foreground">Revenue</div>

@@ -65,7 +65,7 @@ const RestaurantSettings = () => {
 
   if (loading) {
     return (
-      <div className="flex">
+      <div className="flex flex-col md:flex-row min-h-screen">
         <Sidebar />
         <div className="flex-1 p-8">
           <div className="text-center py-12">Loading...</div>
@@ -75,12 +75,12 @@ const RestaurantSettings = () => {
   }
 
   return (
-    <div className="flex">
+    <div className="flex flex-col md:flex-row min-h-screen">
       <Sidebar />
-      <div className="flex-1 p-8">
+      <div className="flex-1 min-w-0 p-4 md:p-8">
         <div className="max-w-4xl mx-auto">
           <div className="mb-8">
-            <h1 className="text-4xl font-bold tracking-tight mb-2">Restaurant Settings</h1>
+            <h1 className="text-2xl md:text-4xl font-bold tracking-tight mb-1 md:mb-2">Restaurant Settings</h1>
             <p className="text-muted-foreground">
               Customize your business information that appears on receipts
             </p>
