@@ -2,13 +2,12 @@ import React, { useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from './ui/button';
-import { Sheet, SheetContent, SheetTrigger } from './ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from './ui/sheet';
 import { 
   LayoutDashboard, Package, FolderTree, ShoppingCart, FileText, LogOut, 
-  Wallet, Settings, Users, Printer, Store, BarChart3, Globe, Building2, Menu
+  Wallet, Settings, Users, Printer, BarChart3, Globe, Building2, Menu
 } from 'lucide-react';
 
-// Platform Owner Menu
 const platformOwnerMenu = [
   { path: '/platform/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/restaurants', icon: Building2, label: 'Restaurants' },
@@ -17,7 +16,6 @@ const platformOwnerMenu = [
   { path: '/platform/settings', icon: Settings, label: 'Platform Settings' },
 ];
 
-// Restaurant Admin Menu
 const restaurantAdminMenu = [
   { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/tables', icon: Users, label: 'Tables' },
@@ -31,7 +29,6 @@ const restaurantAdminMenu = [
   { path: '/settings', icon: Settings, label: 'Settings' },
 ];
 
-// POS Staff Menu
 const posStaffMenu = [
   { path: '/pos', icon: ShoppingCart, label: 'POS' },
   { path: '/orders', icon: FileText, label: 'Orders' },
@@ -43,7 +40,6 @@ const Sidebar = ({ title = 'HevaPOS', subtitle = '' }) => {
   const { user, logout, isPlatformOwner, isRestaurantAdmin } = useAuth();
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
-  // Select menu based on user role
   let menuItems = posStaffMenu;
   let defaultSubtitle = 'POS Terminal';
   
@@ -56,78 +52,115 @@ const Sidebar = ({ title = 'HevaPOS', subtitle = '' }) => {
   }
 
   const handleLogout = () => {
+    setMobileMenuOpen(false);
     logout();
     navigate('/login');
   };
 
-  const NavContent = ({ onItemClick }) => (
-    <>
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-        <p className="text-sm text-muted-foreground mt-1 opacity-80">{subtitle || defaultSubtitle}</p>
-        {user && (
-          <p className="text-xs mt-2 opacity-60">
-            Logged in as: {user.username}
-          </p>
-        )}
-      </div>
-      
-      <nav className="space-y-2 flex-1">
-        {menuItems.map((item) => (
-          <Link
-            key={item.path}
-            to={item.path}
-            onClick={onItemClick}
-            data-testid={`sidebar-link-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
-            className={`sidebar-link ${location.pathname === item.path ? 'active' : ''}`}
-          >
-            <item.icon className="w-5 h-5" />
-            <span>{item.label}</span>
-          </Link>
-        ))}
-      </nav>
-      
-      <div className="mt-auto pt-8">
-        <Button
-          variant="outline"
-          data-testid="logout-button"
-          className="w-full justify-start bg-transparent border-white/20 text-white hover:bg-white/10"
-          onClick={handleLogout}
-        >
-          <LogOut className="w-5 h-5 mr-3" />
-          Logout
-        </Button>
-      </div>
-    </>
-  );
+  const handleNavClick = () => {
+    setMobileMenuOpen(false);
+  };
 
   return (
     <>
       {/* Desktop Sidebar */}
       <div className="sidebar hidden md:flex">
-        <NavContent />
+        <div className="mb-6 flex-shrink-0">
+          <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+          <p className="text-sm text-muted-foreground mt-1 opacity-80">{subtitle || defaultSubtitle}</p>
+          {user && <p className="text-xs mt-2 opacity-60">Logged in as: {user.username}</p>}
+        </div>
+        <nav className="space-y-1 flex-1 overflow-y-auto">
+          {menuItems.map((item) => (
+            <Link
+              key={item.path}
+              to={item.path}
+              data-testid={`sidebar-link-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+              className={`sidebar-link ${location.pathname === item.path ? 'active' : ''}`}
+            >
+              <item.icon className="w-5 h-5" />
+              <span>{item.label}</span>
+            </Link>
+          ))}
+        </nav>
+        <div className="flex-shrink-0 pt-4 mt-4 border-t border-white/10">
+          <Button
+            variant="outline"
+            data-testid="logout-button"
+            className="w-full justify-start bg-transparent border-white/20 text-white hover:bg-white/10"
+            onClick={handleLogout}
+          >
+            <LogOut className="w-5 h-5 mr-3" />
+            Logout
+          </Button>
+        </div>
       </div>
 
-      {/* Mobile Header */}
+      {/* Mobile Header + Sheet Menu */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-slate-900 text-white px-4 py-3 flex items-center justify-between">
         <h1 className="text-lg font-bold">{title}</h1>
         <div className="flex items-center gap-2">
           <span className="text-sm opacity-70">{user?.username}</span>
           <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="sm" className="text-white">
+              <Button variant="ghost" size="sm" className="text-white p-1" data-testid="mobile-menu-button">
                 <Menu className="w-6 h-6" />
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-[280px] bg-slate-900 text-white border-slate-700 p-4">
-              <NavContent onItemClick={() => setMobileMenuOpen(false)} />
+            <SheetContent 
+              side="right" 
+              className="w-[280px] bg-slate-900 text-white border-slate-700 p-0 flex flex-col"
+            >
+              <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
+              
+              {/* Header inside sheet */}
+              <div className="p-4 pb-2 flex-shrink-0">
+                <h2 className="text-xl font-bold">{title}</h2>
+                <p className="text-sm opacity-70 mt-1">{subtitle || defaultSubtitle}</p>
+                {user && <p className="text-xs mt-1 opacity-50">Logged in as: {user.username}</p>}
+              </div>
+
+              {/* Scrollable nav links */}
+              <div className="flex-1 overflow-y-auto px-3 py-2">
+                <nav className="flex flex-col gap-1">
+                  {menuItems.map((item) => (
+                    <Link
+                      key={item.path}
+                      to={item.path}
+                      onClick={handleNavClick}
+                      data-testid={`mobile-sidebar-link-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
+                      className={`flex items-center gap-3 px-3 py-3 rounded-lg text-base font-medium transition-colors ${
+                        location.pathname === item.path 
+                          ? 'bg-blue-600 text-white' 
+                          : 'text-white/90 hover:bg-white/10 active:bg-white/20'
+                      }`}
+                    >
+                      <item.icon className="w-5 h-5 shrink-0" />
+                      <span>{item.label}</span>
+                    </Link>
+                  ))}
+                </nav>
+              </div>
+
+              {/* Logout pinned at bottom */}
+              <div className="flex-shrink-0 p-4 border-t border-white/10">
+                <Button
+                  variant="outline"
+                  data-testid="mobile-logout-button"
+                  className="w-full justify-start bg-transparent border-white/20 text-white hover:bg-white/10"
+                  onClick={handleLogout}
+                >
+                  <LogOut className="w-5 h-5 mr-3" />
+                  Logout
+                </Button>
+              </div>
             </SheetContent>
           </Sheet>
         </div>
       </div>
 
       {/* Spacer for mobile header */}
-      <div className="md:hidden h-14" />
+      <div className="md:hidden h-14 flex-shrink-0" />
     </>
   );
 };

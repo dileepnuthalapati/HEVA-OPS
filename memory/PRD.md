@@ -13,60 +13,6 @@ Build a multi-tenant SaaS POS system called "HevaPOS" with:
 2. **Restaurant Admin**: Manages single restaurant's dashboard, settings, POS operations
 3. **Staff User**: Access only to dedicated POS screen for taking orders
 
-## Core Requirements
-- Multi-tenant data isolation per restaurant
-- Role-based access control with dedicated layouts/navigation
-- Table management with status tracking
-- Printer management (WiFi/Bluetooth ESC/POS)
-- Basic reservations system
-- Advanced payment options (split bills, multiple payment methods)
-- Dynamic currency based on restaurant settings
-
----
-
-## Implementation Status
-
-### Completed Features (as of March 2026)
-- [x] User Authentication (JWT-based)
-- [x] Restaurant Management (CRUD)
-- [x] Role-based architecture (shared Sidebar component)
-- [x] Table Management (CRUD + status tracking)
-- [x] Printer Management (WiFi/Bluetooth)
-- [x] Basic Reservations
-- [x] Table Selection in POS
-- [x] User Creation by Platform Owner
-- [x] Kitchen & Customer Receipt Printing
-- [x] Split Bill functionality
-- [x] Clear Table on Payment
-- [x] Discounts/Coupons on orders
-- [x] Order Notes for kitchen
-- [x] Multiple Payment Methods (cash + card split)
-- [x] Edit Pending Orders
-- [x] Dynamic Currency Symbols
-- [x] Railway Deployment (Backend)
-- [x] Capacitor Configuration (APK)
-- [x] White-labeling (Emergent badge removed)
-- [x] **Product Search** - Real-time search/filter in POS
-- [x] **Custom/Temporary Items** - Add items not in menu to cart
-- [x] **Double-click prevention** - Fixed duplicate item additions
-
-### In Progress
-- None
-
-### Upcoming Tasks (P1)
-- [ ] Subscription Management (trial → active/suspended logic)
-- [ ] Email Notifications (trial expiry alerts)
-
-### Future Tasks (P2)
-- [ ] Revenue Dashboard for Platform Owner
-- [ ] Payment Gateway Integration (Stripe/Square/Razorpay)
-- [ ] Kitchen Display System (KDS)
-
-### Backlog
-- [ ] Backend refactoring (server.py split into routers)
-
----
-
 ## Technical Architecture
 
 ### Stack
@@ -76,22 +22,69 @@ Build a multi-tenant SaaS POS system called "HevaPOS" with:
 - **Hosting**: Railway (Backend)
 
 ### Key Files
-- `/app/backend/server.py` - Monolithic API (~2100 lines)
-- `/app/frontend/src/pages/POSScreen.js` - Main POS UI (with search, custom items)
-- `/app/frontend/src/components/Sidebar.js` - Role-based navigation
-- `/app/frontend/capacitor.config.json` - APK configuration
+- `/app/backend/server.py` - Monolithic API (~2400 lines)
+- `/app/frontend/src/pages/POSScreen.js` - Main POS UI
+- `/app/frontend/src/pages/PrinterSettings.js` - Consolidated printer management
+- `/app/frontend/src/pages/OrderHistory.js` - Orders list with Reprint Receipt
+- `/app/frontend/src/components/Sidebar.js` - Role-based nav, mobile hamburger sheet
+- `/app/frontend/src/index.css` - Minimal global styles, pos-screen responsive rules
 
 ### Database Schema
 - `restaurants`: {id, business_info, currency, users}
 - `users`: {id, username, role, restaurant_id}
-- `orders`: {notes, discount, payment_details, status, items (includes is_custom flag)}
+- `orders`: {notes, discount, payment_details, status, items}
 - `tables`, `printers`, `reservations`
 
 ### Key API Endpoints
-- `GET /` - Healthcheck (Railway)
-- `PUT /api/restaurants/my/settings` - Update tenant settings
-- `PUT /api/orders/{order_id}` - Edit pending order
-- `PUT /api/orders/{order_id}/complete` - Complete with split payments
+- `GET /api/dashboard/today` - Today's stats
+- `GET /api/orders` - List all orders
+- `POST /api/orders/{order_id}/cancel` - Cancel order
+- `POST /api/orders/{order_id}/print-customer-receipt` - Reprint receipt
+- `PUT /api/auth/password` - Change password
+
+---
+
+## Implementation Status
+
+### Completed Features
+- [x] JWT Authentication with role-based access
+- [x] Restaurant Management (CRUD)
+- [x] Table Management (CRUD + status tracking)
+- [x] Printer Management - consolidated to PrinterSettings page
+- [x] POS Screen (text-only layout, no images, compact cart)
+- [x] Product Search, Custom Items, Categories
+- [x] Split Payments, Discounts, Order Notes
+- [x] Kitchen & Customer Receipt generation
+- [x] Dynamic Currency Symbols
+- [x] Railway Deployment, Capacitor Config
+- [x] **Full Mobile Responsiveness** (all screen sizes: 320px → 1920px+)
+  - Sidebar hidden on mobile with hamburger Sheet menu (all items visible)
+  - Fixed mobile header with username + menu toggle
+  - flex-col/flex-row layout switching via Tailwind md: breakpoint
+  - Responsive headings (text-2xl → text-4xl), padding (p-4 → p-8)
+  - POS compact header, scrollable categories, 2-col product grid on mobile
+  - Cart stacks below products on mobile (40vh max)
+- [x] **Reprint Receipt** button on Orders page (printer icon + download)
+- [x] **Dashboard Total Orders clickable** → navigates to /orders
+- [x] Printer setup removed from POS & RestaurantSettings (only in /printers)
+- [x] Orders API resilient to legacy data formats (Optional defaults on model)
+
+### Upcoming Tasks (P0)
+- [ ] Bluetooth Printer Discovery fix for Android APK (Capacitor plugin)
+
+### Upcoming Tasks (P1)
+- [ ] Subscription Management (trial → active/suspended lifecycle)
+- [ ] Email Notifications (trial expiry alerts)
+
+### Future Tasks (P2)
+- [ ] Payment Gateway Integration (Stripe/Square/Razorpay)
+- [ ] Revenue Dashboard for Platform Owner
+- [ ] Kitchen Display System (KDS)
+- [ ] iOS App Build Prep
+
+### Backlog
+- [ ] Backend refactoring (split server.py ~2400 lines into routers)
+- [ ] POSScreen.js split into sub-components (~1350 lines)
 
 ---
 
@@ -101,13 +94,7 @@ Build a multi-tenant SaaS POS system called "HevaPOS" with:
 - Staff User: `user` / `user123`
 
 ## Deployment Notes
-- Backend on Railway requires `PORT` environment variable (dynamic binding)
-- MongoDB Atlas requires IP whitelist (currently `0.0.0.0/0`)
-- APK built locally by user using Capacitor
-- User syncs code to GitHub for Railway auto-deployment
-
-## Latest Changes (March 27, 2026)
-1. Added product search bar with real-time filtering
-2. Added "Custom Item" button to add temporary products to cart
-3. Fixed double-click bug causing multiple item additions
-4. Custom items display with "Custom" badge in cart
+- Backend on Railway requires `PORT` env var
+- MongoDB Atlas requires IP whitelist
+- APK built locally via Capacitor
+- User syncs to GitHub for Railway auto-deploy

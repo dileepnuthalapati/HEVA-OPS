@@ -186,7 +186,7 @@ const TableManagement = () => {
 
   if (loading) {
     return (
-      <div className="flex">
+      <div className="flex flex-col md:flex-row min-h-screen">
         <Sidebar />
         <div className="flex-1 p-8">
           <div className="text-center py-12">Loading...</div>
@@ -196,14 +196,14 @@ const TableManagement = () => {
   }
 
   return (
-    <div className="flex">
+    <div className="flex flex-col md:flex-row min-h-screen">
       <Sidebar />
-      <div className="flex-1 p-8">
+      <div className="flex-1 min-w-0 p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-4xl font-bold tracking-tight mb-2">Table Management</h1>
+              <h1 className="text-2xl md:text-4xl font-bold tracking-tight mb-1 md:mb-2">Table Management</h1>
               <p className="text-muted-foreground">Manage tables, reservations, and seating</p>
             </div>
             <div className="flex gap-2">

@@ -98,12 +98,12 @@ const Reports = () => {
   };
 
   return (
-    <div className="flex">
+    <div className="flex flex-col md:flex-row min-h-screen">
       <Sidebar />
-      <div className="flex-1 p-8">
+      <div className="flex-1 min-w-0 p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
           <div className="mb-8">
-            <h1 className="text-4xl font-bold tracking-tight mb-2">Sales Reports</h1>
+            <h1 className="text-2xl md:text-4xl font-bold tracking-tight mb-1 md:mb-2">Sales Reports</h1>
             <p className="text-muted-foreground">Generate detailed sales reports for any date range</p>
           </div>
 
