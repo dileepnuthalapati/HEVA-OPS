@@ -5,4 +5,4 @@ import pytest
 import os
 
 # Set environment variable for tests
-os.environ.setdefault('REACT_APP_BACKEND_URL', 'https://restaurant-orders-38.preview.emergentagent.com')
+os.environ.setdefault('REACT_APP_BACKEND_URL', 'https://heva-pos-preview.preview.emergentagent.com')

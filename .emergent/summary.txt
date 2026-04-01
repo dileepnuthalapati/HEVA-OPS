@@ -1,159 +1,144 @@
-<analysis>**original_problem_statement**: The user wants to build and deploy a multi-tenant restaurant POS system called HevaPOS. The initial phase involved cloning the codebase from GitHub, fixing critical deployment and authentication blockers, and establishing a stable development environment.
-
-The project has since progressed through several feature implementation cycles. The core tasks completed include:
-1.  **Role-Based Access Control**: Correctly implementing and differentiating the Platform Owner, Restaurant Admin, and Staff roles.
-2.  **Architectural Refactoring**: Creating dedicated, role-specific layouts and navigation sidebars to prevent users from accessing incorrect pages.
-3.  **Core POS Features**: Implementing Table Management, Printer Management (ESC/POS), and a Reservation system.
-4.  **Advanced POS & Payment Features**: Adding table selection to the POS screen, user management by the platform owner, automated kitchen receipt printing, split-bill functionality, and automatic table clearing upon payment.
-5.  **Current Task**: Implementing more advanced order and payment features, including order notes, discounts/coupons, and handling payments split between multiple methods (e.g., part cash, part card).
+<analysis>**original_problem_statement**: The user is building a multi-tenant SaaS POS system called HevaPOS. The system requires a backend deployed on Railway, a frontend packaged as an Android/iOS APK via Capacitor, and role-based access (Platform Owner, Restaurant Admin, Staff). The app requires advanced POS features including table management, dynamic currency, split payments, order editing, and live multi-device syncing.
 
 PRODUCT REQUIREMENTS:
-- A multi-tenant SaaS POS system with data isolation per restaurant.
-- Three distinct roles: Platform Owner, Restaurant Admin, and Staff user.
-- A Platform Owner dashboard to manage restaurants and global settings.
-- A comprehensive Restaurant Admin dashboard to manage day-to-day operations (products, orders, tables, etc.).
-- A dedicated POS screen for staff.
-- Support for thermal printers (Bluetooth/WiFi), table management, and reservations.
-- Advanced payment options including split bills and multiple payment methods.
+- Cloud-based backend (FastAPI) and DB (MongoDB Atlas) to support real-time multi-device syncing.
+- Android APK capability for tablets/phones (iOS planned).
+- Three user roles with distinct capabilities.
+- Full POS functionality: cart, discounts, order notes, cash/card split payments, receipt printing, custom items.
+- Customization per tenant (currency, receipt details, tables, menus, printers).
 
-**User's preferred language**: English
+**User's preferred language**: English (INSTRUCT NEXT AGENT: Respond in English)
 
-**what currently exists?**
-- A full-stack HevaPOS application (React frontend, FastAPI backend) is running in the workspace.
-- The application is configured to use a local MongoDB instance for development and testing, as the user's MongoDB Atlas instance had connection issues (suspected IP whitelist).
-- A robust, three-tiered role-based access system is fully functional:
-    - **Platform Owner**: Manages restaurants and global settings.
-    - **Restaurant Admin**: Manages a specific restaurant's dashboard, settings, and POS operations.
-    - **Staff User**: Has access only to the dedicated POS screen.
-- **Implemented Features**: User Authentication, Restaurant Management, Table Management (with status tracking), Printer Management (WiFi/Bluetooth), Basic Reservations, Table Selection in POS, User Creation by Platform Owner, Kitchen & Customer Receipt Printing, and Split Bill functionality.
-- Code for the latest features (discounts, order notes, and split payment methods) has been added to both the frontend and backend.
+**what currently exists?** 
+A production-ready HevaPOS application. Backend is deployed on Railway, connected to MongoDB Atlas. Frontend is configured with Capacitor for Android. The POS screen has been heavily optimized for fast-paced environments (text-only layout, large buttons, compact cart). Admin dashboard now tracks daily statistics. Features like platform admin management, password changes, custom items, POS search, offline order caching, and order cancellation have been implemented. The app uses role-based sidebar navigation, which includes mobile-responsive headers. In the previous session, mobile UI responsiveness was fixed, Printer Setup was moved to , and a mobile logout button was added.
 
 **Last working item**:
-- Last item agent was working: Implementing advanced order and payment features: (1) Applying discounts/coupons to orders, (2) Adding notes to orders (for the kitchen), and (3) Handling orders paid with multiple methods (e.g., part cash, part card). The agent has written the necessary backend models, API endpoints, and frontend UI components in .
-- Status: IN PROGRESS
+- Last item agent was working: The agent just started the session, read the handoff summary, and sent an  tool call to get user approval on the upcoming plan (which focuses on fixing the Bluetooth Printer Discovery failing in the Android App and testing the recent mobile UI fixes). 
+- Status: BLOCKED (Waiting for user response to )
 - Agent Testing Done: N
-- Which testing method agent to use? both
+- Which testing method agent to use? screenshot tool (for UI) and testing_agent_v3_fork
 - User Testing Done: N
 
 **All Pending/In progress Issue list**:
-- There are no pending bugs. All work is focused on new feature implementation.
+Issue 1: Bluetooth Printer Discovery Failing in Android App (Capacitor WebView) (P0)
+   - Attempted fixes: Previous agent implemented  for Web Bluetooth API discovery, which works in Chrome browsers but fails in native Android WebViews without a specific Capacitor plugin.
+   - Next debug checklist: 
+      - Check  for missing plugins.
+      - Check .
+      - Check  to implement  checks and utilize native plugin methods instead of standard Web APIs.
+      - Need to install and configure  or a similar native Bluetooth serial plugin.
+   - Why fix this issue and what will be achieved with the fix? User relies on the Android APK on tablets to run the POS and connect to thermal printers. Essential for hardware printing.
+   - Status: NOT STARTED (Pending user response to )
+   - Is recurring issue? N
+   - Should Test frontend/backend/both after fix? Frontend
+   - Blocked on other issue: Waiting for user reply to 
 
-**In progress Task List**:
-  - **Task 1: Complete and Test New Payment & Order Features (P0)**
-     - **Where to resume**: The backend and frontend code has been written. The immediate next steps are to test the implementation.
-       1. Restart the backend service to apply the latest code changes in .
-       2. Use  or a test script to verify the updated  and  backend endpoints now correctly handle , , and  payloads.
-       3. Use the  to test the frontend  UI:
-          - Verify the new Add Discount and Add Note popovers/inputs in the cart section.
-          - Verify that placing an order correctly passes this data.
-          - Test the updated payment dialog to ensure it correctly handles split payments (e.g., paying 0 cash and 5 card on a 5 bill).
-       4. After manual verification, run the  for comprehensive regression and feature testing.
-     - **What will be achieved with this?**: The POS will support more complex, real-world transaction scenarios, making it more feature-complete.
-     - **Status**: IN PROGRESS
-     - **Should Test frontend/backend/both after fix?**: Both
-     - **Blocked on something**: No
+**In progress Task List**: None currently active (pending user response).
 
 **Upcoming and Future Tasks**
-- **Upcoming Tasks**:
-    - **P1**: Subscription Management: Implement logic to handle restaurant subscription status (e.g., transition from  to  or ).
-    - **P1**: Email Notifications: Send emails for events like trial expiry.
-    - **P2**: Revenue Dashboard: Create a dashboard for the Platform Owner with charts and analytics on overall revenue.
+Upcoming Tasks:
+- P1: Subscription Management: Implement logic to handle restaurant subscription status (transition from trial to active/suspended).
+- P1: Email Notifications: Send emails for events like trial expiry.
+- P1: Android/Capacitor Bluetooth Plugin Integration: Fix hardware integration on the tablet app (Issue 1).
+- P2: Deliverect / Middleware API Integration: To support UberEats, Deliveroo, etc., as discussed with the user.
+- P2: Revenue Dashboard: Platform Owner dashboard with charts/analytics.
+- P2: iOS App Build Prep: Finalize configurations for iOS deployment.
 
-- **Future Tasks**:
-    - Payment Gateway Integration (e.g., Stripe, Square, Razorpay) - This was deferred by the user.
-    - Kitchen Display System (KDS).
-    - Android APK Build (to be handled by the user).
+Future Tasks:
+- P2: Payment Gateway Integration (Stripe, Square, Razorpay) - Deferred.
+- P2: Kitchen Display System (KDS).
 
 **Completed work in this session**
-- **Critical Bug Fixes**: Resolved initial backend deployment and authentication failures by switching to a local MongoDB and fixing  dependency issues.
-- **Role-Based Architecture**: Refactored the frontend to use a shared  component and created role-specific pages and navigation, fixing all access control and UI consistency issues.
-- **Table & Printer Management**: Implemented full CRUD functionality and UI for managing restaurant tables and ESC/POS printers.
-- **POS Features (Set 1)**: Added table selection to the POS cart, enabled the Platform Owner to create and manage restaurant users, and automated kitchen receipt generation.
-- **Payment Features (Set 1)**: Implemented clear table after payment, a robust split-bill feature (by number of people), and customer receipt printing.
+- No code changes have been made in this specific session yet. The agent immediately sent an  call to confirm the action plan.
+
+*(Inherited from previous session)*:
+- Fixed mobile CSS responsiveness across the app (DONE)
+- Moved Printer Config to  (DONE)
+- Added mobile top-header with logout button (DONE)
 
 **Earlier issues found/mentioned but not fixed**
-- None.
+- None beyond the Capacitor Bluetooth compatibility issue.
 
 **Known issue recurrence from previous fork**
-- The  from the initial handoff was resolved by switching from MongoDB Atlas to the local MongoDB instance. This was a workaround due to a likely IP whitelist issue on the user's Atlas cluster. The agent should remember this context if ever asked to deploy to a live environment that uses Atlas.
+- Issue recurrence in previous fork: GitHub Syncing / Deployment.
+- Recurrence count: 3
+- Status: RESOLVED (Agent instructs user to copy updated files to their GitHub repo for live deployment, as Railway is linked to the user's GitHub).
 
 **Code Architecture**
 
 
 **Key Technical Concepts**
-- **Frontend**: React, React Router, Tailwind CSS, Shadcn UI,  for icons.
-- **Backend**: FastAPI, Motor (async MongoDB driver), JWT,  with .
-- **Database**: Local MongoDB for development.
-- **State Management**: React Context ().
+- Frontend: React, Tailwind CSS, Shadcn UI, Capacitor (Android APK), Web Bluetooth API.
+- Backend: FastAPI, Motor (async MongoDB driver).
+- Database: MongoDB Atlas (Production).
+- Hardware: ESC/POS Thermal Printers (WiFi / Bluetooth).
 
 **key DB schema**
-- **Order Model Update**: The  collection schema has been extended to include:
-    - 
-    -  (e.g., )
-    -  (e.g., )
-- **New Collections**: , , .
+- : {uid=0(root) gid=0(root) groups=0(root), , , , }
+- : {uid=0(root) gid=0(root) groups=0(root), , , , }
+- : {uid=0(root) gid=0(root) groups=0(root), , , , , }
 
 **changes in tech stack**
-- No changes to the core tech stack.
+- Transitioned towards utilizing Capacitor APIs for hardware (pending Bluetooth plugin).
 
 **All files of reference**
-- : Contains all backend logic; significantly expanded.
-- : The main hub for new POS and payment UI logic.
-- : Contains all frontend-to-backend API call definitions.
-- : Defines the role-based navigation structure.
-- : The living document tracking project progress.
+- : Rewritten heavily for mobile flex/grid responsiveness.
+- : Contains new mobile overlay header with logout.
+- : Contains the newly relocated printer setup dialog.
+- : Contains Web Bluetooth & network printing connection logic (needs Capacitor updates).
+- : Contains new endpoints for dashboard today stats, order cancellation, platform admins, password updates.
+-  & : Need to be checked/updated for the Capacitor Bluetooth plugin.
 
 **Areas that need refactoring**:
-- The  file is now over 1900 lines long. It is becoming difficult to maintain and should be refactored into a standard FastAPI project structure with separate directories for , , and .
+-  is over 2300 lines. Desperately needs splitting into separate routers (, , ).
+-  is ~1500 lines long and handles too much state. Cart, Products Grid, and Dialogs should be broken into sub-components.
 
 **key api endpoints**
-- **Updated Endpoints**:
-    - : Now accepts  and  in the payload.
-    - : Now accepts a  list in the payload to handle multiple payment methods.
-- **New Endpoints**:
-    - : To create a new user for a restaurant.
-    - Full CRUD endpoints for , , and .
+- : Fetches statistics strictly for the current day.
+- : Cancels an active order.
+- : Creates a secondary platform owner.
+- : Changes logged-in user's password.
 
 **Critical Info for New Agent**
-- **Use Local MongoDB**: The application is configured to use the local MongoDB instance. Do not attempt to switch back to MongoDB Atlas unless the user confirms the IP whitelist issue is resolved.
-- **Test After Implementation**: Continue the established workflow of writing code for a feature set, performing a quick manual test with , and then running  for comprehensive verification before finishing.
-- **Monolithic Backend**: Be aware that  contains all backend logic. When adding new features, you will be modifying this large file. Proposing a refactor as a future task would be beneficial.
+- **Pending Human Response**: The next agent will inherit the context right as the user responds to the  tool. Read the user's reply carefully to determine priority.
+- **Production Environment**: The user is actively testing the APK in real life, pointing to their Railway backend. Always remind the user to copy/sync files to their GitHub to trigger Railway builds when backend changes are made.
+- **Do not revert POS Layout**: The user specifically requested a text-only, compact layout for the POS (no product images) to speed up order taking. Do not add images back.
+- **Capacitor Limitations**: Any hardware interactions (Bluetooth, Network) fail in the Android APK if relying solely on standard Web APIs (). Always use Capacitor plugins for native builds.
+- **Context Limit**: The backend () and frontend () files are huge. Try to limit viewing entire files and use  precisely.
 
 **documents and test reports created in this job**
-- 
-- 
-- 
-- 
-- 
+-  (Updated in previous fork)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User**: Asked why only Stripe was suggested for payments. **(Resolved)**
-2.  **User**: Deferred payment integration and raised 3 architectural issues about role-based access and UI. **(Resolved)**
-3.  **User**: Confirmed the plan to implement: Table Selection in POS, Restaurant User Creation, and Kitchen Receipt Printing. **(Completed)**
-4.  **User**: Asked for the next action items. **(Resolved)**
-5.  **User**: Confirmed the plan to implement: Clear Table on Payment, Split Bill, and Customer Receipt Print. **(Completed)**
-6.  **User**: Asked for the next action items. **(Resolved)**
-7.  **User**: Confirmed the plan to implement: Multiple Payment Methods, Order Notes, and Discounts/Coupons. **(In Progress)**
+1. User: Asked about integrating with UberEats/Deliveroo and iOS build process. (Resolved)
+2. User: Mobile rendering issues, printer setup location wrong, missing logout, and Bluetooth search failing in Android app. (UI issues fixed, Bluetooth pending)
+3. **PENDING HUMAN MESSAGE**: The agent sent an  proposing the plan for this session (focusing on the Capacitor Bluetooth fix) and is waiting for the user's response. The next message will be the user's reply.
 
 **Project Health Check:**
-- **Broken**: None. The application is stable and all major bugs have been fixed.
-- **Mocked**: The thermal printer integration relies on the browser's Web Serial API (), which functions as a mock in the testing environment but is designed to connect to real hardware.
+- Broken: Android APK Bluetooth Discovery (Fails in WebView).
+- Mocked: None.
 
 **3rd Party Integrations**
-- **MongoDB Atlas**: Credentials exist but the connection is disabled in favor of a local MongoDB instance.
-- **Railway**: The user's chosen platform for live deployment (not managed by the agent).
+- MongoDB Atlas (Database) — requires User-provided connection string.
+- Railway (Backend Hosting) — managed by User.
 
 **Testing status**
-- **Testing agent used after significant changes**: YES. Four test reports have been generated, and the agent has successfully acted on the feedback.
-- **Troubleshoot agent used after agent stuck in loop**: NO (in this session).
-- **Test files created**: None.
-- **Known regressions**: No known regressions. Previous regressions were caught and fixed within the session.
+- Testing agent used after significant changes: NO (Pending until UI testing and Bluetooth fix are done).
+- Troubleshoot agent used after agent stuck in loop: NO.
+- Test files created: None.
+- Known regressions: Web Bluetooth failing inside the Android Capacitor environment.
 
 **Credentials to test flow:**
-- **Platform Owner**:  / 
-- **Restaurant Admin**:  / 
-- **Staff User**:  / 
+- Platform Owner:  / 
+- Restaurant Admin:  / 
+- Staff User:  / 
 
 **What agent forgot to execute**
-- The agent has not yet tested the most recent code changes for discounts, notes, and split-method payments. This is the immediate next step.
-- The two minor, non-critical unused variable linting errors in  still exist.</analysis>
+- The agent has not yet fixed the Android APK Bluetooth issue because they are waiting on the user's approval to begin.
+
+**Debugging checklist for current issue**
+    Issue: Bluetooth discovery fails in Android App (Capacitor WebView)
+    Frontend files to check: 
+    -  (Check for missing capacitor bluetooth plugins)
+    - 
+    -  (Update logic to check  and use native plugin methods like  instead of ).</analysis>
