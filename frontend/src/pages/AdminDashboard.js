@@ -61,7 +61,7 @@ const AdminDashboard = () => {
             <h1 className="text-2xl md:text-4xl font-bold tracking-tight mb-1 md:mb-2" data-testid="dashboard-heading">Today's Dashboard</h1>
             <p className="text-sm md:text-base text-muted-foreground flex items-center gap-2">
               <Calendar className="w-4 h-4 shrink-0" />
-              <span>{today} &bull; Stats reset daily at midnight</span>
+              <span>{today} &bull; Business day resets at 2:00 AM</span>
             </p>
           </div>
 
@@ -104,6 +104,10 @@ const AdminDashboard = () => {
                       <div className="text-xl md:text-3xl font-bold font-mono">
                         {getCurrencySymbol(currency)}{stats?.total_sales?.toFixed(2) || '0.00'}
                       </div>
+                    </div>
+                    <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
+                      <span>Cash: <strong className="font-mono">{getCurrencySymbol(currency)}{stats?.cash_total?.toFixed(2) || '0.00'}</strong></span>
+                      <span>Card: <strong className="font-mono">{getCurrencySymbol(currency)}{stats?.card_total?.toFixed(2) || '0.00'}</strong></span>
                     </div>
                   </CardContent>
                 </Card>

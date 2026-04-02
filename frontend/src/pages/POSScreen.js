@@ -759,7 +759,7 @@ const POSScreen = () => {
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <ShoppingCart className="w-5 h-5" />
-                  <h2 className="text-lg font-bold">Cart</h2>
+                  <h2 className="text-lg font-bold">Order</h2>
                 </div>
                 {cart.length > 0 && (
                   <Button variant="ghost" size="sm" data-testid="clear-cart-button" onClick={clearCart}>
@@ -802,7 +802,7 @@ const POSScreen = () => {
               {cart.length === 0 ? (
                 <div className="text-center py-6 text-muted-foreground">
                   <ShoppingCart className="w-10 h-10 mx-auto mb-2 opacity-50" />
-                  <p className="text-sm">Cart empty</p>
+                  <p className="text-sm">No items yet</p>
                 </div>
               ) : (
                 <div className="space-y-2">
@@ -952,15 +952,15 @@ const POSScreen = () => {
 
         return (
           <>
-            {/* Desktop Cart Sidebar - always visible */}
+            {/* Desktop Order Sidebar - always visible */}
             <div className="hidden md:flex w-[380px] bg-card border-l flex-col cart-sidebar">
               {cartContent}
             </div>
 
-            {/* Mobile Cart - Sheet drawer */}
+            {/* Mobile Order - Sheet drawer */}
             <Sheet open={mobileCartOpen} onOpenChange={setMobileCartOpen}>
               <SheetContent side="right" className="w-[340px] sm:w-[380px] p-0 flex flex-col">
-                <SheetTitle className="sr-only">Shopping Cart</SheetTitle>
+                <SheetTitle className="sr-only">Current Order</SheetTitle>
                 {cartContent}
               </SheetContent>
             </Sheet>
@@ -974,7 +974,7 @@ const POSScreen = () => {
                   onClick={() => setMobileCartOpen(true)}
                 >
                   <ShoppingCart className="w-5 h-5 mr-2" />
-                  Cart {cart.length > 0 && `(${cart.reduce((s, i) => s + i.quantity, 0)})`}
+                  Order {cart.length > 0 && `(${cart.reduce((s, i) => s + i.quantity, 0)})`}
                   {cart.length > 0 && (
                     <span className="ml-2 font-mono font-bold">{getCurrencySymbol(currency)}{calculateCartTotal().toFixed(2)}</span>
                   )}

@@ -6,23 +6,25 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
-import { LogIn } from 'lucide-react';
+import { Eye, EyeOff, WifiOff } from 'lucide-react';
 
 const Login = () => {
+  const navigate = useNavigate();
+  const { login } = useAuth();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
-  const { login } = useAuth();
-  const navigate = useNavigate();
+  const [showPassword, setShowPassword] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!navigator.onLine) {
+      toast.error('You are currently offline. Please check your connection.');
+      return;
+    }
     setLoading(true);
-
     try {
       const response = await login(username, password);
-      
-      // Route based on role
       if (response.user.role === 'platform_owner') {
         navigate('/platform/dashboard');
       } else if (response.user.role === 'admin') {
@@ -31,60 +33,45 @@ const Login = () => {
         navigate('/pos');
       }
     } catch (error) {
-      toast.error('Invalid username or password');
+      if (!navigator.onLine) {
+        toast.error('You are currently offline. Please check your connection.');
+      } else {
+        toast.error(error.response?.data?.detail || 'Invalid credentials');
+      }
     } finally {
       setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 to-slate-100 p-4">
-      <Card className="w-full max-w-md shadow-lg" data-testid="login-card">
-        <CardHeader className="space-y-4 text-center">
-          <div className="mx-auto w-16 h-16 bg-primary rounded-xl flex items-center justify-center">
-            <LogIn className="w-8 h-8 text-primary-foreground" />
-          </div>
-          <CardTitle className="text-4xl font-bold tracking-tight">HevaPOS</CardTitle>
-          <CardDescription className="text-base">Sign in to your account</CardDescription>
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 p-4">
+      <Card className="w-full max-w-md" data-testid="login-card">
+        <CardHeader className="text-center">
+          <CardTitle className="text-3xl font-bold">HevaPOS</CardTitle>
+          <CardDescription>Sign in to your account</CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-2">
-              <Label htmlFor="username" className="text-sm font-semibold">
-                Username
-              </Label>
-              <Input
-                id="username"
-                data-testid="username-input"
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="Enter your username"
-                required
-                className="h-12"
-              />
+          {!navigator.onLine && (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 text-sm text-amber-700" data-testid="offline-warning">
+              <WifiOff className="w-4 h-4 shrink-0" />
+              You are currently offline. Please check your connection.
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="password" className="text-sm font-semibold">
-                Password
-              </Label>
-              <Input
-                id="password"
-                data-testid="password-input"
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                required
-                className="h-12"
-              />
+          )}
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <Label htmlFor="username">Username</Label>
+              <Input id="username" data-testid="login-username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Enter username" required />
             </div>
-            <Button
-              type="submit"
-              data-testid="login-submit-button"
-              className="w-full h-12 text-base font-bold"
-              disabled={loading}
-            >
+            <div>
+              <Label htmlFor="password">Password</Label>
+              <div className="relative">
+                <Input id="password" data-testid="login-password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password" required className="pr-10" />
+                <button type="button" data-testid="toggle-password" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
+              </div>
+            </div>
+            <Button type="submit" data-testid="login-submit" className="w-full" disabled={loading}>
               {loading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>

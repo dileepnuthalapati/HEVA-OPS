@@ -103,7 +103,7 @@ const PlatformReports = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">${stats.totalRevenue.toFixed(2)}</div>
+                <div className="text-2xl font-bold">{stats.totalRevenue.toFixed(2)}</div>
                 <p className="text-xs text-emerald-600">Monthly recurring revenue</p>
               </CardContent>
             </Card>
@@ -116,7 +116,7 @@ const PlatformReports = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">${stats.avgRevenuePerRestaurant.toFixed(2)}</div>
+                <div className="text-2xl font-bold">{stats.avgRevenuePerRestaurant.toFixed(2)}</div>
                 <p className="text-xs text-muted-foreground">Per active customer</p>
               </CardContent>
             </Card>
@@ -208,7 +208,7 @@ const PlatformReports = () => {
                             {restaurant.subscription_plan || 'Standard'}
                           </td>
                           <td className="py-3 px-4 text-right font-medium">
-                            ${restaurant.price || 0}
+                            {restaurant.currency || 'GBP'} {restaurant.price || 0}
                           </td>
                           <td className="py-3 px-4 text-sm text-muted-foreground">
                             {new Date(restaurant.created_at).toLocaleDateString()}

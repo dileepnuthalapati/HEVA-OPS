@@ -43,7 +43,6 @@ export const authAPI = {
     return response.data;
   },
   login: async (username, password) => {
-    // Using secure login endpoint
     const response = await api.post('/auth/login', { username, password });
     if (response.data.access_token) {
       setAuthToken(response.data.access_token);
@@ -55,7 +54,7 @@ export const authAPI = {
     return response.data;
   },
   changePassword: async (currentPassword, newPassword) => {
-    const response = await api.post('/auth/change-password', {
+    const response = await api.put('/auth/change-password', {
       current_password: currentPassword,
       new_password: newPassword
     });
@@ -196,8 +195,8 @@ export const orderAPI = {
     await saveToIndexedDB('orders', response.data);
     return response.data;
   },
-  cancel: async (orderId) => {
-    const response = await api.put(`/orders/${orderId}/cancel`);
+  cancel: async (orderId, reason) => {
+    const response = await api.put(`/orders/${orderId}/cancel`, { reason });
     return response.data;
   },
   printKitchenReceipt: async (orderId) => {
@@ -443,5 +442,34 @@ export const notificationAPI = {
   },
 };
 
+export const staffAPI = {
+  getAll: async () => {
+    const response = await api.get('/restaurant/staff');
+    return response.data;
+  },
+  create: async (data) => {
+    const response = await api.post('/restaurant/staff', data);
+    return response.data;
+  },
+  update: async (id, data) => {
+    const response = await api.put(`/restaurant/staff/${id}`, data);
+    return response.data;
+  },
+  resetPassword: async (id, newPassword) => {
+    const response = await api.put(`/restaurant/staff/${id}/reset-password`, { new_password: newPassword });
+    return response.data;
+  },
+  delete: async (id) => {
+    const response = await api.delete(`/restaurant/staff/${id}`);
+    return response.data;
+  },
+};
+
+export const stripeAPI = {
+  createCheckout: async () => {
+    const response = await api.post('/stripe/create-checkout');
+    return response.data;
+  },
+};
 
 export default api;

@@ -124,7 +124,7 @@ const PlatformDashboard = () => {
                 <DollarSign className="h-5 w-5 text-emerald-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">${stats.thisMonthRevenue.toFixed(2)}</div>
+                <div className="text-3xl font-bold">{stats.thisMonthRevenue.toFixed(2)}</div>
                 <p className={`text-xs mt-1 ${Number(revenueGrowth) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                   {Number(revenueGrowth) >= 0 ? '+' : ''}{revenueGrowth}% from last month
                 </p>
@@ -146,19 +146,19 @@ const PlatformDashboard = () => {
               ) : (
                 <div className="space-y-4">
                   {restaurants.slice(0, 5).map((restaurant) => (
-                    <div key={restaurant.id} className="flex items-center justify-between p-4 border rounded-lg">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+                    <div key={restaurant.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 border rounded-lg gap-3">
+                      <div className="flex items-center gap-4 min-w-0">
+                        <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
                           <Building2 className="w-6 h-6 text-primary" />
                         </div>
-                        <div>
-                          <div className="font-semibold">{restaurant.business_info?.name || 'Unnamed'}</div>
-                          <div className="text-sm text-muted-foreground">
-                            {restaurant.business_info?.city || 'No location'} • {restaurant.owner_email}
+                        <div className="min-w-0">
+                          <div className="font-semibold truncate">{restaurant.business_info?.name || 'Unnamed'}</div>
+                          <div className="text-sm text-muted-foreground truncate">
+                            {restaurant.business_info?.city || 'No location'} &bull; {restaurant.owner_email}
                           </div>
                         </div>
                       </div>
-                      <div className="text-right">
+                      <div className="text-right shrink-0 flex sm:flex-col items-center sm:items-end gap-2">
                         <div className={`px-3 py-1 rounded-full text-xs font-medium ${
                           restaurant.subscription_status === 'active' 
                             ? 'bg-emerald-100 text-emerald-700' 
@@ -166,8 +166,8 @@ const PlatformDashboard = () => {
                         }`}>
                           {restaurant.subscription_status?.toUpperCase() || 'TRIAL'}
                         </div>
-                        <div className="text-sm font-medium mt-1">
-                          ${restaurant.price || 0}/mo
+                        <div className="text-sm font-medium">
+                          {restaurant.currency || 'GBP'} {restaurant.price || 0}/mo
                         </div>
                       </div>
                     </div>
