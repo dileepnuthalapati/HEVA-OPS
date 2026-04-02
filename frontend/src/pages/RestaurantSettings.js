@@ -13,7 +13,7 @@ import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff } f
 
 const TABS = [
   { id: 'business', label: 'Business Info', icon: Store },
-  { id: 'staff', label: 'Staff Management', icon: Users },
+  { id: 'staff', label: 'User Management', icon: Users },
   { id: 'password', label: 'Change Password', icon: Lock },
 ];
 
@@ -306,11 +306,11 @@ const RestaurantSettings = () => {
             <Card data-testid="staff-management-card">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle className="text-xl font-semibold">Staff Members</CardTitle>
+                  <CardTitle className="text-xl font-semibold">Users</CardTitle>
                   <CardDescription>Manage your restaurant team</CardDescription>
                 </div>
                 <Button onClick={openAddStaff} data-testid="add-staff-btn" size="sm">
-                  <Plus className="w-4 h-4 mr-2" /> Add Staff
+                  <Plus className="w-4 h-4 mr-2" /> Add User
                 </Button>
               </CardHeader>
               <CardContent>
@@ -319,8 +319,8 @@ const RestaurantSettings = () => {
                 ) : staffList.length === 0 ? (
                   <div className="text-center py-12">
                     <Users className="w-12 h-12 mx-auto mb-3 text-muted-foreground" />
-                    <p className="text-muted-foreground mb-4">No staff members yet</p>
-                    <Button onClick={openAddStaff} variant="outline"><Plus className="w-4 h-4 mr-2" /> Add Your First Staff</Button>
+                    <p className="text-muted-foreground mb-4">No users yet</p>
+                    <Button onClick={openAddStaff} variant="outline"><Plus className="w-4 h-4 mr-2" /> Add Your First User</Button>
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -409,8 +409,8 @@ const RestaurantSettings = () => {
       <Dialog open={showStaffDialog} onOpenChange={(open) => { if (!open) setShowStaffDialog(false); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>{editingStaff ? 'Edit Staff Member' : 'Add Staff Member'}</DialogTitle>
-            <DialogDescription>{editingStaff ? 'Update staff details' : 'Create a new staff account'}</DialogDescription>
+            <DialogTitle>{editingStaff ? 'Edit User' : 'Add User'}</DialogTitle>
+            <DialogDescription>{editingStaff ? 'Update user details' : 'Create a new user account'}</DialogDescription>
           </DialogHeader>
           <form onSubmit={handleStaffSubmit} className="space-y-4 mt-2">
             <div>

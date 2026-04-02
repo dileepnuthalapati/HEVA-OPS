@@ -39,7 +39,15 @@ const OrderHistory = () => {
 
   const loadOrders = async () => {
     try {
-      const data = await orderAPI.getAll();
+      const fromDate = searchParams.get('from');
+      const toDate = searchParams.get('to');
+      let data;
+      if (fromDate && toDate) {
+        data = await orderAPI.getAll({ from_date: fromDate, to_date: toDate });
+      } else {
+        // Default: show today's business day orders (resets at 2AM)
+        data = await orderAPI.getAll({ today_only: true });
+      }
       setOrders(data);
     } catch (error) {
       toast.error('Failed to load orders');
@@ -109,7 +117,7 @@ const OrderHistory = () => {
               <h1 className="text-2xl md:text-4xl font-bold tracking-tight" data-testid="orders-heading">Order History</h1>
             </div>
             <p className="text-sm text-muted-foreground ml-11">
-              {fromDate && toDate ? `Showing orders from ${fromDate} to ${toDate}` : `${orders.length} total orders`}
+              {fromDate && toDate ? `Showing orders from ${fromDate} to ${toDate}` : `Today's orders (${orders.length}) — resets at 2:00 AM`}
             </p>
           </div>
 

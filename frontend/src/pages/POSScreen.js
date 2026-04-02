@@ -13,7 +13,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Sheet, SheetContent, SheetTitle } from '../components/ui/sheet';
 import { toast } from 'sonner';
-import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, DollarSign, CreditCard, Users, Percent, Tag, MessageSquare, Banknote, Search, PackagePlus, ArrowLeft } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, CreditCard, Users, Percent, Tag, MessageSquare, Banknote, Search, PackagePlus, ArrowLeft } from 'lucide-react';
 
 // Currency helper
 const getCurrencySymbol = (currency) => {
@@ -1150,7 +1150,7 @@ const POSScreen = () => {
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1">
                       <Label className="text-xs flex items-center gap-1">
-                        <DollarSign className="w-3 h-3" /> Cash
+                        <Banknote className="w-3 h-3" /> Cash
                       </Label>
                       <Input
                         type="number"
@@ -1210,7 +1210,7 @@ const POSScreen = () => {
                   data-testid="payment-cash-button"
                   onClick={() => completeOrder('cash')}
                 >
-                  <DollarSign className="w-8 h-8" />
+                  <Banknote className="w-8 h-8" />
                   <span className="text-base font-bold">Cash</span>
                   {splitCount > 1 && (
                     <span className="text-xs opacity-75">{getCurrencySymbol(currency)}{calculatePerPersonAmount().toFixed(2)} each</span>

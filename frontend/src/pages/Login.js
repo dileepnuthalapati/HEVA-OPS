@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
@@ -15,11 +15,23 @@ const Login = () => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+
+  useEffect(() => {
+    const goOnline = () => setIsOnline(true);
+    const goOffline = () => setIsOnline(false);
+    window.addEventListener('online', goOnline);
+    window.addEventListener('offline', goOffline);
+    return () => {
+      window.removeEventListener('online', goOnline);
+      window.removeEventListener('offline', goOffline);
+    };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!navigator.onLine) {
-      toast.error('You are currently offline. Please check your connection.');
+    if (!isOnline) {
+      toast.error('You are offline. Please check your internet connection and try again.');
       return;
     }
     setLoading(true);
@@ -34,7 +46,7 @@ const Login = () => {
       }
     } catch (error) {
       if (!navigator.onLine) {
-        toast.error('You are currently offline. Please check your connection.');
+        toast.error('Connection lost. Please check your internet and try again.');
       } else {
         toast.error(error.response?.data?.detail || 'Invalid credentials');
       }
@@ -51,10 +63,13 @@ const Login = () => {
           <CardDescription>Sign in to your account</CardDescription>
         </CardHeader>
         <CardContent>
-          {!navigator.onLine && (
-            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 text-sm text-amber-700" data-testid="offline-warning">
-              <WifiOff className="w-4 h-4 shrink-0" />
-              You are currently offline. Please check your connection.
+          {!isOnline && (
+            <div className="mb-4 p-3 bg-red-50 border border-red-300 rounded-lg flex items-center gap-2 text-sm text-red-700" data-testid="offline-warning">
+              <WifiOff className="w-5 h-5 shrink-0" />
+              <div>
+                <div className="font-semibold">You are offline</div>
+                <div className="text-xs mt-0.5">Check your WiFi or mobile data connection and try again.</div>
+              </div>
             </div>
           )}
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -71,8 +86,8 @@ const Login = () => {
                 </button>
               </div>
             </div>
-            <Button type="submit" data-testid="login-submit" className="w-full" disabled={loading}>
-              {loading ? 'Signing in...' : 'Sign In'}
+            <Button type="submit" data-testid="login-submit" className="w-full" disabled={loading || !isOnline}>
+              {!isOnline ? 'Offline - Cannot Sign In' : loading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
         </CardContent>
