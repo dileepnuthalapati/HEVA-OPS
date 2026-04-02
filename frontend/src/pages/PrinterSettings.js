@@ -388,29 +388,26 @@ const PrinterSettings = () => {
 
           {/* Help Section */}
           <Card className="mt-8">
-            <CardHeader><CardTitle>Printing Guide</CardTitle></CardHeader>
+            <CardHeader><CardTitle>How to Connect a Printer</CardTitle></CardHeader>
             <CardContent className="space-y-5">
               <div>
-                <h4 className="font-semibold mb-1">WiFi / Network Printers</h4>
-                <p className="text-sm text-muted-foreground">Connect your printer to the same WiFi network as your POS device. Use "Discover Printers" to auto-find it, or enter the IP address and port manually. Common ports: 9100 (ESC/POS), 515 (LPR), 631 (IPP). Example: 192.168.1.100:9100</p>
+                <h4 className="font-semibold mb-2">WiFi Printer</h4>
+                <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1.5">
+                  <li>Connect your printer to the same WiFi as your device</li>
+                  <li>Click <strong>Discover Printers</strong> above</li>
+                  <li>Tap <strong>Start Scan</strong> — your printer will appear in the list</li>
+                  <li>Select it and you're done</li>
+                </ol>
               </div>
               <div>
-                <h4 className="font-semibold mb-1">Bluetooth Printers</h4>
-                <p className="text-sm text-muted-foreground mb-2">Bluetooth printing works <strong>only in the Android/iOS app</strong> (built with Capacitor), not in a web browser.</p>
-                <div className="bg-muted rounded-lg p-3 text-sm space-y-1">
-                  <p className="font-medium">To set up Bluetooth:</p>
-                  <ol className="list-decimal list-inside text-xs text-muted-foreground space-y-0.5">
-                    <li>Install HevaPOS APK on your tablet/phone</li>
-                    <li>Power on your BT printer and set it to discoverable mode</li>
-                    <li>In the app: Printers &rarr; Discover &rarr; Bluetooth &rarr; Start Scan</li>
-                    <li>Tap your printer in the results to add it</li>
-                  </ol>
-                  <p className="text-xs text-muted-foreground mt-2">If you know the MAC address, you can also add manually: Add Printer &rarr; Bluetooth &rarr; enter MAC (e.g., 00:11:22:33:44:55)</p>
-                </div>
-              </div>
-              <div>
-                <h4 className="font-semibold mb-1">Supported Printers</h4>
-                <p className="text-sm text-muted-foreground">HevaPOS supports ESC/POS compatible thermal printers: Epson TM series, Star TSP series, and most generic 58mm/80mm thermal printers.</p>
+                <h4 className="font-semibold mb-2">Bluetooth Printer</h4>
+                <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1.5">
+                  <li>Turn on your printer and set it to pairing mode</li>
+                  <li>Open HevaPOS on your tablet/phone (Android app)</li>
+                  <li>Go to <strong>Printers &rarr; Discover &rarr; Bluetooth &rarr; Start Scan</strong></li>
+                  <li>Tap your printer from the list to add it</li>
+                </ol>
+                <p className="text-xs text-muted-foreground mt-2">Bluetooth scanning requires the HevaPOS Android app installed on your device.</p>
               </div>
             </CardContent>
           </Card>
@@ -448,33 +445,11 @@ const PrinterSettings = () => {
             {/* WiFi Discovery Panel */}
             {discoveryType === 'wifi' && (
               <>
-                <div className="p-3 bg-muted rounded-lg text-sm space-y-2">
-                  <p className="font-medium">How WiFi discovery works:</p>
-                  <p>Scans your local network for devices on these ports:</p>
-                  <ul className="list-disc list-inside text-xs space-y-0.5 text-muted-foreground">
-                    <li><strong>Port 9100</strong> — ESC/POS Raw (most thermal printers)</li>
-                    <li><strong>Port 515</strong> — LPR/LPD protocol</li>
-                    <li><strong>Port 631</strong> — IPP / CUPS</li>
-                    <li><strong>Port 80</strong> — Printer web config page</li>
-                  </ul>
-                  <p className="text-xs text-muted-foreground mt-1">Make sure your printer is powered on and connected to the same WiFi network as this device.</p>
-                </div>
-                <div>
-                  <Label className="text-sm">Custom Port (optional)</Label>
-                  <div className="flex gap-2 mt-1">
-                    <Input
-                      data-testid="custom-port-input"
-                      type="number"
-                      placeholder="e.g. 8080"
-                      value={customPort}
-                      onChange={(e) => setCustomPort(e.target.value)}
-                      className="w-32"
-                    />
-                    <span className="text-xs text-muted-foreground self-center">Added to scan if not in default list</span>
-                  </div>
+                <div className="p-3 bg-muted rounded-lg text-sm">
+                  <p>Make sure your printer is <strong>powered on</strong> and connected to the <strong>same WiFi network</strong> as this device, then tap Scan.</p>
                 </div>
                 <Button onClick={startScan} disabled={scanning} data-testid="start-scan-btn" className="w-full">
-                  {scanning ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Scanning...</> : <><Search className="w-4 h-4 mr-2" /> Start WiFi Scan</>}
+                  {scanning ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Scanning your network...</> : <><Search className="w-4 h-4 mr-2" /> Scan for Printers</>}
                 </Button>
                 {scanProgress && (
                   <div className="text-xs text-muted-foreground text-center animate-pulse">{scanProgress}</div>
@@ -501,40 +476,31 @@ const PrinterSettings = () => {
                   </>
                 ) : (
                   <>
-                    {/* Browser — explain clearly that BT doesn't work here */}
-                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-3">
-                      <div className="flex items-start gap-2">
-                        <Bluetooth className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-semibold text-amber-900 text-sm">Bluetooth scanning requires the Android/iOS app</p>
-                          <p className="text-amber-800 text-xs mt-1">Web browsers cannot scan for Bluetooth printers. Bluetooth Low Energy (BLE) scanning is only available when HevaPOS is installed as a native app on your tablet or phone.</p>
-                        </div>
-                      </div>
+                    {/* Browser — simple explanation */}
+                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                      <p className="font-semibold text-amber-900 text-sm">Bluetooth requires the HevaPOS app</p>
+                      <p className="text-amber-800 text-xs mt-1">To scan for Bluetooth printers, open HevaPOS on your Android tablet or phone.</p>
                     </div>
-                    <div className="p-4 border rounded-lg space-y-3">
-                      <p className="font-semibold text-sm">How to use Bluetooth printers:</p>
+                    <div className="p-4 border rounded-lg space-y-2">
+                      <p className="font-semibold text-sm">Steps:</p>
                       <div className="space-y-2 text-sm text-muted-foreground">
                         <div className="flex gap-2">
                           <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs shrink-0">1</span>
-                          <span>Build the HevaPOS APK using Capacitor and install it on your Android tablet/phone</span>
+                          <span>Turn on your printer and set it to pairing mode</span>
                         </div>
                         <div className="flex gap-2">
                           <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs shrink-0">2</span>
-                          <span>Turn on your Bluetooth printer and put it in pairing/discoverable mode</span>
+                          <span>Open HevaPOS app on your tablet</span>
                         </div>
                         <div className="flex gap-2">
                           <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs shrink-0">3</span>
-                          <span>Open HevaPOS app &rarr; Printers &rarr; Discover &rarr; Bluetooth &rarr; Start Scan</span>
+                          <span>Printers &rarr; Discover &rarr; Bluetooth &rarr; Scan</span>
                         </div>
                         <div className="flex gap-2">
                           <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs shrink-0">4</span>
-                          <span>Select your printer from the list and it will be added automatically</span>
+                          <span>Tap your printer to add it</span>
                         </div>
                       </div>
-                    </div>
-                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
-                      <p className="font-medium text-blue-900 text-xs">Already know the MAC address?</p>
-                      <p className="text-blue-700 text-xs mt-1">You can skip discovery and add your printer manually using "Add Printer" &rarr; Bluetooth &rarr; enter the MAC address (e.g., 00:11:22:33:44:55). Find it on a label on the printer or in its settings menu.</p>
                     </div>
                   </>
                 )}
