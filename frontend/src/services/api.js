@@ -483,4 +483,26 @@ export const stripeAPI = {
   },
 };
 
+export const emailAPI = {
+  send: async (recipientEmail, subject, htmlContent) => {
+    const response = await api.post('/email/send', {
+      recipient_email: recipientEmail,
+      subject: subject,
+      html_content: htmlContent,
+    });
+    return response.data;
+  },
+  sendOrderReceipt: async (orderId, recipientEmail) => {
+    const response = await api.post('/email/order-receipt', {
+      order_id: orderId,
+      recipient_email: recipientEmail,
+    });
+    return response.data;
+  },
+  sendNotification: async (notificationId) => {
+    const response = await api.post(`/email/notification/${notificationId}`);
+    return response.data;
+  },
+};
+
 export default api;

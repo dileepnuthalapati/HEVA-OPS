@@ -81,9 +81,14 @@ export const AuthProvider = ({ children }) => {
     
     // Normal login
     const response = await authAPI.login(username, password);
-    setUser(response.user);
-    localStorage.setItem('user', JSON.stringify(response.user));
-    return response;
+    const userData = {
+      username: response.username,
+      role: response.role,
+      restaurant_id: response.restaurant_id,
+    };
+    setUser(userData);
+    localStorage.setItem('user', JSON.stringify(userData));
+    return { user: userData, ...response };
   };
 
   const logout = () => {
