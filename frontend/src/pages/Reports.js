@@ -107,17 +107,11 @@ const Reports = () => {
         });
       }
       
-      // Save PDF - try direct save, fallback to opening in new tab for mobile
-      const filename = `HevaPOS_Report_${startDate}_to_${endDate}.pdf`;
-      try {
-        doc.save(filename);
-      } catch (saveErr) {
-        // Fallback: open PDF in new browser tab so user can save manually
-        const pdfDataUri = doc.output('dataurlstring');
-        window.open(pdfDataUri, '_blank');
-      }
+      // Open PDF in a new tab so user can view, save, or share
+      const pdfDataUri = doc.output('dataurlstring');
+      window.open(pdfDataUri, '_blank');
       
-      toast.success('PDF ready! Check your Downloads folder.');
+      toast.success('Report opened in new tab');
     } catch (error) {
       toast.error('Failed to generate PDF');
     }
