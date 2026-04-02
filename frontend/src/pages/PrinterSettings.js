@@ -113,7 +113,7 @@ const PrinterSettings = () => {
   };
 
   // WiFi Network Discovery
-  // Native APK: scans directly from tablet using TCP socket plugin
+  // Native APK: auto-detects subnet from tablet's IP, scans directly via TCP
   // Browser: uses backend TCP port scanner
   const scanWifiPrinters = async () => {
     setScanning(true);
@@ -121,36 +121,33 @@ const PrinterSettings = () => {
     setDiscoveredDevices([]);
 
     if (isNativeApp) {
-      // Native APK: scan from tablet directly using TCP socket
-      setScanProgress('Scanning your WiFi network for printers...');
+      // Native APK: auto-detect subnet and scan directly
       try {
-        // Try common subnets
-        const subnets = ['192.168.1', '192.168.0', '192.168.2', '10.0.0', '172.16.0'];
         const allDevices = [];
-
-        for (const subnet of subnets) {
-          setScanProgress(`Scanning ${subnet}.x ...`);
-          const found = await printerService.scanWifiPrinters(subnet, (device) => {
+        await printerService.scanWifiPrinters(
+          (device) => {
             allDevices.push(device);
             setDiscoveredDevices([...allDevices]);
-          });
-          if (found.length > 0) break; // Found printers, stop scanning other subnets
-        }
+          },
+          (message) => {
+            setScanProgress(message);
+          }
+        );
 
         setScanProgress('');
         if (allDevices.length === 0) {
           setScanError(
-            'No WiFi printers found.\n\n' +
+            'No WiFi printers found on your network.\n\n' +
             'Make sure:\n' +
             '1. Your printer is on and connected to WiFi\n' +
-            '2. Your tablet is on the same WiFi network\n' +
-            '3. Or add the printer manually using its IP address\n\n' +
-            'Tip: Print a network status page from your printer to find its IP address.'
+            '2. Your tablet is on the same WiFi network\n\n' +
+            'Or add the printer manually:\n' +
+            'Print a network status page from your printer to find its IP address.'
           );
         }
       } catch (err) {
         setScanProgress('');
-        setScanError('WiFi scan failed: ' + err.message);
+        setScanError(err.message || 'WiFi scan failed');
       } finally {
         setScanning(false);
       }
