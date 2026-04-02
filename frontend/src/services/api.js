@@ -404,6 +404,10 @@ export const printerAPI = {
     });
     return response.data;
   },
+  detectSubnet: async () => {
+    const response = await api.get('/printers/detect-subnet');
+    return response.data;
+  },
   delete: async (id) => {
     const response = await api.delete(`/printers/${id}`);
     return response.data;
@@ -487,6 +491,10 @@ export const stripeAPI = {
 };
 
 export const emailAPI = {
+  getStatus: async () => {
+    const response = await api.get('/email/status');
+    return response.data;
+  },
   send: async (recipientEmail, subject, htmlContent) => {
     const response = await api.post('/email/send', {
       recipient_email: recipientEmail,
@@ -495,11 +503,16 @@ export const emailAPI = {
     });
     return response.data;
   },
-  sendOrderReceipt: async (orderId, recipientEmail) => {
-    const response = await api.post('/email/order-receipt', {
-      order_id: orderId,
-      recipient_email: recipientEmail,
-    });
+  sendWelcome: async (restaurantId) => {
+    const response = await api.post(`/email/welcome/${restaurantId}`);
+    return response.data;
+  },
+  sendPaymentReminder: async (restaurantId) => {
+    const response = await api.post(`/email/payment-reminder/${restaurantId}`);
+    return response.data;
+  },
+  sendTrialReminder: async (restaurantId) => {
+    const response = await api.post(`/email/trial-reminder/${restaurantId}`);
     return response.data;
   },
   sendNotification: async (notificationId) => {

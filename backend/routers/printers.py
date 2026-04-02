@@ -142,6 +142,42 @@ def _tcp_check(ip: str, port: int, timeout: float) -> dict:
     return None
 
 
+@router.get("/printers/detect-subnet")
+async def detect_subnet(current_user: User = Depends(get_current_user)):
+    """Auto-detect the server's local network subnet."""
+    import subprocess
+    subnets = set()
+    try:
+        # Try multiple methods to detect local IPs
+        # Method 1: socket
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        try:
+            s.connect(("8.8.8.8", 80))
+            ip = s.getsockname()[0]
+            parts = ip.rsplit(".", 1)
+            if len(parts) == 2 and not ip.startswith("127."):
+                subnets.add(parts[0])
+        except Exception:
+            pass
+        finally:
+            s.close()
+
+        # Method 2: hostname
+        import socket as sock_mod
+        hostname = sock_mod.gethostname()
+        for info in sock_mod.getaddrinfo(hostname, None, sock_mod.AF_INET):
+            ip = info[4][0]
+            if not ip.startswith("127."):
+                parts = ip.rsplit(".", 1)
+                if len(parts) == 2:
+                    subnets.add(parts[0])
+    except Exception:
+        pass
+
+    subnet_list = list(subnets) if subnets else ["192.168.1"]
+    return {"subnets": subnet_list, "primary": subnet_list[0]}
+
+
 @router.post("/printers/discover")
 async def discover_printers(scan: ScanRequest, current_user: User = Depends(get_current_user)):
     ports = list(scan.ports)

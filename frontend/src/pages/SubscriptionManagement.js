@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import { subscriptionAPI, notificationAPI, stripeAPI } from '../services/api';
+import { subscriptionAPI, notificationAPI, stripeAPI, emailAPI } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { CreditCard, AlertTriangle, CheckCircle, XCircle, Clock, Bell, RefreshCw, Mail, ExternalLink } from 'lucide-react';
+import { CreditCard, AlertTriangle, CheckCircle, XCircle, Clock, Bell, RefreshCw, Mail, ExternalLink, Send, Loader2 } from 'lucide-react';
 
 const statusConfig = {
   trial: { color: 'bg-blue-100 text-blue-700', icon: Clock, label: 'Trial' },
@@ -23,9 +23,12 @@ const SubscriptionManagement = () => {
   const [newStatus, setNewStatus] = useState('');
   const [checking, setChecking] = useState(false);
   const [creatingCheckout, setCreatingCheckout] = useState(false);
+  const [sendingEmail, setSendingEmail] = useState({});
+  const [emailConfigured, setEmailConfigured] = useState(false);
 
   useEffect(() => {
     loadData();
+    checkEmailStatus();
   }, []);
 
   const loadData = async () => {
@@ -41,6 +44,13 @@ const SubscriptionManagement = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const checkEmailStatus = async () => {
+    try {
+      const status = await emailAPI.getStatus();
+      setEmailConfigured(status.configured);
+    } catch { /* ignore */ }
   };
 
   const handleStatusChange = async () => {
@@ -85,6 +95,46 @@ const SubscriptionManagement = () => {
     }
   };
 
+  const handleSendEmail = async (type, restaurantId, label) => {
+    const key = `${type}_${restaurantId}`;
+    setSendingEmail(prev => ({ ...prev, [key]: true }));
+    try {
+      let result;
+      if (type === 'trial') {
+        result = await emailAPI.sendTrialReminder(restaurantId);
+      } else if (type === 'payment') {
+        result = await emailAPI.sendPaymentReminder(restaurantId);
+      }
+      if (result?.status === 'skipped') {
+        toast.warning(result.message || 'Email service not configured');
+      } else {
+        toast.success(result?.message || `${label} sent!`);
+      }
+      loadData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || `Failed to send ${label.toLowerCase()}`);
+    } finally {
+      setSendingEmail(prev => ({ ...prev, [key]: false }));
+    }
+  };
+
+  const handleSendNotificationEmail = async (notifId) => {
+    setSendingEmail(prev => ({ ...prev, [notifId]: true }));
+    try {
+      const result = await emailAPI.sendNotification(notifId);
+      if (result?.status === 'skipped') {
+        toast.warning(result.message || 'Email service not configured');
+      } else {
+        toast.success(result?.message || 'Email sent!');
+      }
+      loadData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to send email');
+    } finally {
+      setSendingEmail(prev => ({ ...prev, [notifId]: false }));
+    }
+  };
+
   const handleMarkSent = async (notifId) => {
     try {
       await notificationAPI.markSent(notifId);
@@ -113,10 +163,18 @@ const SubscriptionManagement = () => {
               </Button>
               <Button onClick={handleCheckTrials} disabled={checking} data-testid="check-trials-btn" className="shrink-0">
                 <RefreshCw className={`w-4 h-4 mr-2 ${checking ? 'animate-spin' : ''}`} />
-                Check Trial Expirations
+                Check Trials
               </Button>
             </div>
           </div>
+
+          {/* Email Status Banner */}
+          {!emailConfigured && (
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg flex items-center gap-2 text-sm text-amber-800" data-testid="email-not-configured">
+              <Mail className="w-4 h-4 shrink-0" />
+              <span>Email not configured. Add <code className="bg-amber-100 px-1 rounded text-xs">RESEND_API_KEY</code> to your environment to send emails. <a href="https://resend.com" target="_blank" rel="noopener noreferrer" className="underline font-medium">Get free key</a></span>
+            </div>
+          )}
 
           {/* Notifications Banner */}
           {pendingNotifications.length > 0 && (
@@ -130,15 +188,21 @@ const SubscriptionManagement = () => {
               <CardContent className="px-4 pb-4">
                 <div className="space-y-2 max-h-40 overflow-y-auto">
                   {pendingNotifications.slice(0, 5).map((n) => (
-                    <div key={n.id} className="flex items-center justify-between p-2 bg-white rounded border text-sm">
+                    <div key={n.id} className="flex items-center justify-between p-2 bg-white rounded border text-sm gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="font-medium truncate">{n.message}</div>
                         <div className="text-xs text-muted-foreground">{n.email} &bull; {new Date(n.created_at).toLocaleString()}</div>
                       </div>
-                      <Button size="sm" variant="outline" onClick={() => handleMarkSent(n.id)} className="ml-2 shrink-0 h-7 text-xs">
-                        <Mail className="w-3 h-3 mr-1" />
-                        Mark Sent
-                      </Button>
+                      <div className="flex gap-1.5 shrink-0">
+                        {n.email && (
+                          <Button size="sm" variant="default" onClick={() => handleSendNotificationEmail(n.id)} disabled={sendingEmail[n.id]} className="h-7 text-xs" data-testid={`send-notif-email-${n.id}`}>
+                            {sendingEmail[n.id] ? <Loader2 className="w-3 h-3 animate-spin" /> : <><Send className="w-3 h-3 mr-1" /> Email</>}
+                          </Button>
+                        )}
+                        <Button size="sm" variant="outline" onClick={() => handleMarkSent(n.id)} className="h-7 text-xs">
+                          <CheckCircle className="w-3 h-3 mr-1" /> Done
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -153,6 +217,8 @@ const SubscriptionManagement = () => {
               {subscriptions.map((sub) => {
                 const config = statusConfig[sub.subscription_status] || statusConfig.trial;
                 const StatusIcon = config.icon;
+                const isTrialKey = `trial_${sub.id}`;
+                const isPaymentKey = `payment_${sub.id}`;
                 return (
                   <Card key={sub.id} data-testid={`sub-card-${sub.id}`}>
                     <CardHeader className="pb-3 px-4 pt-4">
@@ -192,16 +258,48 @@ const SubscriptionManagement = () => {
                           </div>
                         )}
                       </div>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full mt-3"
-                        data-testid={`manage-sub-${sub.id}`}
-                        onClick={() => { setSelectedRestaurant(sub); setNewStatus(sub.subscription_status); }}
-                      >
-                        <CreditCard className="w-3.5 h-3.5 mr-1.5" />
-                        Manage Subscription
-                      </Button>
+
+                      {/* Action Buttons */}
+                      <div className="flex flex-col gap-2 mt-3">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          data-testid={`manage-sub-${sub.id}`}
+                          onClick={() => { setSelectedRestaurant(sub); setNewStatus(sub.subscription_status); }}
+                        >
+                          <CreditCard className="w-3.5 h-3.5 mr-1.5" />
+                          Manage Subscription
+                        </Button>
+
+                        {/* Email actions based on status */}
+                        {sub.subscription_status === 'trial' && sub.owner_email && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="w-full text-blue-600 border-blue-200 hover:bg-blue-50"
+                            data-testid={`trial-reminder-${sub.id}`}
+                            onClick={() => handleSendEmail('trial', sub.id, 'Trial reminder')}
+                            disabled={sendingEmail[isTrialKey]}
+                          >
+                            {sendingEmail[isTrialKey] ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Mail className="w-3.5 h-3.5 mr-1.5" />}
+                            Send Trial Reminder
+                          </Button>
+                        )}
+                        {(sub.subscription_status === 'suspended' || sub.subscription_status === 'active') && sub.owner_email && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className={`w-full ${sub.subscription_status === 'suspended' ? 'text-red-600 border-red-200 hover:bg-red-50' : 'text-amber-600 border-amber-200 hover:bg-amber-50'}`}
+                            data-testid={`payment-reminder-${sub.id}`}
+                            onClick={() => handleSendEmail('payment', sub.id, 'Payment reminder')}
+                            disabled={sendingEmail[isPaymentKey]}
+                          >
+                            {sendingEmail[isPaymentKey] ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Mail className="w-3.5 h-3.5 mr-1.5" />}
+                            Send Payment Reminder
+                          </Button>
+                        )}
+                      </div>
                     </CardContent>
                   </Card>
                 );

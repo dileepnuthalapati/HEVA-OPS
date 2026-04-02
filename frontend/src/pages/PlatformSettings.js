@@ -8,7 +8,8 @@ import { Switch } from '../components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { authAPI, platformAdminAPI } from '../services/api';
-import { Settings, Bell, Shield, CreditCard, Mail, Globe, Key, UserPlus, Trash2, Users } from 'lucide-react';
+import { emailAPI } from '../services/api';
+import { Settings, Bell, Shield, CreditCard, Mail, Globe, Key, UserPlus, Trash2, Users, CheckCircle, XCircle } from 'lucide-react';
 
 const PlatformSettings = () => {
   const [settings, setSettings] = useState({
@@ -41,10 +42,19 @@ const PlatformSettings = () => {
   const [newAdminPassword, setNewAdminPassword] = useState('');
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [addingAdmin, setAddingAdmin] = useState(false);
+  const [emailStatus, setEmailStatus] = useState(null);
 
   useEffect(() => {
     loadAdmins();
+    loadEmailStatus();
   }, []);
+
+  const loadEmailStatus = async () => {
+    try {
+      const status = await emailAPI.getStatus();
+      setEmailStatus(status);
+    } catch { /* ignore */ }
+  };
 
   const loadAdmins = async () => {
     try {
@@ -316,6 +326,51 @@ const PlatformSettings = () => {
                   />
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* Email Configuration */}
+          <Card className="mb-6">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Mail className="w-5 h-5" />
+                Email Service
+              </CardTitle>
+              <CardDescription>Send reminders, onboarding emails, and notifications</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {emailStatus ? (
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    {emailStatus.configured ? (
+                      <div className="flex items-center gap-2 text-emerald-600">
+                        <CheckCircle className="w-5 h-5" />
+                        <span className="font-medium">Email service is active</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-2 text-amber-600">
+                        <XCircle className="w-5 h-5" />
+                        <span className="font-medium">Email service not configured</span>
+                      </div>
+                    )}
+                  </div>
+                  {emailStatus.configured ? (
+                    <p className="text-sm text-muted-foreground">Sending from: <code className="bg-muted px-1.5 py-0.5 rounded text-xs">{emailStatus.sender_email}</code></p>
+                  ) : (
+                    <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800">
+                      <p className="mb-2">To enable email notifications:</p>
+                      <ol className="list-decimal list-inside space-y-1 text-xs">
+                        <li>Sign up at <a href="https://resend.com" target="_blank" rel="noopener noreferrer" className="underline font-medium">resend.com</a> (free — 100 emails/day)</li>
+                        <li>Get your API key from the dashboard</li>
+                        <li>Add <code className="bg-amber-100 px-1 rounded">RESEND_API_KEY=re_xxxxx</code> to your Railway environment variables</li>
+                        <li>Optionally set <code className="bg-amber-100 px-1 rounded">SENDER_EMAIL=you@yourdomain.com</code></li>
+                      </ol>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">Loading email status...</p>
+              )}
             </CardContent>
           </Card>
 
