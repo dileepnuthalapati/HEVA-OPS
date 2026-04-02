@@ -1,45 +1,54 @@
 # HevaPOS - Product Requirements Document
 
 ## Overview
-Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB), mobile-first frontend (React + Capacitor for Android/iOS APK).
+Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB), mobile-first frontend (React + Capacitor Android APK).
 
-## Completed Features
-- [x] Full POS system (menu, orders, tables, reports, staff, subscriptions, email)
-- [x] Dynamic currency support
-- [x] Backend modularization (15 routers)
-- [x] **Universal Printer Support**
-  - Bluetooth Classic (SPP) + BLE + WiFi TCP
-  - Static import for `@kduma-autoid/capacitor-bluetooth-printer`
-  - Discovery: Paired devices first, named BLE only (no "Unknown Device" noise)
-  - Duplicate print prevention (both UI-level isPrinting + service-level _printing lock)
-  - Print button on pending orders (Print/Edit/Cancel/Pay grid)
-  - Auto-prints don't show toast errors, manual prints do
-  - Busy printer detection with WiFi recommendation for multi-device setups
-  - Multi-device sharing tip in PrinterSettings help section
-
-## Print Architecture
+## Print Architecture (Final — April 2, 2026)
 ```
-Pending Order Print: User taps Print → printOrderReceipt() → /api/print/kitchen/{id} → sendToPrinter()
-Auto Kitchen Print:  Place Order → /api/print/kitchen/{id} → sendToPrinter('kitchen-auto')
-Auto Customer Print: Complete Payment → /api/print/customer/{id} → sendToPrinter('customer-auto')
-Reprint Receipt:     Completed order → Reprint button → /api/print/customer/{id} → sendToPrinter()
+3 Plugins Installed:
+├── capacitor-tcp-socket          — WiFi TCP (direct tablet→printer, no backend)
+├── @kduma-autoid/capacitor-bluetooth-printer — Classic BT SPP
+└── @capacitor-community/bluetooth-le        — BLE fallback
 
-Bluetooth: Classic SPP first → BLE fallback → Error with WiFi recommendation
-WiFi: Backend TCP proxy (/api/printer/send)
-Multi-device: WiFi recommended (TCP supports multiple connections), BT is 1-to-1 only
+WiFi (RECOMMENDED for multi-device):
+  APK → TcpSocket.connect(IP:9100) → TcpSocket.send(base64) → Printer
+  Browser → backend /api/printer/send → TCP proxy → Printer
+  ✅ Multiple devices can share one WiFi printer simultaneously
+
+Bluetooth Classic SPP (single device):
+  APK → BluetoothPrinter.connectAndPrint(MAC, data) → Printer
+  ⚠️ One device at a time (BT limitation)
+
+BLE (fallback):
+  APK → BleClient.connect(MAC) → BleClient.write(chunks) → Printer
+
+Print Points in POS:
+  1. Place Order → auto kitchen receipt
+  2. Complete Payment → auto customer receipt
+  3. Print button on pending orders → manual kitchen receipt
+  4. Reprint button on completed orders → manual customer receipt
+  5. Test Print in Printer Settings
 ```
 
 ## APK Build Steps
-1. `cd frontend && yarn install && yarn build`
-2. `npx cap sync android` ← Registers BluetoothPrinter native plugin
-3. Open `android/` in Android Studio → Build Signed APK
+```bash
+cd frontend && yarn install && yarn build
+npx cap sync android    # Registers all 3 native plugins
+# Open android/ in Android Studio → Build Signed APK
+```
+
+## Completed Features
+- Full POS system (menu, orders, tables, reports, staff, subscriptions, email)
+- Dynamic currency, backend modularization (15 routers)
+- Universal printer support (WiFi TCP + BT Classic + BLE)
+- Direct WiFi TCP printing from tablet (no backend dependency)
+- WiFi network scanner from tablet using TCP probing
+- Print button on pending orders
+- Duplicate print prevention (isPrinting + _printing lock)
+- Paired device discovery + named BLE only (no Unknown Device noise)
+- Multi-device WiFi recommendation & busy-printer guidance
 
 ## Upcoming
 - P1: Kitchen Display System (KDS)
 - P1: Revenue analytics dashboard
 - P2: Deliverect API, iOS build prep
-
-## Tech Stack
-Frontend: React, Tailwind CSS, Shadcn UI, Capacitor
-Backend: FastAPI, Motor (async MongoDB)
-Printing: @kduma-autoid/capacitor-bluetooth-printer (Classic SPP), @capacitor-community/bluetooth-le (BLE)
