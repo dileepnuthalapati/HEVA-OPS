@@ -1,0 +1,150 @@
+{
+  "brand_identity": {
+    "name": "SwiftPOS",
+    "ethos": "Speed. Clarity. Reliability.",
+    "emotional_archetype": "The Performance Pro",
+    "description": "A high-performance, offline-first POS system designed for the chaotic reality of restaurant work. It prioritizes muscle memory, high-contrast legibility, and zero-latency interactions.",
+    "theme_strategy": "Hybrid",
+    "theme_logic": "Light Mode is default for high-glare daytime service. Dark Mode is optional for evening shifts / bars."
+  },
+  "typography": {
+    "primary_font": "Manrope",
+    "primary_font_usage": "Headings, UI Labels, Buttons. A modern, geometric sans-serif that feels friendly but technical.",
+    "secondary_font": "JetBrains Mono",
+    "secondary_font_usage": "Prices, Quantities, Order IDs, Modifiers. Monospaced font ensures numbers align perfectly in lists.",
+    "scale": {
+      "h1": "text-4xl font-bold tracking-tight",
+      "h2": "text-3xl font-semibold tracking-tight",
+      "h3": "text-2xl font-semibold",
+      "body": "text-base font-medium leading-relaxed",
+      "caption": "text-sm font-medium text-muted-foreground uppercase tracking-wider",
+      "price": "text-lg font-mono font-bold"
+    }
+  },
+  "colors": {
+    "palette_name": "Swiss Utility",
+    "base": {
+      "background": "white",
+      "foreground": "#0f172a",
+      "card": "#ffffff",
+      "border": "#e2e8f0"
+    },
+    "brand": {
+      "primary": "#0f172a",
+      "primary_foreground": "#f8fafc",
+      "accent": "#002FA7",
+      "accent_foreground": "#ffffff"
+    },
+    "functional": {
+      "success": "#10B981",
+      "success_hover": "#059669",
+      "warning": "#F59E0B",
+      "destructive": "#EF4444",
+      "info": "#3B82F6",
+      "offline": "#64748b",
+      "syncing": "#eab308"
+    },
+    "gradients": {
+      "subtle_fade": "bg-gradient-to-b from-transparent to-black/5"
+    }
+  },
+  "layout_system": {
+    "container_philosophy": "Fluid but bounded. Max width 1920px for large POS terminals.",
+    "spacing": {
+      "standard": "p-4",
+      "relaxed": "p-6",
+      "section_gap": "gap-4"
+    },
+    "grids": {
+      "pos_product_grid": "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3",
+      "dashboard_metric_grid": "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4",
+      "bento_menu": "grid grid-cols-2 md:grid-cols-4 gap-4 auto-rows-[120px]"
+    }
+  },
+  "components": {
+    "buttons": {
+      "base_style": "h-12 rounded-lg font-bold transition-all active:scale-95 disabled:opacity-50",
+      "primary": "bg-primary text-primary-foreground hover:bg-primary/90 shadow-sm",
+      "success": "bg-emerald-500 text-white hover:bg-emerald-600 shadow-sm",
+      "outline": "border-2 border-input bg-background hover:bg-accent hover:text-accent-foreground"
+    },
+    "cards": {
+      "product_card": "relative overflow-hidden rounded-xl border bg-card text-card-foreground shadow-sm hover:shadow-md transition-all active:scale-95 cursor-pointer select-none",
+      "metric_card": "p-6 rounded-xl border bg-card/50 shadow-sm"
+    },
+    "inputs": {
+      "style": "h-12 rounded-md border-input bg-background px-4 py-2 text-lg focus-visible:ring-2 focus-visible:ring-ring"
+    }
+  },
+  "visual_enhancers": {
+    "shadows": {
+      "layered": "shadow-[0_2px_4px_rgba(0,0,0,0.05),0_12px_24px_rgba(0,0,0,0.05)]",
+      "sharp": "shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]"
+    },
+    "radius": {
+      "default": "rounded-lg",
+      "large": "rounded-xl",
+      "pill": "rounded-full"
+    },
+    "borders": {
+      "subtle": "border border-border",
+      "active": "border-2 border-primary"
+    }
+  },
+  "motion": {
+    "philosophy": "Snappy. 150ms duration max for interactions. No long fades.",
+    "presets": {
+      "tap": "active:scale-95 transition-transform duration-75",
+      "slide_in": "animate-in slide-in-from-right-4 duration-200",
+      "fade_in": "animate-in fade-in duration-200"
+    }
+  },
+  "offline_ui": {
+    "indicator_strategy": "Top-right persistent status pill.",
+    "states": {
+      "online": {
+        "color": "bg-emerald-500",
+        "label": "Online"
+      },
+      "syncing": {
+        "color": "bg-amber-500 animate-pulse",
+        "label": "Syncing..."
+      },
+      "offline": {
+        "color": "bg-slate-500",
+        "label": "Offline Mode"
+      }
+    }
+  },
+  "image_urls": {
+    "categories": {
+      "burgers": "https://images.pexels.com/photos/4315148/pexels-photo-4315148.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "pizza": "https://images.unsplash.com/photo-1751200884901-c1c6f43ae1d6?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NTY2NzR8MHwxfHNlYXJjaHwzfHxhcnRpc2FuJTIwcGl6emElMjBydXN0aWN8ZW58MHx8fHwxNzc0MDI2Mjk3fDA&ixlib=rb-4.1.0&q=85",
+      "drinks": "https://images.pexels.com/photos/7594166/pexels-photo-7594166.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "desserts": "https://images.unsplash.com/photo-1767335911122-e996a8c3f06c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzMzV8MHwxfHNlYXJjaHwxfHxmaW5lJTIwZGluaW5nJTIwZGVzc2VydCUyMG1pbmltYWxpc3R8ZW58MHx8fHwxNzc0MDI2Mjk5fDA&ixlib=rb-4.1.0&q=85"
+    },
+    "products": {
+      "classic_burger": "https://images.unsplash.com/photo-1662452883375-9226ea22c765?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1ODh8MHwxfHNlYXJjaHwxfHxnb3VybWV0JTIwYnVyZ2VyJTIwZGFyayUyMGJhY2tncm91bmR8ZW58MHx8fHwxNzc0MDI2Mjk2fDA&ixlib=rb-4.1.0&q=85",
+      "cocktail": "https://images.pexels.com/photos/36189467/pexels-photo-36189467.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+    },
+    "users": {
+      "chef_avatar": "https://images.pexels.com/photos/3814446/pexels-photo-3814446.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+    }
+  },
+  "instructions_to_main_agent": [
+    "1. IMPLEMENT FONTS: Install 'Manrope' and 'JetBrains Mono' via Google Fonts in index.html or CSS.",
+    "2. SETUP OFFLINE: Ensure Service Worker registration is handled in index.js for PWA capabilities.",
+    "3. USE SHADCN: Use the provided shadcn components in /components/ui but CUSTOMIZE them with the border-radius and shadow rules defined above.",
+    "4. NO DEFAULT SCROLLBARS: Hide scrollbars in the product grid using 'scrollbar-hide' class (tailwind plugin) or css, but keep functionality.",
+    "5. TOUCH TARGETS: Ensure all interactive elements are at least 44px height/width for touch accessibility.",
+    "6. DATA-TESTID: Add data-testid to all buttons (e.g., 'add-to-cart-btn', 'checkout-btn') for testing.",
+    "7. LAYOUT: Dashboard should use a sidebar layout. POS screen should be full width with no sidebar, just a top bar and split view."
+  ],
+  "UNIVERSAL_GUIDELINES": [
+    "Avoid generic 'AI slop' aesthetics. No purple/teal gradients.",
+    "Don't use 'Inter' for headings. Use 'Manrope'.",
+    "Use 2-3x more padding than you think is necessary.",
+    "Every interaction needs a micro-animation (scale, color shift).",
+    "Use 'sonner' for toasts."
+  ]
+}
