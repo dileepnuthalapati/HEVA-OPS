@@ -11,3 +11,6 @@
 ## Staff User
 - Username: `user`
 - Password: `user123`
+
+## Seed Endpoint
+- POST /api/seed-database?secret=hevapos2026
