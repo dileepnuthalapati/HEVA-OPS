@@ -51,6 +51,7 @@ class ThermalPrinterService {
     this.bleCharUUID = null;
     this.isNative = Capacitor.isNativePlatform();
     this.bleInitialized = false;
+    this._printing = false; // Lock to prevent duplicate prints
   }
 
   async initBLE() {
@@ -68,21 +69,32 @@ class ThermalPrinterService {
   }
 
   // ================================================================
-  // MAIN PRINT METHOD
+  // MAIN PRINT METHOD — with built-in duplicate prevention
   // ================================================================
   async printToDevice(printer, escposBase64, apiUrl, authToken) {
     if (!printer) throw new Error('No printer configured. Go to Settings > Printers to add one.');
     if (!escposBase64) throw new Error('No print data generated.');
 
-    const byteCount = base64ToBytes(escposBase64).length;
-    console.log(`[Printer] Sending ${byteCount} bytes to "${printer.name}" (${printer.type}) at ${printer.address}`);
+    // Prevent duplicate simultaneous prints
+    if (this._printing) {
+      console.log('[Printer] Already printing, skipping duplicate request');
+      throw new Error('Printer is busy with a previous job. Please wait.');
+    }
 
-    if (printer.type === 'wifi') {
-      return this._printWifi(printer, escposBase64, apiUrl, authToken);
-    } else if (printer.type === 'bluetooth') {
-      return this._printBluetooth(printer, escposBase64);
-    } else {
-      throw new Error(`Unknown printer type: ${printer.type}`);
+    this._printing = true;
+    try {
+      const byteCount = base64ToBytes(escposBase64).length;
+      console.log(`[Printer] Sending ${byteCount} bytes to "${printer.name}" (${printer.type}) at ${printer.address}`);
+
+      if (printer.type === 'wifi') {
+        return await this._printWifi(printer, escposBase64, apiUrl, authToken);
+      } else if (printer.type === 'bluetooth') {
+        return await this._printBluetooth(printer, escposBase64);
+      } else {
+        throw new Error(`Unknown printer type: ${printer.type}`);
+      }
+    } finally {
+      this._printing = false;
     }
   }
 
@@ -128,14 +140,24 @@ class ThermalPrinterService {
       await this._printViaBLE(printer.address, base64ToBytes(escposBase64));
       return { success: true, method: 'ble', message: `Printed via BLE to ${printer.name}` };
     } catch (bleError) {
+      // Detect "printer busy / connected to another device" scenario
+      const isBusy = sppResult.error?.toLowerCase().includes('connect') ||
+                     sppResult.error?.toLowerCase().includes('socket') ||
+                     sppResult.error?.toLowerCase().includes('busy') ||
+                     sppResult.error?.toLowerCase().includes('refused');
+
+      const busyHint = isBusy
+        ? '\n\nThe printer may be connected to another device (e.g., Uber tablet). ' +
+          'Bluetooth only allows ONE device at a time. To share the printer between multiple devices, ' +
+          'connect it via WiFi instead — WiFi supports multiple devices simultaneously.'
+        : '';
+
       throw new Error(
-        `Could not print to ${printer.name}.\n\n` +
-        `Classic Bluetooth: ${sppResult.error}\n` +
-        `BLE: ${bleError.message}\n\n` +
-        'Tips:\n' +
-        '1. Make sure the printer is paired in Android Bluetooth Settings\n' +
-        '2. Turn the printer off and on, then try again\n' +
-        '3. Remove and re-pair the printer in Android Settings'
+        `Could not print to ${printer.name}.${busyHint}\n\n` +
+        'Troubleshooting:\n' +
+        '1. Turn the printer off and on\n' +
+        '2. Make sure it\'s paired in Android Bluetooth Settings\n' +
+        '3. If shared with other devices, use WiFi connection instead'
       );
     }
   }

@@ -458,6 +458,13 @@ const PrinterSettings = () => {
                 </ol>
                 <p className="text-xs text-muted-foreground mt-2">Supports both Bluetooth Classic (SPP) and BLE printers. Works with Epson, Star, Bixolon, and most ESC/POS thermal printers.</p>
               </div>
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <h4 className="font-semibold text-sm text-blue-900 mb-1">Sharing a printer between multiple devices?</h4>
+                <p className="text-xs text-blue-800">
+                  <strong>WiFi is recommended</strong> — multiple devices can print to the same WiFi printer simultaneously.
+                  Bluetooth only allows <strong>one device at a time</strong>. If another tablet (e.g., Uber) is connected via Bluetooth, your app won't be able to print until that connection is released.
+                </p>
+              </div>
             </CardContent>
           </Card>
         </div>
