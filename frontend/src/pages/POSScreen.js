@@ -302,6 +302,7 @@ const POSScreen = () => {
     try {
       const updatedOrder = await orderAPI.update(editingOrder.id, {
         items: cart,
+        subtotal: subtotal,
         total_amount: subtotal,
         table_id: selectedTable || null,
         order_notes: orderNotes || null,
@@ -358,6 +359,7 @@ const POSScreen = () => {
     try {
       const order = await orderAPI.create({
         items: cart,
+        subtotal: subtotal,
         total_amount: subtotal,
         table_id: selectedTable || null,
         order_notes: orderNotes || null,
