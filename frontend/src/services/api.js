@@ -421,6 +421,14 @@ export const printerAPI = {
     const response = await api.post(`/print/customer/${orderId}`);
     return response.data;
   },
+  getDefault: async () => {
+    const response = await api.get('/printers/default');
+    return response.data;
+  },
+  sendToWifi: async (ip, port, base64Data) => {
+    const response = await api.post('/printer/send', { ip, port, data: base64Data });
+    return response.data;
+  },
 };
 
 export const subscriptionAPI = {

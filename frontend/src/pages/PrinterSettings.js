@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import { printerAPI } from '../services/api';
+import { printerAPI, getAuthToken } from '../services/api';
+import printerService from '../services/printer';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -70,15 +71,43 @@ const PrinterSettings = () => {
   };
 
   const handleTest = async (printer) => {
+    const toastId = toast.loading(`Sending test print to ${printer.name}...`);
     try {
-      toast.loading('Testing printer...');
       const result = await printerAPI.test(printer.id);
+
+      // WiFi printers: backend already sent the data via TCP
+      if (printer.type === 'wifi') {
+        if (result.sent) {
+          toast.success(`Test receipt printed on ${printer.name}!`, { id: toastId });
+          setTestResult({ ...result, printSuccess: true });
+        } else {
+          // Backend couldn't reach the printer — show error + commands
+          toast.error(`Could not reach printer: ${result.send_error || 'Connection failed'}`, { id: toastId });
+          setTestResult({ ...result, printSuccess: false });
+        }
+        return;
+      }
+
+      // Bluetooth printers: send from the device via BLE
+      if (printer.type === 'bluetooth') {
+        try {
+          const apiUrl = process.env.REACT_APP_BACKEND_URL;
+          const token = getAuthToken();
+          await printerService.printToDevice(printer, result.commands, apiUrl, token);
+          toast.success(`Test receipt printed on ${printer.name}!`, { id: toastId });
+          setTestResult({ ...result, printSuccess: true });
+        } catch (bleError) {
+          toast.error(`Bluetooth print failed: ${bleError.message}`, { id: toastId });
+          setTestResult({ ...result, printSuccess: false, send_error: bleError.message });
+        }
+        return;
+      }
+
+      // Fallback
+      toast.success('Test receipt generated', { id: toastId });
       setTestResult(result);
-      toast.dismiss();
-      toast.success('Test receipt generated!');
     } catch (error) {
-      toast.dismiss();
-      toast.error('Failed to test printer');
+      toast.error(error.response?.data?.detail || 'Failed to test printer', { id: toastId });
     }
   };
 
@@ -348,21 +377,35 @@ const PrinterSettings = () => {
           {testResult && (
             <Card className="mt-8">
               <CardHeader>
-                <CardTitle className="flex items-center gap-2"><Check className="w-5 h-5 text-emerald-500" /> Test Receipt Generated</CardTitle>
-                <CardDescription>Send these ESC/POS commands to your printer</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                  {testResult.printSuccess ? (
+                    <><Check className="w-5 h-5 text-emerald-500" /> Test Print Successful</>
+                  ) : (
+                    <><Printer className="w-5 h-5 text-amber-500" /> Test Print Result</>
+                  )}
+                </CardTitle>
+                <CardDescription>
+                  {testResult.printSuccess
+                    ? `Successfully sent to ${testResult.printer}`
+                    : testResult.send_error
+                      ? `Could not send to printer: ${testResult.send_error}`
+                      : 'ESC/POS commands generated — see below'
+                  }
+                </CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="bg-slate-100 rounded-lg p-4">
                   <p className="text-sm mb-2"><strong>Printer:</strong> {testResult.printer}</p>
-                  <p className="text-sm mb-2"><strong>Type:</strong> {testResult.type}</p>
+                  <p className="text-sm mb-2"><strong>Type:</strong> {testResult.type?.toUpperCase()}</p>
                   <p className="text-sm mb-2"><strong>Address:</strong> {testResult.address}</p>
-                  <div className="mt-4">
-                    <p className="text-sm font-semibold mb-2">ESC/POS Commands (Base64):</p>
-                    <div className="bg-white p-3 rounded font-mono text-xs break-all max-h-40 overflow-auto">{testResult.commands}</div>
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-4">{testResult.instructions}</p>
+                  <p className="text-sm mb-2">
+                    <strong>Status:</strong>{' '}
+                    {testResult.printSuccess
+                      ? <span className="text-emerald-600 font-semibold">Sent to printer</span>
+                      : <span className="text-amber-600 font-semibold">Not sent — check connection</span>
+                    }
+                  </p>
                 </div>
-                <Button variant="outline" className="mt-4" onClick={() => { navigator.clipboard.writeText(testResult.commands); toast.success('Copied!'); }}>Copy Commands</Button>
               </CardContent>
             </Card>
           )}

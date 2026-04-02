@@ -201,7 +201,9 @@ async def print_customer_receipt_escpos(order_id: str, current_user: User = Depe
         if table:
             table_info = {"number": table["number"], "name": table.get("name", f"Table {table['number']}")}
 
-    commands = generate_escpos_customer_receipt(order, business_info, table_info)
+    currency = restaurant.get("currency", "GBP") if restaurant else "GBP"
+
+    commands = generate_escpos_customer_receipt(order, business_info, table_info, currency)
     return {"order_id": order_id, "order_number": order.get("order_number", "N/A"), "commands": commands, "table": table_info}
 
 
@@ -274,7 +276,9 @@ def generate_escpos_kitchen_receipt(order: dict, business_info: dict, table_info
     return base64.b64encode(commands).decode()
 
 
-def generate_escpos_customer_receipt(order: dict, business_info: dict, table_info: dict = None) -> str:
+def generate_escpos_customer_receipt(order: dict, business_info: dict, table_info: dict = None, currency: str = "GBP") -> str:
+    symbols = {'GBP': '\u00a3', 'USD': '$', 'EUR': '\u20ac', 'INR': '\u20b9'}
+    sym = symbols.get(currency, currency + ' ')
     commands = bytearray()
     commands.extend([0x1B, 0x40])
     commands.extend([0x1B, 0x61, 0x01])
@@ -309,18 +313,18 @@ def generate_escpos_customer_receipt(order: dict, business_info: dict, table_inf
         price = item.get('unit_price', 0)
         total = item.get('total', 0)
         commands.extend(f"{qty}x {name}\n".encode())
-        commands.extend(f"   ${price:.2f} x {qty} = ${total:.2f}\n".encode())
+        commands.extend(f"   {sym}{price:.2f} x {qty} = {sym}{total:.2f}\n".encode())
     commands.extend(b"-" * 40 + b"\n")
     subtotal = order.get('subtotal', 0)
     tip = order.get('tip_amount', 0)
     total = order.get('total_amount', 0)
-    commands.extend(f"{'Subtotal:':>30} ${subtotal:.2f}\n".encode())
+    commands.extend(f"{'Subtotal:':>30} {sym}{subtotal:.2f}\n".encode())
     if tip > 0:
         tip_pct = order.get('tip_percentage', 0)
-        commands.extend(f"{f'Tip ({tip_pct}%):':>30} ${tip:.2f}\n".encode())
+        commands.extend(f"{f'Tip ({tip_pct}%):':>30} {sym}{tip:.2f}\n".encode())
     commands.extend([0x1B, 0x45, 0x01])
     commands.extend([0x1D, 0x21, 0x01])
-    commands.extend(f"{'TOTAL:':>20} ${total:.2f}\n".encode())
+    commands.extend(f"{'TOTAL:':>20} {sym}{total:.2f}\n".encode())
     commands.extend([0x1D, 0x21, 0x00])
     commands.extend([0x1B, 0x45, 0x00])
     commands.extend(b"\n")

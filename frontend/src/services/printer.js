@@ -1,9 +1,10 @@
 /**
  * HevaPOS Thermal Printer Service
  * 
- * Uses @capacitor-community/bluetooth-le for native Android/iOS (APK)
- * Falls back to Web Bluetooth API for Chrome browser testing
- * Supports WiFi/Network printers via WebSocket or raw TCP
+ * Handles actual print execution for both WiFi and Bluetooth printers.
+ * - WiFi: Sends ESC/POS data via backend TCP proxy (/api/printer/send)
+ * - Bluetooth: Uses @capacitor-community/bluetooth-le for native BLE transmission
+ * - Web: Falls back to Web Bluetooth API for Chrome browser
  */
 
 import { BleClient, numbersToDataView } from '@capacitor-community/bluetooth-le';
@@ -22,22 +23,38 @@ const PRINTER_WRITE_UUIDS = [
   '49535343-8841-43f4-a8d4-ecbe34729bb3',
 ];
 
+// ===== Utility Functions =====
+
+function base64ToBytes(base64) {
+  const binaryString = atob(base64);
+  const bytes = new Uint8Array(binaryString.length);
+  for (let i = 0; i < binaryString.length; i++) {
+    bytes[i] = binaryString.charCodeAt(i);
+  }
+  return bytes;
+}
+
+function bytesToBase64(bytes) {
+  let binary = '';
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
+}
+
+// ===== Printer Service =====
+
 class ThermalPrinterService {
   constructor() {
-    this.device = null;
     this.connectedDeviceId = null;
     this.serviceUUID = null;
     this.characteristicUUID = null;
-    this.connectionType = null; // 'ble-native', 'ble-web', 'wifi'
     this.isNative = Capacitor.isNativePlatform();
     this.initialized = false;
   }
 
-  // ===== Initialization =====
-
   async initialize() {
     if (this.initialized) return;
-    
     if (this.isNative) {
       try {
         await BleClient.initialize({ androidNeverForLocation: true });
@@ -49,265 +66,226 @@ class ThermalPrinterService {
       }
     } else {
       this.initialized = true;
-      console.log('[Printer] Web mode - will use Web Bluetooth API');
+      console.log('[Printer] Web mode initialized');
     }
   }
 
-  isSupported() {
-    if (this.isNative) return true;
-    return !!navigator.bluetooth;
+  // ================================================================
+  // MAIN PRINT METHOD — call this from POS Screen, Test Print, etc.
+  // ================================================================
+  /**
+   * @param {Object} printer - { type: 'wifi'|'bluetooth', address: '...', name: '...' }
+   * @param {string} escposBase64 - Base64-encoded ESC/POS commands
+   * @param {string} apiUrl - Backend API URL (process.env.REACT_APP_BACKEND_URL)
+   * @param {string} authToken - JWT auth token
+   */
+  async printToDevice(printer, escposBase64, apiUrl, authToken) {
+    if (!printer) throw new Error('No printer configured. Add a printer in Settings > Printers.');
+    if (!escposBase64) throw new Error('No print data generated.');
+
+    console.log(`[Printer] Sending to "${printer.name}" (${printer.type}) at ${printer.address}`);
+
+    if (printer.type === 'wifi') {
+      return this._printWifi(printer, escposBase64, apiUrl, authToken);
+    } else if (printer.type === 'bluetooth') {
+      return this._printBluetooth(printer, escposBase64);
+    } else {
+      throw new Error(`Unknown printer type: ${printer.type}`);
+    }
   }
 
-  isConnected() {
-    return !!this.connectedDeviceId || !!this.device;
+  // ===== WiFi: Send via backend TCP proxy =====
+  async _printWifi(printer, base64Data, apiUrl, authToken) {
+    const parts = printer.address.split(':');
+    const ip = parts[0];
+    const port = parseInt(parts[1]) || 9100;
+
+    console.log(`[Printer] WiFi sending to ${ip}:${port} (${base64ToBytes(base64Data).length} bytes)`);
+
+    const response = await fetch(`${apiUrl}/api/printer/send`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`,
+      },
+      body: JSON.stringify({ ip, port, data: base64Data }),
+    });
+
+    if (!response.ok) {
+      const err = await response.json().catch(() => ({}));
+      throw new Error(err.detail || `WiFi print failed (HTTP ${response.status})`);
+    }
+
+    const result = await response.json();
+    console.log('[Printer] WiFi print success');
+    return result;
   }
 
-  // ===== Bluetooth Discovery & Connection =====
-
-  async discoverBluetoothPrinter() {
+  // ===== Bluetooth: Connect via BLE and send =====
+  async _printBluetooth(printer, escposBase64) {
+    const bytes = base64ToBytes(escposBase64);
     await this.initialize();
 
-    if (this.isNative) {
-      return this._discoverNative();
-    } else {
-      return this._discoverWebBluetooth();
-    }
-  }
-
-  async _discoverNative() {
-    // Ensure Bluetooth is enabled
-    const isEnabled = await BleClient.isEnabled();
-    if (!isEnabled) {
-      try {
-        await BleClient.requestEnable();
-      } catch {
-        throw new Error('Please enable Bluetooth to connect to a printer.');
-      }
+    if (!this.isNative) {
+      return this._printWebBluetooth(bytes);
     }
 
-    // Scan for devices
-    const devices = [];
-    
-    return new Promise((resolve, reject) => {
-      const timeout = setTimeout(async () => {
-        await BleClient.stopLEScan();
-        if (devices.length === 0) {
-          reject(new Error('No Bluetooth printers found. Make sure your printer is on and in range.'));
-        }
-      }, 15000);
+    // Native Capacitor: connect by MAC address if needed, then send
+    const deviceId = printer.address;
 
-      BleClient.requestLEScan(
-        { services: [], allowDuplicates: false },
-        (result) => {
-          const name = result.device.name || '';
-          // Filter for likely printers
-          if (name && (name.toLowerCase().includes('print') || 
-              name.toLowerCase().includes('pos') || 
-              name.toLowerCase().includes('esc') ||
-              name.toLowerCase().includes('thermal') ||
-              name.startsWith('BT-') || 
-              name.startsWith('RP') ||
-              name.startsWith('MTP') ||
-              name.startsWith('SP') ||
-              devices.length === 0)) { // Accept first named device
-            
-            const exists = devices.find(d => d.deviceId === result.device.deviceId);
-            if (!exists) {
-              devices.push({
-                deviceId: result.device.deviceId,
-                name: result.device.name || 'Unknown Printer',
-              });
-            }
-          }
-        }
-      ).then(() => {
-        console.log('[Printer] Native BLE scan started');
-      }).catch((err) => {
-        clearTimeout(timeout);
-        reject(new Error('Bluetooth scan failed: ' + err.message));
-      });
+    // If already connected to a different device, disconnect first
+    if (this.connectedDeviceId && this.connectedDeviceId !== deviceId) {
+      try { await BleClient.disconnect(this.connectedDeviceId); } catch {}
+      this.connectedDeviceId = null;
+      this.serviceUUID = null;
+      this.characteristicUUID = null;
+    }
 
-      // After finding first device, try to connect
-      const checkInterval = setInterval(async () => {
-        if (devices.length > 0) {
-          clearInterval(checkInterval);
-          clearTimeout(timeout);
-          await BleClient.stopLEScan();
-          
-          const device = devices[0];
-          try {
-            await this._connectNative(device.deviceId);
-            resolve({ name: device.name, deviceId: device.deviceId });
-          } catch (err) {
-            reject(err);
-          }
-        }
-      }, 1000);
-    });
+    // Connect if not already connected to this device
+    if (this.connectedDeviceId !== deviceId) {
+      await this._connectNativeBLE(deviceId);
+    }
+
+    await this._sendNativeBLE(bytes);
+    return { success: true, message: `Printed via Bluetooth to ${printer.name}` };
   }
 
-  async _connectNative(deviceId) {
+  async _connectNativeBLE(deviceId) {
+    console.log(`[Printer] Connecting BLE to ${deviceId}...`);
     try {
       await BleClient.connect(deviceId, (disconnectedId) => {
-        console.log('[Printer] Device disconnected:', disconnectedId);
-        this.connectedDeviceId = null;
-        this.serviceUUID = null;
-        this.characteristicUUID = null;
-        this.connectionType = null;
+        console.log('[Printer] BLE device disconnected:', disconnectedId);
+        if (this.connectedDeviceId === disconnectedId) {
+          this.connectedDeviceId = null;
+          this.serviceUUID = null;
+          this.characteristicUUID = null;
+        }
       });
 
-      // Discover writable characteristic
+      // Discover services and find writable characteristic
       const services = await BleClient.getServices(deviceId);
       let foundService = null;
       let foundCharacteristic = null;
 
       for (const service of services) {
         for (const characteristic of service.characteristics) {
-          if (characteristic.properties?.write || characteristic.properties?.writeWithoutResponse) {
-            // Prefer known printer UUIDs
-            if (PRINTER_SERVICE_UUIDS.includes(service.uuid.toLowerCase()) ||
-                PRINTER_WRITE_UUIDS.includes(characteristic.uuid.toLowerCase())) {
-              foundService = service.uuid;
-              foundCharacteristic = characteristic.uuid;
-              break;
-            }
-            // Fallback to first writable characteristic
-            if (!foundService) {
-              foundService = service.uuid;
-              foundCharacteristic = characteristic.uuid;
-            }
+          const canWrite = characteristic.properties?.write || characteristic.properties?.writeWithoutResponse;
+          if (!canWrite) continue;
+
+          // Prefer known printer UUIDs
+          const isKnownService = PRINTER_SERVICE_UUIDS.includes(service.uuid.toLowerCase());
+          const isKnownChar = PRINTER_WRITE_UUIDS.includes(characteristic.uuid.toLowerCase());
+
+          if (isKnownService || isKnownChar) {
+            foundService = service.uuid;
+            foundCharacteristic = characteristic.uuid;
+            break;
+          }
+          // Fallback: first writable characteristic
+          if (!foundService) {
+            foundService = service.uuid;
+            foundCharacteristic = characteristic.uuid;
           }
         }
-        if (PRINTER_SERVICE_UUIDS.includes(service.uuid?.toLowerCase())) break;
+        if (foundCharacteristic && PRINTER_SERVICE_UUIDS.includes(service.uuid?.toLowerCase())) break;
       }
 
       if (!foundService || !foundCharacteristic) {
         await BleClient.disconnect(deviceId);
-        throw new Error('Connected but no writable printer service found.');
+        throw new Error(
+          'Connected but no writable print service found. ' +
+          'This printer may use Bluetooth Classic (SPP) instead of BLE. ' +
+          'Try connecting it via WiFi/Network instead, or check if your printer model supports BLE.'
+        );
       }
 
       this.connectedDeviceId = deviceId;
       this.serviceUUID = foundService;
       this.characteristicUUID = foundCharacteristic;
-      this.connectionType = 'ble-native';
-      console.log(`[Printer] Connected native BLE: service=${foundService}, char=${foundCharacteristic}`);
+      console.log(`[Printer] BLE connected: service=${foundService}, char=${foundCharacteristic}`);
     } catch (error) {
-      throw new Error('Failed to connect to printer: ' + error.message);
-    }
-  }
-
-  async _discoverWebBluetooth() {
-    if (!navigator.bluetooth) {
-      throw new Error('Web Bluetooth not supported. Use Chrome on desktop or the Android app.');
-    }
-
-    try {
-      const device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: PRINTER_SERVICE_UUIDS,
-      });
-
-      if (!device) throw new Error('No device selected');
-
-      const server = await device.gatt.connect();
-      
-      // Try known service UUIDs
-      for (const serviceUUID of PRINTER_SERVICE_UUIDS) {
-        try {
-          const service = await server.getPrimaryService(serviceUUID);
-          for (const charUUID of PRINTER_WRITE_UUIDS) {
-            try {
-              const characteristic = await service.getCharacteristic(charUUID);
-              this.device = { gattServer: server, characteristic, name: device.name };
-              this.connectionType = 'ble-web';
-              console.log('[Printer] Web Bluetooth connected');
-              return { name: device.name || 'Bluetooth Printer' };
-            } catch {}
-          }
-        } catch {}
+      if (error.message?.includes('no writable') || error.message?.includes('Bluetooth Classic')) {
+        throw error;
       }
-
-      // Fallback: try to find any writable characteristic
-      const services = await server.getPrimaryServices();
-      for (const service of services) {
-        const chars = await service.getCharacteristics();
-        for (const char of chars) {
-          if (char.properties.write || char.properties.writeWithoutResponse) {
-            this.device = { gattServer: server, characteristic: char, name: device.name };
-            this.connectionType = 'ble-web';
-            return { name: device.name || 'Bluetooth Printer' };
-          }
-        }
-      }
-
-      throw new Error('Connected but no writable characteristic found.');
-    } catch (error) {
-      if (error.name === 'NotFoundError') {
-        throw new Error('No printer selected. Please try again.');
-      }
-      throw error;
-    }
-  }
-
-  // ===== WiFi Printer =====
-
-  async connectWifi(ip, port = 9100) {
-    // WiFi printers are connected via the backend API (ESC/POS commands sent to IP)
-    this.device = { type: 'wifi', ip, port, name: `WiFi Printer (${ip})` };
-    this.connectionType = 'wifi';
-    console.log(`[Printer] WiFi printer registered: ${ip}:${port}`);
-    return { name: `WiFi Printer (${ip}:${port})` };
-  }
-
-  // ===== Print Operations =====
-
-  async printRaw(data) {
-    if (!this.isConnected()) {
-      throw new Error('No printer connected');
-    }
-
-    let bytes;
-    if (typeof data === 'string') {
-      bytes = new TextEncoder().encode(data);
-    } else if (Array.isArray(data)) {
-      bytes = new Uint8Array(data);
-    } else {
-      bytes = data;
-    }
-
-    if (this.connectionType === 'ble-native') {
-      await this._sendNativeBLE(bytes);
-    } else if (this.connectionType === 'ble-web') {
-      await this._sendWebBluetooth(bytes);
-    } else if (this.connectionType === 'wifi') {
-      console.log(`[Printer] WiFi print: ${bytes.length} bytes (handled via backend API)`);
+      throw new Error(
+        `Cannot connect to Bluetooth printer (${deviceId}): ${error.message}. ` +
+        'Make sure the printer is powered on, in range, and Bluetooth is enabled.'
+      );
     }
   }
 
   async _sendNativeBLE(bytes) {
-    const CHUNK_SIZE = 100; // BLE MTU safe chunk
+    if (!this.connectedDeviceId || !this.serviceUUID || !this.characteristicUUID) {
+      throw new Error('Bluetooth printer not connected. Try reconnecting.');
+    }
+
+    const CHUNK_SIZE = 100;
     for (let offset = 0; offset < bytes.length; offset += CHUNK_SIZE) {
       const chunk = bytes.slice(offset, Math.min(offset + CHUNK_SIZE, bytes.length));
       const dataView = numbersToDataView(Array.from(chunk));
-      
+
       await BleClient.write(
         this.connectedDeviceId,
         this.serviceUUID,
         this.characteristicUUID,
         dataView
       );
-      
-      // Small delay between chunks
+
       if (offset + CHUNK_SIZE < bytes.length) {
         await new Promise(r => setTimeout(r, 30));
       }
     }
-    console.log(`[Printer] Sent ${bytes.length} bytes via native BLE`);
+    console.log(`[Printer] BLE sent ${bytes.length} bytes`);
   }
 
-  async _sendWebBluetooth(bytes) {
-    const characteristic = this.device?.characteristic;
-    if (!characteristic) throw new Error('No characteristic available');
+  // ===== Web Bluetooth Fallback (Chrome desktop testing) =====
+  async _printWebBluetooth(bytes) {
+    if (!navigator.bluetooth) {
+      throw new Error('Bluetooth not available in this browser. Use the HevaPOS Android app for Bluetooth printing.');
+    }
+
+    const device = await navigator.bluetooth.requestDevice({
+      acceptAllDevices: true,
+      optionalServices: PRINTER_SERVICE_UUIDS,
+    });
+
+    if (!device) throw new Error('No device selected');
+    const server = await device.gatt.connect();
+    let characteristic = null;
+
+    // Try known printer service/characteristic UUIDs first
+    for (const serviceUUID of PRINTER_SERVICE_UUIDS) {
+      try {
+        const service = await server.getPrimaryService(serviceUUID);
+        for (const charUUID of PRINTER_WRITE_UUIDS) {
+          try {
+            characteristic = await service.getCharacteristic(charUUID);
+            break;
+          } catch {}
+        }
+        if (characteristic) break;
+      } catch {}
+    }
+
+    // Fallback: any writable characteristic
+    if (!characteristic) {
+      const services = await server.getPrimaryServices();
+      for (const service of services) {
+        const chars = await service.getCharacteristics();
+        for (const char of chars) {
+          if (char.properties.write || char.properties.writeWithoutResponse) {
+            characteristic = char;
+            break;
+          }
+        }
+        if (characteristic) break;
+      }
+    }
+
+    if (!characteristic) {
+      server.disconnect();
+      throw new Error('Connected but no writable characteristic found.');
+    }
 
     const CHUNK_SIZE = 100;
     for (let offset = 0; offset < bytes.length; offset += CHUNK_SIZE) {
@@ -317,50 +295,66 @@ class ThermalPrinterService {
         await new Promise(r => setTimeout(r, 30));
       }
     }
-    console.log(`[Printer] Sent ${bytes.length} bytes via Web Bluetooth`);
+
+    server.disconnect();
+    console.log(`[Printer] Web Bluetooth sent ${bytes.length} bytes`);
+    return { success: true, message: 'Printed via Web Bluetooth' };
   }
 
-  // ===== Test Print =====
+  // ================================================================
+  // BLE Discovery (for PrinterSettings scan)
+  // ================================================================
+  async discoverBLEPrinters(onDeviceFound, durationMs = 10000) {
+    await this.initialize();
 
-  async testPrint() {
-    const cmds = [
-      0x1b, 0x40,                    // Initialize
-      0x1b, 0x61, 0x01,              // Center align
-      0x1b, 0x45, 0x08,              // Bold on
-      ...new TextEncoder().encode('HevaPOS'),
-      0x0a,                           // Line feed
-      0x1b, 0x45, 0x00,              // Bold off
-      ...new TextEncoder().encode('Printer Test OK'),
-      0x0a, 0x0a,
-      ...new TextEncoder().encode(new Date().toLocaleString()),
-      0x0a,
-      ...new TextEncoder().encode('--------------------------------'),
-      0x0a,
-      0x1b, 0x64, 0x03,              // Feed 3 lines
-      0x1d, 0x56, 0x00,              // Cut paper
-    ];
-    await this.printRaw(new Uint8Array(cmds));
+    if (!this.isNative) {
+      throw new Error('Bluetooth scanning requires the HevaPOS Android app.');
+    }
+
+    const isEnabled = await BleClient.isEnabled();
+    if (!isEnabled) {
+      try { await BleClient.requestEnable(); } catch {
+        throw new Error('Please enable Bluetooth to scan for printers.');
+      }
+    }
+
+    const seen = new Set();
+    await BleClient.requestLEScan({ services: [], allowDuplicates: false }, (result) => {
+      const id = result.device.deviceId;
+      if (!seen.has(id) && (result.device.name || id)) {
+        seen.add(id);
+        onDeviceFound({
+          deviceId: id,
+          name: result.device.name || 'Unknown Device',
+          rssi: result.rssi,
+        });
+      }
+    });
+
+    console.log(`[Printer] BLE scan started for ${durationMs}ms`);
+    await new Promise(resolve => setTimeout(resolve, durationMs));
+    await BleClient.stopLEScan();
+    console.log(`[Printer] BLE scan complete, found ${seen.size} devices`);
   }
 
-  // ===== Disconnect =====
-
+  // ================================================================
+  // Disconnect
+  // ================================================================
   async disconnect() {
     try {
-      if (this.connectionType === 'ble-native' && this.connectedDeviceId) {
+      if (this.isNative && this.connectedDeviceId) {
         await BleClient.disconnect(this.connectedDeviceId);
-      } else if (this.connectionType === 'ble-web' && this.device?.gattServer) {
-        this.device.gattServer.disconnect();
       }
     } catch (error) {
       console.warn('[Printer] Disconnect error:', error);
     }
-    this.device = null;
     this.connectedDeviceId = null;
     this.serviceUUID = null;
     this.characteristicUUID = null;
-    this.connectionType = null;
     console.log('[Printer] Disconnected');
   }
 }
 
-export default new ThermalPrinterService();
+const printerService = new ThermalPrinterService();
+export default printerService;
+export { base64ToBytes, bytesToBase64 };
