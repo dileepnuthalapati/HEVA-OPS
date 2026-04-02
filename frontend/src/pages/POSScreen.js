@@ -11,6 +11,7 @@ import { Label } from '../components/ui/label';
 import { Textarea } from '../components/ui/textarea';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Sheet, SheetContent, SheetTitle } from '../components/ui/sheet';
 import { toast } from 'sonner';
 import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, DollarSign, CreditCard, Users, Percent, Tag, MessageSquare, Banknote, Search, PackagePlus, ArrowLeft } from 'lucide-react';
 
@@ -52,6 +53,7 @@ const POSScreen = () => {
   const [discountReason, setDiscountReason] = useState('');
   const [showDiscountPanel, setShowDiscountPanel] = useState(false);
   const [showNotesPanel, setShowNotesPanel] = useState(false);
+  const [mobileCartOpen, setMobileCartOpen] = useState(false);
   
   // Split payment mode (cash/card amounts)
   const [splitPaymentMode, setSplitPaymentMode] = useState(false);
@@ -749,277 +751,239 @@ const POSScreen = () => {
         </ScrollArea>
       </div>
 
-      {/* Cart Sidebar */}
-      <div className="w-[380px] bg-card border-l flex flex-col cart-sidebar">
-        <div className="p-4 border-b">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ShoppingCart className="w-6 h-6" />
-              <h2 className="text-xl font-bold">Cart</h2>
-            </div>
-            {cart.length > 0 && (
-              <Button variant="ghost" size="sm" data-testid="clear-cart-button" onClick={clearCart}>
-                <X className="w-5 h-5" />
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Table Selection - More Compact */}
-        <div className="px-4 py-2 border-b bg-slate-50">
-          <Select value={selectedTable || "no-table"} onValueChange={(v) => setSelectedTable(v === "no-table" ? null : v)}>
-            <SelectTrigger data-testid="table-selector" className="w-full h-10 text-sm">
-              <SelectValue placeholder="Select table (optional)" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="no-table">
+      {/* Cart Content - reused in desktop sidebar and mobile sheet */}
+      {(() => {
+        const cartContent = (
+          <>
+            <div className="p-4 border-b">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <Users className="w-4 h-4 text-muted-foreground" />
-                  Takeaway
+                  <ShoppingCart className="w-5 h-5" />
+                  <h2 className="text-lg font-bold">Cart</h2>
                 </div>
-              </SelectItem>
-              {tables.filter(t => t.status === 'available' || t.status === 'occupied').map((table) => (
-                <SelectItem key={table.id} value={table.id}>
-                  <div className="flex items-center gap-2">
-                    Table {table.number}
-                    <span className={`text-xs px-1.5 py-0.5 rounded ${
-                      table.status === 'available' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
-                    }`}>
-                      {table.status === 'available' ? 'Free' : 'In Use'}
-                    </span>
-                  </div>
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        <ScrollArea className="flex-1 p-4">
-          {cart.length === 0 ? (
-            <div className="text-center py-8 text-muted-foreground">
-              <ShoppingCart className="w-12 h-12 mx-auto mb-2 opacity-50" />
-              <p>Cart empty</p>
+                {cart.length > 0 && (
+                  <Button variant="ghost" size="sm" data-testid="clear-cart-button" onClick={clearCart}>
+                    <X className="w-4 h-4" />
+                  </Button>
+                )}
+              </div>
             </div>
-          ) : (
-            <div className="space-y-2">
-              {cart.map((item) => (
-                <div key={item.product_id} data-testid={`cart-item-${item.product_id}`} className="p-3 bg-slate-50 rounded-lg">
-                  <div className="flex justify-between items-center mb-2">
-                    <div className="flex-1 min-w-0">
-                      <div className="font-semibold text-sm truncate flex items-center gap-1">
-                        {item.product_name}
-                        {item.is_custom && (
-                          <span className="text-xs bg-amber-100 text-amber-700 px-1 rounded">Custom</span>
-                        )}
-                      </div>
-                      <div className="text-xs text-muted-foreground font-mono">
-                        {getCurrencySymbol(currency)}{item.unit_price.toFixed(2)} × {item.quantity}
-                      </div>
-                    </div>
-                    <div className="font-bold font-mono text-emerald-600 ml-2">
-                      {getCurrencySymbol(currency)}{item.total.toFixed(2)}
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between">
+
+            {/* Table Selection */}
+            <div className="px-4 py-2 border-b bg-slate-50">
+              <Select value={selectedTable || "no-table"} onValueChange={(v) => setSelectedTable(v === "no-table" ? null : v)}>
+                <SelectTrigger data-testid="table-selector" className="w-full h-9 text-sm">
+                  <SelectValue placeholder="Select table (optional)" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="no-table">
                     <div className="flex items-center gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        data-testid={`decrease-qty-${item.product_id}`}
-                        onClick={() => updateQuantity(item.product_id, -1)}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Minus className="w-4 h-4" />
-                      </Button>
-                      <span className="font-mono font-bold w-6 text-center">{item.quantity}</span>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        data-testid={`increase-qty-${item.product_id}`}
-                        onClick={() => updateQuantity(item.product_id, 1)}
-                        className="h-8 w-8 p-0"
-                      >
-                        <Plus className="w-4 h-4" />
-                      </Button>
+                      <Users className="w-4 h-4 text-muted-foreground" />
+                      Takeaway
                     </div>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      data-testid={`remove-item-${item.product_id}`}
-                      onClick={() => removeFromCart(item.product_id)}
-                      className="h-8 w-8 p-0 text-red-500 hover:bg-red-50"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
-                  </div>
-                </div>
-              ))}
+                  </SelectItem>
+                  {tables.filter(t => t.status === 'available' || t.status === 'occupied').map((table) => (
+                    <SelectItem key={table.id} value={table.id}>
+                      <div className="flex items-center gap-2">
+                        Table {table.number}
+                        <span className={`text-xs px-1.5 py-0.5 rounded ${
+                          table.status === 'available' ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                        }`}>
+                          {table.status === 'available' ? 'Free' : 'In Use'}
+                        </span>
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
-          )}
-        </ScrollArea>
 
-        <div className="p-6 border-t space-y-4">
-          {/* Discount and Notes Buttons */}
-          <div className="flex gap-2">
-            <Button
-              variant={showDiscountPanel ? "secondary" : "outline"}
-              className="flex-1 h-11 text-base"
-              onClick={() => { setShowDiscountPanel(!showDiscountPanel); setShowNotesPanel(false); }}
-              data-testid="toggle-discount-btn"
-            >
-              <Percent className="w-5 h-5 mr-2" />
-              Discount
-              {discountValue && <span className="ml-1 text-emerald-600">✓</span>}
-            </Button>
-            <Button
-              variant={showNotesPanel ? "secondary" : "outline"}
-              className="flex-1 h-11 text-base"
-              onClick={() => { setShowNotesPanel(!showNotesPanel); setShowDiscountPanel(false); }}
-              data-testid="toggle-notes-btn"
-            >
-              <MessageSquare className="w-5 h-5 mr-2" />
-              Notes
-              {orderNotes && <span className="ml-1 text-emerald-600">✓</span>}
-            </Button>
-          </div>
+            <ScrollArea className="flex-1 p-3">
+              {cart.length === 0 ? (
+                <div className="text-center py-6 text-muted-foreground">
+                  <ShoppingCart className="w-10 h-10 mx-auto mb-2 opacity-50" />
+                  <p className="text-sm">Cart empty</p>
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {cart.map((item) => (
+                    <div key={item.product_id} data-testid={`cart-item-${item.product_id}`} className="p-2.5 bg-slate-50 rounded-lg">
+                      <div className="flex justify-between items-center mb-1.5">
+                        <div className="flex-1 min-w-0">
+                          <div className="font-semibold text-sm truncate flex items-center gap-1">
+                            {item.product_name}
+                            {item.is_custom && (
+                              <span className="text-xs bg-amber-100 text-amber-700 px-1 rounded">Custom</span>
+                            )}
+                          </div>
+                          <div className="text-xs text-muted-foreground font-mono">
+                            {getCurrencySymbol(currency)}{item.unit_price.toFixed(2)} x {item.quantity}
+                          </div>
+                        </div>
+                        <div className="font-bold font-mono text-emerald-600 text-sm ml-2">
+                          {getCurrencySymbol(currency)}{item.total.toFixed(2)}
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-1.5">
+                          <Button size="sm" variant="outline" data-testid={`decrease-qty-${item.product_id}`} onClick={() => updateQuantity(item.product_id, -1)} className="h-7 w-7 p-0">
+                            <Minus className="w-3 h-3" />
+                          </Button>
+                          <span className="font-mono font-bold w-5 text-center text-sm">{item.quantity}</span>
+                          <Button size="sm" variant="outline" data-testid={`increase-qty-${item.product_id}`} onClick={() => updateQuantity(item.product_id, 1)} className="h-7 w-7 p-0">
+                            <Plus className="w-3 h-3" />
+                          </Button>
+                        </div>
+                        <Button variant="ghost" size="sm" data-testid={`remove-item-${item.product_id}`} onClick={() => removeFromCart(item.product_id)} className="h-7 w-7 p-0 text-red-500 hover:bg-red-50">
+                          <Trash2 className="w-3 h-3" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
 
-          {/* Discount Panel */}
-          {showDiscountPanel && (
-            <div className="p-4 bg-slate-50 rounded-lg space-y-3">
+            <div className="p-4 border-t space-y-3">
               <div className="flex gap-2">
                 <Button
-                  variant={discountType === 'percentage' ? 'default' : 'outline'}
-                  onClick={() => setDiscountType('percentage')}
-                  className="flex-1 h-10"
+                  variant={showDiscountPanel ? "secondary" : "outline"}
+                  className="flex-1 h-10 text-sm"
+                  onClick={() => { setShowDiscountPanel(!showDiscountPanel); setShowNotesPanel(false); }}
+                  data-testid="toggle-discount-btn"
                 >
                   <Percent className="w-4 h-4 mr-1" />
-                  Percentage
+                  Discount
+                  {discountValue && <span className="ml-1 text-emerald-600 text-xs">ON</span>}
                 </Button>
                 <Button
-                  variant={discountType === 'fixed' ? 'default' : 'outline'}
-                  onClick={() => setDiscountType('fixed')}
-                  className="flex-1 h-10"
+                  variant={showNotesPanel ? "secondary" : "outline"}
+                  className="flex-1 h-10 text-sm"
+                  onClick={() => { setShowNotesPanel(!showNotesPanel); setShowDiscountPanel(false); }}
+                  data-testid="toggle-notes-btn"
                 >
-                  <Tag className="w-3 h-3 mr-1" />
-                  Fixed
+                  <MessageSquare className="w-4 h-4 mr-1" />
+                  Notes
+                  {orderNotes && <span className="ml-1 text-emerald-600 text-xs">ON</span>}
                 </Button>
               </div>
-              {discountType && (
-                <>
-                  <div>
-                    <Input
-                      type="number"
-                      placeholder={discountType === 'percentage' ? 'Enter %' : `Enter ${getCurrencySymbol(currency)}`}
-                      value={discountValue}
-                      onChange={(e) => setDiscountValue(e.target.value)}
-                      data-testid="discount-value-input"
-                    />
-                  </div>
-                  <div>
-                    <Input
-                      placeholder="Reason (optional)"
-                      value={discountReason}
-                      onChange={(e) => setDiscountReason(e.target.value)}
-                      data-testid="discount-reason-input"
-                    />
-                  </div>
+
+              {showDiscountPanel && (
+                <div className="p-3 bg-slate-50 rounded-lg space-y-2">
                   <div className="flex gap-2">
-                    <Button size="sm" variant="outline" onClick={() => { setDiscountType(''); setDiscountValue(''); setDiscountReason(''); }} className="flex-1">
-                      Clear
+                    <Button variant={discountType === 'percentage' ? 'default' : 'outline'} onClick={() => setDiscountType('percentage')} className="flex-1 h-9 text-sm">
+                      <Percent className="w-3 h-3 mr-1" /> %
                     </Button>
-                    <Button size="sm" onClick={() => setShowDiscountPanel(false)} className="flex-1">
-                      Apply
+                    <Button variant={discountType === 'fixed' ? 'default' : 'outline'} onClick={() => setDiscountType('fixed')} className="flex-1 h-9 text-sm">
+                      <Tag className="w-3 h-3 mr-1" /> Fixed
                     </Button>
                   </div>
-                </>
+                  {discountType && (
+                    <>
+                      <Input type="number" placeholder={discountType === 'percentage' ? 'Enter %' : `Enter ${getCurrencySymbol(currency)}`} value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} data-testid="discount-value-input" className="h-9" />
+                      <Input placeholder="Reason (optional)" value={discountReason} onChange={(e) => setDiscountReason(e.target.value)} data-testid="discount-reason-input" className="h-9" />
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => { setDiscountType(''); setDiscountValue(''); setDiscountReason(''); }} className="flex-1">Clear</Button>
+                        <Button size="sm" onClick={() => setShowDiscountPanel(false)} className="flex-1">Apply</Button>
+                      </div>
+                    </>
+                  )}
+                </div>
               )}
-            </div>
-          )}
 
-          {/* Notes Panel */}
-          {showNotesPanel && (
-            <div className="p-3 bg-slate-50 rounded-lg space-y-3">
-              <Textarea
-                placeholder="Order notes for kitchen (allergies, special requests...)"
-                value={orderNotes}
-                onChange={(e) => setOrderNotes(e.target.value)}
-                rows={3}
-                data-testid="order-notes-input"
-              />
-              <div className="flex gap-2">
-                <Button size="sm" variant="outline" onClick={() => setOrderNotes('')} className="flex-1">
-                  Clear
-                </Button>
-                <Button size="sm" onClick={() => setShowNotesPanel(false)} className="flex-1">
-                  Done
-                </Button>
+              {showNotesPanel && (
+                <div className="p-3 bg-slate-50 rounded-lg space-y-2">
+                  <Textarea placeholder="Order notes for kitchen..." value={orderNotes} onChange={(e) => setOrderNotes(e.target.value)} rows={2} data-testid="order-notes-input" />
+                  <div className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => setOrderNotes('')} className="flex-1">Clear</Button>
+                    <Button size="sm" onClick={() => setShowNotesPanel(false)} className="flex-1">Done</Button>
+                  </div>
+                </div>
+              )}
+
+              <div className="space-y-1">
+                {calculateDiscount() > 0 && (
+                  <div className="flex justify-between text-sm text-emerald-600">
+                    <span>Discount</span>
+                    <span className="font-mono">-{getCurrencySymbol(currency)}{calculateDiscount().toFixed(2)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between items-center pt-2 border-t">
+                  <div>
+                    <span className="text-lg font-bold">Total</span>
+                    <span className="text-xs text-muted-foreground ml-1">({cart.reduce((sum, item) => sum + item.quantity, 0)} items)</span>
+                  </div>
+                  <span className="text-xl font-bold font-mono text-emerald-600">{getCurrencySymbol(currency)}{calculateCartTotal().toFixed(2)}</span>
+                </div>
               </div>
+              
+              {lastOrderNumber && (
+                <div className="p-2 bg-emerald-50 border border-emerald-200 rounded-lg text-center text-sm animate-pulse">
+                  <span className="font-bold text-emerald-700">Order #{lastOrderNumber} Sent!</span>
+                </div>
+              )}
+              
+              {editingOrder && (
+                <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="font-semibold text-amber-800 text-sm">Editing Order #{editingOrder.order_number}</div>
+                      <div className="text-xs text-amber-600">Modify items, then Update</div>
+                    </div>
+                    <Button size="sm" variant="ghost" onClick={() => { setEditingOrder(null); setCart([]); setOrderNotes(''); setDiscountType(''); setDiscountValue(''); setDiscountReason(''); }}>
+                      <X className="w-4 h-4" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+              
+              <Button
+                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold h-12"
+                data-testid="place-order-button"
+                onClick={() => { editingOrder ? updateOrder() : placeOrder(); setMobileCartOpen(false); }}
+                disabled={cart.length === 0}
+              >
+                <Printer className="w-5 h-5 mr-2" />
+                {editingOrder ? `Update Order #${editingOrder.order_number}` : 'Place Order (Send to Kitchen)'}
+              </Button>
             </div>
-          )}
+          </>
+        );
 
-          {/* Order Summary - Compact */}
-          <div className="space-y-2">
-            {calculateDiscount() > 0 && (
-              <div className="flex justify-between text-sm text-emerald-600">
-                <span>Discount ({discountType === 'percentage' ? `${discountValue}%` : `${getCurrencySymbol(currency)}${discountValue}`})</span>
-                <span className="font-mono">-{getCurrencySymbol(currency)}{calculateDiscount().toFixed(2)}</span>
+        return (
+          <>
+            {/* Desktop Cart Sidebar - always visible */}
+            <div className="hidden md:flex w-[380px] bg-card border-l flex-col cart-sidebar">
+              {cartContent}
+            </div>
+
+            {/* Mobile Cart - Sheet drawer */}
+            <Sheet open={mobileCartOpen} onOpenChange={setMobileCartOpen}>
+              <SheetContent side="right" className="w-[340px] sm:w-[380px] p-0 flex flex-col">
+                <SheetTitle className="sr-only">Shopping Cart</SheetTitle>
+                {cartContent}
+              </SheetContent>
+            </Sheet>
+
+            {/* Mobile floating cart button */}
+            {!mobileCartOpen && (
+              <div className="md:hidden fixed bottom-4 right-4 z-40">
+                <Button
+                  data-testid="mobile-cart-button"
+                  className="h-14 px-5 rounded-full shadow-lg bg-amber-500 hover:bg-amber-600 text-white"
+                  onClick={() => setMobileCartOpen(true)}
+                >
+                  <ShoppingCart className="w-5 h-5 mr-2" />
+                  Cart {cart.length > 0 && `(${cart.reduce((s, i) => s + i.quantity, 0)})`}
+                  {cart.length > 0 && (
+                    <span className="ml-2 font-mono font-bold">{getCurrencySymbol(currency)}{calculateCartTotal().toFixed(2)}</span>
+                  )}
+                </Button>
               </div>
             )}
-            <div className="flex justify-between items-center pt-2 border-t">
-              <div>
-                <span className="text-xl font-bold">Total</span>
-                <span className="text-sm text-muted-foreground ml-2">({cart.reduce((sum, item) => sum + item.quantity, 0)} items)</span>
-              </div>
-              <span className="cart-total font-mono text-emerald-600">{getCurrencySymbol(currency)}{calculateCartTotal().toFixed(2)}</span>
-            </div>
-          </div>
-          
-          {/* Last Order Confirmation */}
-          {lastOrderNumber && (
-            <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-center animate-pulse">
-              <div className="font-bold text-emerald-700 text-lg">
-                ✓ Order #{lastOrderNumber} Sent to Kitchen!
-              </div>
-            </div>
-          )}
-          
-          {/* Editing Order Banner */}
-          {editingOrder && (
-            <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg mb-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="font-semibold text-amber-800 text-base">Editing Order #{editingOrder.order_number}</div>
-                  <div className="text-sm text-amber-600">Add items and click Update Order</div>
-                </div>
-                <Button 
-                  size="sm" 
-                  variant="ghost" 
-                  onClick={() => {
-                    setEditingOrder(null);
-                    setCart([]);
-                    setOrderNotes('');
-                    setDiscountType('');
-                    setDiscountValue('');
-                    setDiscountReason('');
-                  }}
-                >
-                  <X className="w-5 h-5" />
-                </Button>
-              </div>
-            </div>
-          )}
-          
-          <Button
-            className="place-order-btn w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold"
-            data-testid="place-order-button"
-            onClick={editingOrder ? updateOrder : placeOrder}
-            disabled={cart.length === 0}
-          >
-            <Printer className="w-6 h-6 mr-2" />
-            {editingOrder ? `Update Order #${editingOrder.order_number}` : 'Place Order (Send to Kitchen)'}
-          </Button>
-        </div>
-      </div>
+          </>
+        );
+      })()}
 
       {/* Payment Method Dialog */}
       <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>

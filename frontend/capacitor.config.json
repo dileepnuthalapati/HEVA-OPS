@@ -1,20 +1,36 @@
 {
-  "appId": "com.hetupathways.app",
+  "appId": "com.hevapos.app",
   "appName": "HevaPOS",
   "webDir": "build",
+  "bundledWebRuntime": false,
   "server": {
-    "androidScheme": "https",
-    "cleartext": false
-  },
-  "android": {
-    "allowMixedContent": false,
-    "backgroundColor": "#0f172a"
+    "androidScheme": "http",
+    "cleartext": true
   },
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 2000,
-      "backgroundColor": "#0f172a",
+      "backgroundColor": "#1a1a2e",
+      "androidSplashResourceName": "splash",
+      "androidScaleType": "CENTER_CROP",
+      "androidSpinnerStyle": "small",
+      "spinnerColor": "#10b981",
+      "splashFullScreen": true,
+      "splashImmersive": true,
       "showSpinner": false
+    },
+    "BluetoothLe": {
+      "displayStrings": {
+        "scanning": "Scanning for printers...",
+        "cancel": "Cancel",
+        "availableDevices": "Available Printers",
+        "noDeviceFound": "No printers found"
+      }
     }
+  },
+  "android": {
+    "allowMixedContent": true,
+    "captureInput": true,
+    "webContentsDebuggingEnabled": true
   }
 }

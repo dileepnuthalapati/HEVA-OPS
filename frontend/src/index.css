@@ -189,14 +189,6 @@ body {
     min-height: 0;
     overflow-y: auto;
   }
-  
-  .pos-screen .cart-sidebar {
-    width: 100% !important;
-    max-height: 40vh;
-    border-left: none !important;
-    border-top: 2px solid #e5e7eb;
-    overflow-y: auto;
-  }
 
   .pos-grid {
     grid-template-columns: repeat(2, 1fr);

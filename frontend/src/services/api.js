@@ -406,4 +406,39 @@ export const printerAPI = {
   },
 };
 
+export const subscriptionAPI = {
+  getAll: async () => {
+    const response = await api.get('/subscriptions');
+    return response.data;
+  },
+  getMy: async () => {
+    const response = await api.get('/subscriptions/my');
+    return response.data;
+  },
+  update: async (restaurantId, data) => {
+    const response = await api.put(`/subscriptions/${restaurantId}`, data);
+    return response.data;
+  },
+  checkTrials: async () => {
+    const response = await api.post('/subscriptions/check-trials');
+    return response.data;
+  },
+};
+
+export const notificationAPI = {
+  getAll: async () => {
+    const response = await api.get('/notifications');
+    return response.data;
+  },
+  getMy: async () => {
+    const response = await api.get('/notifications/my');
+    return response.data;
+  },
+  markSent: async (id) => {
+    const response = await api.put(`/notifications/${id}/mark-sent`);
+    return response.data;
+  },
+};
+
+
 export default api;

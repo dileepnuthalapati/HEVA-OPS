@@ -5,12 +5,13 @@ import { Button } from './ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from './ui/sheet';
 import { 
   LayoutDashboard, Package, FolderTree, ShoppingCart, FileText, LogOut, 
-  Wallet, Settings, Users, Printer, BarChart3, Globe, Building2, Menu
+  Wallet, Settings, Users, Printer, BarChart3, Globe, Building2, Menu, CreditCard
 } from 'lucide-react';
 
 const platformOwnerMenu = [
   { path: '/platform/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/restaurants', icon: Building2, label: 'Restaurants' },
+  { path: '/platform/subscriptions', icon: CreditCard, label: 'Subscriptions' },
   { path: '/platform/categories', icon: Globe, label: 'Global Categories' },
   { path: '/platform/reports', icon: BarChart3, label: 'Platform Reports' },
   { path: '/platform/settings', icon: Settings, label: 'Platform Settings' },

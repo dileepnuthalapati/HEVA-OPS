@@ -47,6 +47,7 @@ async def seed_database():
     await db.restaurants.delete_many({})
     await db.categories.delete_many({})
     await db.products.delete_many({})
+    await db.notifications.delete_many({})
     
     # ===== CREATE PLATFORM OWNER =====
     print("\n👑 Creating Platform Owner...")
