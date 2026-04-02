@@ -22,6 +22,7 @@
 import { BleClient, numbersToDataView } from '@capacitor-community/bluetooth-le';
 import { BluetoothPrinter } from '@kduma-autoid/capacitor-bluetooth-printer';
 import { TcpSocket } from 'capacitor-tcp-socket';
+import { CapacitorWifi } from '@capgo/capacitor-wifi';
 import { Capacitor } from '@capacitor/core';
 
 // BLE printer UUIDs
@@ -342,36 +343,81 @@ class ThermalPrinterService {
   }
 
   // ================================================================
-  // WiFi Printer Discovery — scan from the tablet itself
+  // WiFi Printer Discovery — auto-detect subnet from device IP
   // ================================================================
-  async scanWifiPrinters(subnet, onPrinterFound, ports = [9100]) {
+
+  /**
+   * Get the device's local WiFi IP and extract the subnet.
+   * Returns e.g., '192.168.0' from '192.168.0.105'
+   */
+  async getDeviceSubnet() {
+    if (!this.isNative) return null;
+    try {
+      const result = await CapacitorWifi.getIpAddress();
+      const ip = result.ipAddress;
+      if (!ip) return null;
+      const parts = ip.split('.');
+      if (parts.length === 4) {
+        const subnet = `${parts[0]}.${parts[1]}.${parts[2]}`;
+        console.log(`[Printer] Device IP: ${ip}, Subnet: ${subnet}`);
+        return subnet;
+      }
+      return null;
+    } catch (error) {
+      console.warn('[Printer] Failed to get device IP:', error.message);
+      return null;
+    }
+  }
+
+  /**
+   * Scan the local WiFi network for printers.
+   * Auto-detects subnet from the tablet's IP address.
+   * @param {Function} onPrinterFound - callback({ip, port, name})
+   * @param {Function} onProgress - callback(message)
+   */
+  async scanWifiPrinters(onPrinterFound, onProgress) {
     if (!this.isNative) {
       throw new Error('WiFi scanning from browser not supported. Use the backend scanner or enter the printer IP manually.');
     }
 
+    // Auto-detect subnet from device IP
+    const subnet = await this.getDeviceSubnet();
+    if (!subnet) {
+      throw new Error(
+        'Could not detect your WiFi network.\n' +
+        'Make sure your tablet is connected to WiFi.'
+      );
+    }
+
+    if (onProgress) onProgress(`Scanning ${subnet}.x for printers...`);
     const results = [];
-    const scanPromises = [];
+    const ports = [9100];
 
-    for (let i = 1; i <= 254; i++) {
-      const ip = `${subnet}.${i}`;
-      for (const port of ports) {
-        scanPromises.push(
-          this._probeWifiPrinter(ip, port).then(found => {
-            if (found) {
-              results.push({ ip, port, name: `Printer at ${ip}` });
-              onPrinterFound({ ip, port, name: `Printer at ${ip}` });
-            }
-          })
-        );
+    // Scan IPs 1-254 in batches
+    const batchSize = 25;
+    for (let batchStart = 1; batchStart <= 254; batchStart += batchSize) {
+      const batchEnd = Math.min(batchStart + batchSize - 1, 254);
+      if (onProgress) onProgress(`Scanning ${subnet}.${batchStart}-${batchEnd}...`);
+
+      const batchPromises = [];
+      for (let i = batchStart; i <= batchEnd; i++) {
+        const ip = `${subnet}.${i}`;
+        for (const port of ports) {
+          batchPromises.push(
+            this._probeWifiPrinter(ip, port).then(found => {
+              if (found) {
+                const device = { ip, port, name: `Printer at ${ip}` };
+                results.push(device);
+                onPrinterFound(device);
+              }
+            })
+          );
+        }
       }
+      await Promise.all(batchPromises);
     }
 
-    // Run in batches of 20 to avoid overwhelming the network
-    const batchSize = 20;
-    for (let i = 0; i < scanPromises.length; i += batchSize) {
-      await Promise.all(scanPromises.slice(i, i + batchSize));
-    }
-
+    if (onProgress) onProgress('');
     return results;
   }
 
