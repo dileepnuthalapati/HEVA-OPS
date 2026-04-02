@@ -12,7 +12,11 @@ router = APIRouter()
 async def create_order(order_data: OrderCreate, current_user: User = Depends(get_current_user)):
     # Get next order number
     last_order = await db.orders.find_one(sort=[("order_number", -1)])
-    order_number = (last_order.get("order_number", 0) + 1) if last_order else 1
+    if last_order:
+        last_num = last_order.get("order_number", 0)
+        order_number = (int(last_num) + 1) if last_num else 1
+    else:
+        order_number = 1
 
     order_id = f"order_{datetime.now(timezone.utc).timestamp()}"
     order_dict = {
