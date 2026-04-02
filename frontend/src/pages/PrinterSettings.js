@@ -161,85 +161,85 @@ const PrinterSettings = () => {
     }
   };
 
-  // Bluetooth Discovery — shows PAIRED devices (Classic SPP) + BLE scan
+  // Bluetooth Discovery — shows PAIRED devices first, then named BLE devices only
   const scanBluetoothDevices = async () => {
-    // In browser: Bluetooth scanning is not possible. Show clear guidance.
     if (!isNativeApp) {
       setScanning(false);
       setScanError('');
       setDiscoveredDevices([]);
-      return; // The UI below will show the explanation card
+      return;
     }
-
-    const PRINTER_PATTERNS = ['TM-', 'EPSON', 'STAR', 'TSP', 'BIXOLON', 'THERMAL', 'PRINTER', 'POS', 'RPP', 'SPP', 'M30', 'M10', 'XP-', 'ZJ-'];
 
     setScanning(true);
     setScanError('');
     setDiscoveredDevices([]);
 
-    const allDevices = [];
+    const pairedDevices = [];
+    const bleDevices = [];
+    const PRINTER_PATTERNS = ['TM-', 'EPSON', 'STAR', 'TSP', 'BIXOLON', 'THERMAL', 'PRINTER', 'POS', 'RPP', 'SPP', 'M30', 'M10', 'XP-', 'ZJ-', 'SK'];
 
-    // Step 1: Get already-paired Classic Bluetooth devices (most thermal printers)
-    setScanProgress('Checking paired Bluetooth devices...');
+    // Step 1: Get PAIRED devices from Android Bluetooth Settings
+    // These are the devices the user has already paired — most reliable source
+    setScanProgress('Loading paired Bluetooth devices...');
     try {
       const paired = await printerService.listPairedDevices();
       for (const dev of paired) {
         const name = dev.name || '';
-        const isPrinter = PRINTER_PATTERNS.some(p => name.toUpperCase().includes(p));
-        allDevices.push({
+        const isPrinter = PRINTER_PATTERNS.some(p => name.toUpperCase().includes(p)) || name.length > 0;
+        pairedDevices.push({
           deviceId: dev.address,
-          name: name || 'Unknown Device',
-          type: dev.type || 'classic',
+          name: name || dev.address,
+          type: 'classic',
           isPrinter,
           paired: true,
+          source: 'paired',
         });
       }
-      // Sort: printers first
-      allDevices.sort((a, b) => (b.isPrinter ? 1 : 0) - (a.isPrinter ? 1 : 0));
-      if (allDevices.length > 0) {
-        setDiscoveredDevices([...allDevices]);
-      }
+      // Sort: likely printers first
+      pairedDevices.sort((a, b) => (b.isPrinter ? 1 : 0) - (a.isPrinter ? 1 : 0));
+      setDiscoveredDevices([...pairedDevices]);
     } catch (err) {
-      console.warn('[PrinterSettings] Paired device list failed:', err.message);
+      console.warn('[PrinterSettings] Paired list failed:', err.message);
     }
 
-    // Step 2: BLE scan for nearby devices (catches BLE-only printers)
-    setScanProgress('Scanning for nearby Bluetooth devices (10s)...');
+    // Step 2: Quick BLE scan — ONLY shows devices that broadcast a name
+    // Filters out all "Unknown Device" entries
+    setScanProgress('Scanning for nearby BLE printers (10s)...');
     try {
+      const pairedIds = new Set(pairedDevices.map(d => d.deviceId));
       await printerService.scanBLEDevices((dev) => {
-        const exists = allDevices.find(d => d.deviceId === dev.deviceId);
-        if (!exists) {
-          const isPrinter = PRINTER_PATTERNS.some(p => (dev.name || '').toUpperCase().includes(p));
-          allDevices.push({
-            deviceId: dev.deviceId,
-            name: dev.name || 'Unknown Device',
-            type: 'le',
-            isPrinter,
-            paired: false,
-            rssi: dev.rssi,
-          });
-          allDevices.sort((a, b) => {
-            if (a.isPrinter !== b.isPrinter) return b.isPrinter ? 1 : -1;
-            if (a.paired !== b.paired) return a.paired ? -1 : 1;
-            return (b.rssi || -999) - (a.rssi || -999);
-          });
-          setDiscoveredDevices([...allDevices]);
-        }
+        // Skip if already in paired list or no name
+        if (pairedIds.has(dev.deviceId) || !dev.name) return;
+        const isPrinter = PRINTER_PATTERNS.some(p => dev.name.toUpperCase().includes(p));
+        bleDevices.push({
+          deviceId: dev.deviceId,
+          name: dev.name,
+          type: 'le',
+          isPrinter,
+          paired: false,
+          source: 'ble-scan',
+          rssi: dev.rssi,
+        });
+        // Update combined list: paired first, then BLE printers, then BLE others
+        const combined = [...pairedDevices, ...bleDevices.filter(d => d.isPrinter), ...bleDevices.filter(d => !d.isPrinter)];
+        setDiscoveredDevices([...combined]);
       }, 10000);
     } catch (bleErr) {
-      console.warn('[PrinterSettings] BLE scan failed:', bleErr.message);
+      console.warn('[PrinterSettings] BLE scan error:', bleErr.message);
     }
 
     setScanProgress('');
     setScanning(false);
 
-    if (allDevices.length === 0) {
+    const totalFound = pairedDevices.length + bleDevices.length;
+    if (totalFound === 0) {
       setScanError(
         'No Bluetooth devices found.\n\n' +
-        'For best results:\n' +
-        '1. Pair your printer in Android Bluetooth Settings first\n' +
-        '2. Make sure the printer is powered on\n' +
-        '3. Come back here and scan again'
+        'To connect your printer:\n' +
+        '1. Open Android Settings > Bluetooth\n' +
+        '2. Pair your printer there first\n' +
+        '3. Come back here and tap "Find Printers"\n\n' +
+        'Or add it manually using the MAC address from your printer\'s settings page.'
       );
     }
   };
@@ -560,32 +560,80 @@ const PrinterSettings = () => {
               <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-800 whitespace-pre-line">{scanError}</div>
             )}
 
-            {/* Discovered Devices */}
-            {discoveredDevices.length > 0 && (
+            {/* Discovered Devices — WiFi */}
+            {discoveryType === 'wifi' && discoveredDevices.length > 0 && (
               <div className="space-y-2 max-h-60 overflow-y-auto">
-                <p className="text-sm font-medium">Found {discoveredDevices.length} device(s):</p>
+                <p className="text-sm font-medium">Found {discoveredDevices.length} printer(s):</p>
                 {discoveredDevices.map((device, idx) => (
                   <button
-                    key={idx}
+                    key={`wifi-${idx}`}
                     data-testid={`discovered-device-${idx}`}
                     onClick={() => selectDiscoveredDevice(device)}
                     className="w-full flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors text-left"
                   >
                     <div className="flex items-center gap-3 min-w-0">
-                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${device.ip ? 'bg-blue-100' : device.isPrinter ? 'bg-emerald-100' : 'bg-purple-100'}`}>
-                        {device.ip ? <Monitor className="w-4 h-4 text-blue-600" /> : <Bluetooth className={`w-4 h-4 ${device.isPrinter ? 'text-emerald-600' : 'text-purple-600'}`} />}
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-blue-100">
+                        <Monitor className="w-4 h-4 text-blue-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="font-medium text-sm truncate block">{device.name || 'Network Printer'}</span>
+                        <div className="text-xs text-muted-foreground font-mono">{device.ip}:{device.port}</div>
+                      </div>
+                    </div>
+                    <div className="text-xs text-primary shrink-0 ml-2">Select</div>
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Discovered Devices — Bluetooth */}
+            {discoveryType === 'bluetooth' && discoveredDevices.length > 0 && (
+              <div className="space-y-2 max-h-60 overflow-y-auto">
+                {/* Section headers */}
+                {discoveredDevices.some(d => d.paired) && (
+                  <p className="text-sm font-semibold text-emerald-700">Paired Devices (from Android Settings)</p>
+                )}
+                {discoveredDevices.filter(d => d.paired).map((device, idx) => (
+                  <button
+                    key={`paired-${idx}`}
+                    data-testid={`discovered-device-paired-${idx}`}
+                    onClick={() => selectDiscoveredDevice(device)}
+                    className="w-full flex items-center justify-between p-3 border-2 border-emerald-200 bg-emerald-50/50 rounded-lg hover:bg-emerald-100/50 transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-emerald-100">
+                        <Bluetooth className="w-4 h-4 text-emerald-600" />
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <span className="font-medium text-sm truncate">{device.name || (device.ip ? 'Network Device' : 'BT Device')}</span>
-                          {device.paired && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium shrink-0">Paired</span>
-                          )}
-                          {device.isPrinter && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-medium shrink-0">Printer</span>
-                          )}
+                          <span className="font-medium text-sm truncate">{device.name}</span>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 font-semibold shrink-0">Paired</span>
                         </div>
-                        <div className="text-xs text-muted-foreground font-mono">{device.ip ? `${device.ip}:${device.port}` : device.deviceId}</div>
+                        <div className="text-xs text-muted-foreground font-mono">{device.deviceId}</div>
+                      </div>
+                    </div>
+                    <div className="text-xs font-medium text-emerald-700 shrink-0 ml-2">Add Printer</div>
+                  </button>
+                ))}
+
+                {/* BLE devices section (only named ones) */}
+                {discoveredDevices.some(d => !d.paired) && (
+                  <p className="text-sm font-semibold text-muted-foreground mt-3">Nearby BLE Devices</p>
+                )}
+                {discoveredDevices.filter(d => !d.paired).map((device, idx) => (
+                  <button
+                    key={`ble-${idx}`}
+                    data-testid={`discovered-device-ble-${idx}`}
+                    onClick={() => selectDiscoveredDevice(device)}
+                    className="w-full flex items-center justify-between p-3 border rounded-lg hover:bg-muted/50 transition-colors text-left"
+                  >
+                    <div className="flex items-center gap-3 min-w-0">
+                      <div className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 bg-purple-100">
+                        <Bluetooth className="w-4 h-4 text-purple-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="font-medium text-sm truncate block">{device.name}</span>
+                        <div className="text-xs text-muted-foreground font-mono">{device.deviceId}</div>
                       </div>
                     </div>
                     <div className="text-xs text-primary shrink-0 ml-2">Select</div>
