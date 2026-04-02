@@ -4,7 +4,7 @@
 Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB), mobile-first frontend (React + Capacitor for Android/iOS APK).
 
 ## User Roles
-- **Platform Owner**: Manages restaurants, subscriptions, billing
+- **Platform Owner**: Manages restaurants, subscriptions, billing, emails
 - **Restaurant Admin**: Manages menu, orders, staff, reports, printers
 - **Staff User**: Takes orders, processes payments, prints receipts
 
@@ -24,14 +24,14 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 │   ├── reports.py      # Reports + stats (2AM business day)
 │   ├── receipts.py     # PDF + ESC/POS receipt generation
 │   ├── cash_drawer.py  # Cash drawer management
-│   ├── printers.py     # Printer CRUD + TCP discovery
+│   ├── printers.py     # Printer CRUD + TCP discovery + auto-detect subnet
 │   ├── tables.py       # Table management + merge/split
 │   ├── reservations.py # Reservation CRUD
 │   ├── subscriptions.py# Stripe + subscription management
 │   ├── notifications.py# Notification CRUD
 │   ├── staff.py        # Staff management
 │   ├── health.py       # Root, status, seed
-│   └── email.py        # Resend email service (NEW)
+│   └── email.py        # Resend email (welcome, trial, payment reminders)
 ```
 
 ## Completed Features
@@ -45,19 +45,22 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 - [x] Reports with 2AM business day reset
 - [x] PDF receipt generation (kitchen + customer)
 - [x] ESC/POS thermal printer support
-- [x] WiFi printer TCP discovery (backend scanner)
+- [x] WiFi printer TCP discovery with auto-subnet detection
 - [x] Bluetooth printer support (Capacitor BLE plugin)
 - [x] Dynamic currency (removed hardcoded $)
 - [x] Staff Management UI
 - [x] Subscription management + Stripe integration
 - [x] Offline detection on login
 - [x] Admin/Staff order syncing
-- [x] Completed orders list with Print Receipt
 - [x] Backend modularization (15 routers) - April 2, 2026
-- [x] Email service integration (Resend) - April 2, 2026
+- [x] Email service (Resend) - platform owner only - April 2, 2026
+  - Welcome emails on restaurant onboarding
+  - Trial expiry reminders
+  - Payment reminders
+  - Email config status on Settings page
 
 ## In Progress
-- [ ] Email: RESEND_API_KEY needs to be configured for live emails
+- [ ] Email: RESEND_API_KEY needs to be added to Railway env vars
 - [ ] Stripe: Waiting for user's real Stripe key
 
 ## Upcoming (P1)
