@@ -28,7 +28,6 @@ const PrinterSettings = () => {
   const [scanning, setScanning] = useState(false);
   const [discoveredDevices, setDiscoveredDevices] = useState([]);
   const [scanError, setScanError] = useState('');
-  const [customPort, setCustomPort] = useState('');
   const [scanProgress, setScanProgress] = useState('');
   const isNativeApp = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
 
@@ -104,47 +103,29 @@ const PrinterSettings = () => {
     setDiscoveredDevices([]);
     
     const portsToScan = [9100, 515, 631];
-    const customPortNum = customPort ? parseInt(customPort) : null;
     
-    // Detect local subnet via WebRTC
+    // Auto-detect subnet from the backend server's actual network
     let subnet = '192.168.1';
+    setScanProgress('Detecting your network...');
     try {
-      const pc = new RTCPeerConnection({ iceServers: [] });
-      pc.createDataChannel('');
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      await new Promise((resolve) => {
-        const timeout = setTimeout(resolve, 3000);
-        pc.onicecandidate = (e) => {
-          if (!e.candidate) { clearTimeout(timeout); resolve(); return; }
-          const match = e.candidate.candidate.match(/(\d+\.\d+\.\d+)\.\d+/);
-          if (match && !match[1].startsWith('0.')) subnet = match[1];
-        };
-      });
-      pc.close();
+      const subnetData = await printerAPI.detectSubnet();
+      subnet = subnetData.primary || '192.168.1';
     } catch (e) { /* fallback */ }
 
-    setScanProgress(`Scanning ${subnet}.x on ports ${portsToScan.join(', ')}${customPortNum ? ', ' + customPortNum : ''}...`);
+    setScanProgress(`Scanning your network for printers...`);
     
     try {
-      const result = await printerAPI.discover(subnet, portsToScan, customPortNum);
+      const result = await printerAPI.discover(subnet, portsToScan, null);
       if (result.devices && result.devices.length > 0) {
         setDiscoveredDevices(result.devices);
         setScanProgress('');
       } else {
         setScanProgress('');
-        setScanError(`No printers found on ${subnet}.x. Make sure your Epson printer is powered on and connected to this WiFi. Check the IP on the printer's network status printout.`);
-        setDiscoveredDevices([
-          { ip: `${subnet}.100`, port: 9100, suggested: true, name: 'Common Epson default' },
-          { ip: `${subnet}.168`, port: 9100, suggested: true, name: 'Common printer IP' },
-        ]);
+        setScanError('No printers found on your network. Make sure your printer is powered on and connected to the same WiFi.');
       }
     } catch (error) {
       setScanProgress('');
-      setScanError(error.response?.data?.detail || 'Scan failed. Enter the printer IP manually — find it via the printer\'s self-test receipt or network config page.');
-      setDiscoveredDevices([
-        { ip: `${subnet}.100`, port: 9100, suggested: true, name: 'Common Epson default' },
-      ]);
+      setScanError(error.response?.data?.detail || 'Scan failed. Make sure the printer is powered on and connected to WiFi. You can also add it manually using the IP shown on the printer\'s network status printout.');
     } finally {
       setScanning(false);
       setScanProgress('');

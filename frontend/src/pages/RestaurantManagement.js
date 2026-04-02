@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import { restaurantAPI } from '../services/api';
+import { emailAPI } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -9,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, Store, Building2, Mail, Phone, MapPin, DollarSign, User, Users, Trash2, Key, Edit } from 'lucide-react';
+import { Plus, Store, Building2, Mail, Phone, MapPin, DollarSign, User, Users, Trash2, Key, Edit, Send, Loader2 } from 'lucide-react';
 
 const CURRENCY_OPTIONS = [
   { value: 'GBP', label: '£ GBP - British Pound', symbol: '£' },
@@ -121,6 +122,16 @@ const RestaurantManagement = () => {
           }
         } else {
           toast.success('Restaurant added successfully!');
+        }
+
+        // Auto-send welcome email
+        if (formData.email) {
+          try {
+            const emailResult = await emailAPI.sendWelcome(restaurant.id);
+            if (emailResult?.status === 'success') {
+              toast.success('Welcome email sent!');
+            }
+          } catch { /* ignore email errors on create */ }
         }
       }
       
