@@ -193,8 +193,8 @@ export const orderAPI = {
     await saveToIndexedDB('orders', response.data);
     return response.data;
   },
-  cancel: async (orderId) => {
-    const response = await api.put(`/orders/${orderId}/cancel`);
+  cancel: async (orderId, reason) => {
+    const response = await api.put(`/orders/${orderId}/cancel`, { reason });
     return response.data;
   },
   printKitchenReceipt: async (orderId) => {
@@ -439,6 +439,37 @@ export const notificationAPI = {
     return response.data;
   },
 };
+
+export const staffAPI = {
+  getAll: async () => {
+    const response = await api.get('/restaurant/staff');
+    return response.data;
+  },
+  create: async (data) => {
+    const response = await api.post('/restaurant/staff', data);
+    return response.data;
+  },
+  update: async (id, data) => {
+    const response = await api.put(`/restaurant/staff/${id}`, data);
+    return response.data;
+  },
+  resetPassword: async (id, newPassword) => {
+    const response = await api.put(`/restaurant/staff/${id}/reset-password`, { new_password: newPassword });
+    return response.data;
+  },
+  delete: async (id) => {
+    const response = await api.delete(`/restaurant/staff/${id}`);
+    return response.data;
+  },
+};
+
+export const authAPI = {
+  changePassword: async (currentPassword, newPassword) => {
+    const response = await api.put('/auth/change-password', { current_password: currentPassword, new_password: newPassword });
+    return response.data;
+  },
+};
+
 
 
 export default api;

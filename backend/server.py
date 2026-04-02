@@ -1,4 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request
+import json
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
@@ -930,36 +931,26 @@ async def complete_order(order_id: str, complete_data: OrderComplete, current_us
     updated = await db.orders.find_one({"id": order_id}, {"_id": 0})
     return Order(**updated)
 
+class CancelOrderRequest(BaseModel):
+    reason: str
+
 @api_router.put("/orders/{order_id}/cancel")
-async def cancel_order(order_id: str, current_user: User = Depends(get_current_user)):
-    """Cancel a pending order"""
+async def cancel_order(order_id: str, cancel_data: CancelOrderRequest, current_user: User = Depends(get_current_user)):
+    """Cancel a pending order with mandatory reason"""
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
-    
     if order["status"] == "completed":
         raise HTTPException(status_code=400, detail="Cannot cancel a completed order")
-    
     if order["status"] == "cancelled":
         raise HTTPException(status_code=400, detail="Order already cancelled")
-    
-    # Clear the table if assigned
     if order.get("table_id"):
-        await db.tables.update_one(
-            {"id": order["table_id"]},
-            {"$set": {"status": "available", "current_order_id": None}}
-        )
-    
-    result = await db.orders.update_one(
-        {"id": order_id},
-        {"$set": {
-            "status": "cancelled",
-            "cancelled_at": datetime.now(timezone.utc).isoformat(),
-            "cancelled_by": current_user.username
-        }}
-    )
-    
-    return {"message": "Order cancelled successfully", "order_id": order_id}
+        await db.tables.update_one({"id": order["table_id"]}, {"$set": {"status": "available", "current_order_id": None}})
+    await db.orders.update_one({"id": order_id}, {"$set": {
+        "status": "cancelled", "cancel_reason": cancel_data.reason,
+        "cancelled_at": datetime.now(timezone.utc).isoformat(), "cancelled_by": current_user.username
+    }})
+    return {"message": "Order cancelled", "order_id": order_id}
 
 @api_router.get("/orders/pending", response_model=List[Order])
 async def get_pending_orders(current_user: User = Depends(get_current_user)):
@@ -1382,13 +1373,28 @@ async def get_report_stats(start_date: str, end_date: str, current_user: User = 
     total_orders = len(orders)
     avg_order_value = total_sales / total_orders if total_orders > 0 else 0
     
+    cash_total = 0
+    card_total = 0
+    for o in orders:
+        pm = o.get("payment_method", "cash")
+        amt = o.get("total_amount", 0)
+        if pm == "card":
+            card_total += amt
+        elif pm == "split":
+            pd = o.get("payment_details") or {}
+            cash_total += pd.get("cash", 0)
+            card_total += pd.get("card", 0)
+        else:
+            cash_total += amt
+    
     product_sales = {}
     for order in orders:
         for item in order.get("items", []):
-            if item["product_name"] not in product_sales:
+            if item.get("product_name") and item["product_name"] not in product_sales:
                 product_sales[item["product_name"]] = {"quantity": 0, "revenue": 0}
-            product_sales[item["product_name"]]["quantity"] += item["quantity"]
-            product_sales[item["product_name"]]["revenue"] += item["total"]
+            if item.get("product_name"):
+                product_sales[item["product_name"]]["quantity"] += item.get("quantity", 0)
+                product_sales[item["product_name"]]["revenue"] += item.get("total", 0)
     
     top_products = sorted(product_sales.items(), key=lambda x: x[1]["revenue"], reverse=True)[:5]
     
@@ -1396,37 +1402,54 @@ async def get_report_stats(start_date: str, end_date: str, current_user: User = 
         "total_sales": round(total_sales, 2),
         "total_orders": total_orders,
         "avg_order_value": round(avg_order_value, 2),
+        "cash_total": round(cash_total, 2),
+        "card_total": round(card_total, 2),
         "top_products": [{"name": name, "quantity": data["quantity"], "revenue": round(data["revenue"], 2)} for name, data in top_products]
     }
 
 @api_router.get("/reports/today")
 async def get_today_stats(current_user: User = Depends(require_admin)):
-    """Get today's sales statistics for dashboard"""
-    # Get today's date range in UTC
-    today = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
-    tomorrow = today + timedelta(days=1)
+    """Get today's sales stats using business day (resets at 2AM)"""
+    now = datetime.now(timezone.utc)
+    # Business day starts at 2AM today (or 2AM yesterday if before 2AM now)
+    if now.hour < 2:
+        biz_start = (now - timedelta(days=1)).replace(hour=2, minute=0, second=0, microsecond=0)
+    else:
+        biz_start = now.replace(hour=2, minute=0, second=0, microsecond=0)
+    biz_end = biz_start + timedelta(days=1)
     
     orders = await db.orders.find(
-        {
-            "created_at": {"$gte": today.isoformat(), "$lt": tomorrow.isoformat()},
-            "status": "completed"
-        },
+        {"created_at": {"$gte": biz_start.isoformat(), "$lt": biz_end.isoformat()}, "status": "completed"},
         {"_id": 0}
     ).to_list(1000)
     
-    total_sales = sum(order.get("total_amount", 0) for order in orders)
+    total_sales = sum(o.get("total_amount", 0) for o in orders)
     total_orders = len(orders)
     avg_order_value = total_sales / total_orders if total_orders > 0 else 0
     
-    # Calculate top selling products today
+    # Cash vs Card breakdown
+    cash_total = 0
+    card_total = 0
+    for o in orders:
+        pm = o.get("payment_method", "cash")
+        amt = o.get("total_amount", 0)
+        if pm == "card":
+            card_total += amt
+        elif pm == "split":
+            pd = o.get("payment_details") or {}
+            cash_total += pd.get("cash", 0)
+            card_total += pd.get("card", 0)
+        else:
+            cash_total += amt
+    
     product_sales = {}
     for order in orders:
         for item in order.get("items", []):
-            name = item["product_name"]
+            name = item.get("product_name", "Unknown")
             if name not in product_sales:
                 product_sales[name] = {"quantity": 0, "revenue": 0}
-            product_sales[name]["quantity"] += item["quantity"]
-            product_sales[name]["revenue"] += item["total"]
+            product_sales[name]["quantity"] += item.get("quantity", 0)
+            product_sales[name]["revenue"] += item.get("total", 0)
     
     top_products = sorted(product_sales.items(), key=lambda x: x[1]["quantity"], reverse=True)[:5]
     
@@ -1434,8 +1457,11 @@ async def get_today_stats(current_user: User = Depends(require_admin)):
         "total_sales": round(total_sales, 2),
         "total_orders": total_orders,
         "avg_order_value": round(avg_order_value, 2),
-        "top_products": [{"name": name, "quantity": data["quantity"], "revenue": round(data["revenue"], 2)} for name, data in top_products],
-        "date": today.date().isoformat()
+        "cash_total": round(cash_total, 2),
+        "card_total": round(card_total, 2),
+        "top_products": [{"name": n, "quantity": d["quantity"], "revenue": round(d["revenue"], 2)} for n, d in top_products],
+        "date": biz_start.date().isoformat(),
+        "business_day_start": biz_start.isoformat(),
     }
 
 # ===== PRINTER API ENDPOINTS =====
@@ -2397,6 +2423,133 @@ async def get_my_notifications(current_user: User = Depends(get_current_user)):
         return []
     notifications = await db.notifications.find({"restaurant_id": current_user.restaurant_id}, {"_id": 0}).sort("created_at", -1).to_list(20)
     return notifications
+
+
+# ===== USER MANAGEMENT (Restaurant Admin) =====
+class StaffCreate(BaseModel):
+    username: str
+    password: str
+    role: str = "user"
+
+class PasswordReset(BaseModel):
+    new_password: str
+
+class PasswordChange(BaseModel):
+    current_password: str
+    new_password: str
+
+@api_router.get("/restaurant/staff")
+async def list_restaurant_staff(current_user: User = Depends(require_admin)):
+    """Restaurant Admin: list staff in their restaurant"""
+    users = await db.users.find({"restaurant_id": current_user.restaurant_id}, {"_id": 0, "password_hash": 0}).to_list(100)
+    return users
+
+@api_router.post("/restaurant/staff")
+async def create_restaurant_staff(staff: StaffCreate, current_user: User = Depends(require_admin)):
+    """Restaurant Admin: create staff user"""
+    existing = await db.users.find_one({"username": staff.username})
+    if existing:
+        raise HTTPException(status_code=400, detail="Username already exists")
+    user_doc = {
+        "id": f"user_{datetime.now(timezone.utc).timestamp()}",
+        "username": staff.username,
+        "password_hash": get_password_hash(staff.password),
+        "role": staff.role if staff.role in ["user", "admin"] else "user",
+        "restaurant_id": current_user.restaurant_id,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "created_by": current_user.username,
+    }
+    await db.users.insert_one(user_doc)
+    return {"message": f"Staff '{staff.username}' created", "id": user_doc["id"]}
+
+@api_router.put("/restaurant/staff/{user_id}/reset-password")
+async def reset_staff_password(user_id: str, data: PasswordReset, current_user: User = Depends(require_admin)):
+    """Restaurant Admin: reset a staff member's password"""
+    user = await db.users.find_one({"id": user_id, "restaurant_id": current_user.restaurant_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+    await db.users.update_one({"id": user_id}, {"$set": {"password_hash": get_password_hash(data.new_password)}})
+    return {"message": f"Password reset for {user.get('username', user_id)}"}
+
+@api_router.put("/restaurant/staff/{user_id}")
+async def update_staff(user_id: str, staff: StaffCreate, current_user: User = Depends(require_admin)):
+    """Restaurant Admin: edit staff profile"""
+    user = await db.users.find_one({"id": user_id, "restaurant_id": current_user.restaurant_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+    update = {"username": staff.username, "role": staff.role}
+    if staff.password:
+        update["password_hash"] = get_password_hash(staff.password)
+    await db.users.update_one({"id": user_id}, {"$set": update})
+    return {"message": f"Staff '{staff.username}' updated"}
+
+@api_router.put("/auth/change-password")
+async def change_own_password(data: PasswordChange, current_user: User = Depends(get_current_user)):
+    """Any user: change own password"""
+    user = await db.users.find_one({"username": current_user.username})
+    if not user or not verify_password(data.current_password, user["password_hash"]):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+    await db.users.update_one({"username": current_user.username}, {"$set": {"password_hash": get_password_hash(data.new_password)}})
+    return {"message": "Password changed successfully"}
+
+@api_router.delete("/restaurant/staff/{user_id}")
+async def delete_staff(user_id: str, current_user: User = Depends(require_admin)):
+    """Restaurant Admin: delete a staff member"""
+    user = await db.users.find_one({"id": user_id, "restaurant_id": current_user.restaurant_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Staff not found")
+    if user.get("username") == current_user.username:
+        raise HTTPException(status_code=400, detail="Cannot delete yourself")
+    await db.users.delete_one({"id": user_id})
+    return {"message": f"Staff '{user.get('username')}' deleted"}
+
+# ===== STRIPE SUBSCRIPTION =====
+@api_router.post("/stripe/create-checkout")
+async def create_stripe_checkout(current_user: User = Depends(require_platform_owner)):
+    """Create a Stripe Checkout session for subscription"""
+    import stripe
+    stripe.api_key = os.environ.get("STRIPE_API_KEY", "")
+    if not stripe.api_key:
+        raise HTTPException(status_code=500, detail="Stripe not configured")
+    try:
+        session = stripe.checkout.Session.create(
+            payment_method_types=["card"],
+            line_items=[{"price_data": {"currency": "gbp", "product_data": {"name": "HevaPOS Standard Plan"}, "unit_amount": 4999, "recurring": {"interval": "month"}}, "quantity": 1}],
+            mode="subscription",
+            success_url=os.environ.get("FRONTEND_URL", "http://localhost:3000") + "/platform/subscriptions?success=true",
+            cancel_url=os.environ.get("FRONTEND_URL", "http://localhost:3000") + "/platform/subscriptions?cancelled=true",
+        )
+        return {"checkout_url": session.url, "session_id": session.id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_router.post("/stripe/webhook")
+async def stripe_webhook(request: Request):
+    """Handle Stripe webhook events"""
+    import stripe
+    stripe.api_key = os.environ.get("STRIPE_API_KEY", "")
+    payload = await request.body()
+    try:
+        event = stripe.Event.construct_from(json.loads(payload), stripe.api_key)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid payload")
+    
+    if event.type == "invoice.payment_succeeded":
+        # Activate subscription
+        customer_id = event.data.object.get("customer")
+        restaurant = await db.restaurants.find_one({"stripe_customer_id": customer_id})
+        if restaurant:
+            await db.restaurants.update_one({"id": restaurant["id"]}, {"$set": {"subscription_status": "active", "next_billing_date": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()}})
+    elif event.type == "invoice.payment_failed":
+        # Suspend subscription
+        customer_id = event.data.object.get("customer")
+        restaurant = await db.restaurants.find_one({"stripe_customer_id": customer_id})
+        if restaurant:
+            await db.restaurants.update_one({"id": restaurant["id"]}, {"$set": {"subscription_status": "suspended", "suspended_at": datetime.now(timezone.utc).isoformat()}})
+            await db.notifications.insert_one({"id": f"notif_stripe_{datetime.now(timezone.utc).timestamp()}", "restaurant_id": restaurant["id"], "type": "payment_failed", "message": f"Payment failed for {restaurant.get('business_info', {}).get('name', '')}", "email": restaurant.get("owner_email", ""), "status": "pending", "created_at": datetime.now(timezone.utc).isoformat(), "sent_at": None})
+    
+    return {"status": "ok"}
+
 
 
 
