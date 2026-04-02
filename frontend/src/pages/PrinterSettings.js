@@ -97,85 +97,53 @@ const PrinterSettings = () => {
     } catch (error) { toast.error('Failed to set default printer'); }
   };
 
-  // WiFi Network Discovery — scans multiple common printer ports
+  // WiFi Network Discovery — uses backend TCP port scanner for real detection
   const scanWifiPrinters = async () => {
     setScanning(true);
     setScanError('');
     setDiscoveredDevices([]);
     
-    // Ports to scan: 9100 (ESC/POS raw), 515 (LPR), 631 (IPP/CUPS), 80 (web config)
-    const portsToScan = [9100, 515, 631, 80];
-    if (customPort && !isNaN(customPort) && !portsToScan.includes(Number(customPort))) {
-      portsToScan.unshift(Number(customPort));
-    }
+    const portsToScan = [9100, 515, 631];
+    const customPortNum = customPort ? parseInt(customPort) : null;
+    
+    // Detect local subnet via WebRTC
+    let subnet = '192.168.1';
+    try {
+      const pc = new RTCPeerConnection({ iceServers: [] });
+      pc.createDataChannel('');
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await new Promise((resolve) => {
+        const timeout = setTimeout(resolve, 3000);
+        pc.onicecandidate = (e) => {
+          if (!e.candidate) { clearTimeout(timeout); resolve(); return; }
+          const match = e.candidate.candidate.match(/(\d+\.\d+\.\d+)\.\d+/);
+          if (match && !match[1].startsWith('0.')) subnet = match[1];
+        };
+      });
+      pc.close();
+    } catch (e) { /* fallback */ }
+
+    setScanProgress(`Scanning ${subnet}.x on ports ${portsToScan.join(', ')}${customPortNum ? ', ' + customPortNum : ''}...`);
     
     try {
-      // Detect local subnet via WebRTC
-      const localIPs = [];
-      try {
-        const pc = new RTCPeerConnection({ iceServers: [] });
-        pc.createDataChannel('');
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        await new Promise((resolve) => {
-          const timeout = setTimeout(resolve, 3000);
-          pc.onicecandidate = (e) => {
-            if (!e.candidate) { clearTimeout(timeout); resolve(); return; }
-            const match = e.candidate.candidate.match(/(\d+\.\d+\.\d+)\.\d+/);
-            if (match && !match[1].startsWith('0.')) localIPs.push(match[1]);
-          };
-        });
-        pc.close();
-      } catch (e) { /* WebRTC unavailable */ }
-
-      const subnet = localIPs.length > 0 ? localIPs[0] : '192.168.1';
-      const found = [];
-      
-      // Scan each port across the subnet
-      for (const port of portsToScan) {
-        setScanProgress(`Scanning ${subnet}.x on port ${port}...`);
-        const ips = [];
-        for (let i = 1; i <= 254; i++) ips.push(`${subnet}.${i}`);
-        
-        const batchSize = 40;
-        for (let batch = 0; batch < Math.min(ips.length, 120); batch += batchSize) {
-          const batchIPs = ips.slice(batch, batch + batchSize);
-          const results = await Promise.allSettled(
-            batchIPs.map(ip =>
-              Promise.race([
-                fetch(`http://${ip}:${port}`, { mode: 'no-cors', signal: AbortSignal.timeout(1200) })
-                  .then(() => ({ ip, port, reachable: true })),
-                new Promise((_, reject) => setTimeout(() => reject(), 1200))
-              ])
-            )
-          );
-          results.forEach((result) => {
-            if (result.status === 'fulfilled' && result.value?.reachable) {
-              const dup = found.find(d => d.ip === result.value.ip && d.port === result.value.port);
-              if (!dup) {
-                const portLabel = { 9100: 'ESC/POS Raw', 515: 'LPR', 631: 'IPP/CUPS', 80: 'Web Config' };
-                found.push({ ...result.value, name: portLabel[port] || `Port ${port}` });
-              }
-            }
-          });
-          if (found.length > 0) setDiscoveredDevices([...found]);
-        }
-      }
-      
-      setScanProgress('');
-      if (found.length === 0) {
+      const result = await printerAPI.discover(subnet, portsToScan, customPortNum);
+      if (result.devices && result.devices.length > 0) {
+        setDiscoveredDevices(result.devices);
+        setScanProgress('');
+      } else {
+        setScanProgress('');
+        setScanError(`No printers found on ${subnet}.x. Make sure your Epson printer is powered on and connected to this WiFi. Check the IP on the printer's network status printout.`);
         setDiscoveredDevices([
-          { ip: `${subnet}.100`, port: 9100, suggested: true, name: 'ESC/POS Raw (common)' },
-          { ip: `${subnet}.200`, port: 9100, suggested: true, name: 'ESC/POS Raw (common)' },
-          { ip: `${subnet}.1`, port: 631, suggested: true, name: 'IPP/CUPS (router/server)' },
+          { ip: `${subnet}.100`, port: 9100, suggested: true, name: 'Common Epson default' },
+          { ip: `${subnet}.168`, port: 9100, suggested: true, name: 'Common printer IP' },
         ]);
-        setScanError(`No printers found on ${subnet}.x across ports ${portsToScan.join(', ')}. Try the suggestions below or enter the IP manually.`);
       }
     } catch (error) {
       setScanProgress('');
-      setScanError('Network scan failed. Enter the printer IP:Port manually.');
+      setScanError(error.response?.data?.detail || 'Scan failed. Enter the printer IP manually — find it via the printer\'s self-test receipt or network config page.');
       setDiscoveredDevices([
-        { ip: '192.168.1.100', port: 9100, suggested: true, name: 'Default ESC/POS' },
+        { ip: `${subnet}.100`, port: 9100, suggested: true, name: 'Common Epson default' },
       ]);
     } finally {
       setScanning(false);
@@ -193,6 +161,9 @@ const PrinterSettings = () => {
       return; // The UI below will show the explanation card
     }
 
+    // Known printer name patterns to prioritize
+    const PRINTER_PATTERNS = ['TM-', 'EPSON', 'STAR', 'TSP', 'BIXOLON', 'THERMAL', 'PRINTER', 'POS', 'RPP', 'SPP'];
+
     // Native APK: Real BLE scan
     setScanning(true);
     setScanError('');
@@ -207,18 +178,22 @@ const PrinterSettings = () => {
         if (result.device?.name || result.device?.deviceId) {
           const existing = devices.find(d => d.deviceId === result.device.deviceId);
           if (!existing) {
+            const name = result.device.name || '';
+            const isPrinter = PRINTER_PATTERNS.some(p => name.toUpperCase().includes(p));
             devices.push({
               deviceId: result.device.deviceId,
-              name: result.device.name || 'Unknown Device',
+              name: name || 'Unknown Device',
               rssi: result.rssi,
+              isPrinter,
             });
+            // Sort: printers first, then by signal strength
+            devices.sort((a, b) => (b.isPrinter ? 1 : 0) - (a.isPrinter ? 1 : 0) || (b.rssi || -999) - (a.rssi || -999));
             setDiscoveredDevices([...devices]);
           }
         }
       });
 
-      // Scan for 10 seconds
-      setScanProgress('Scanning for Bluetooth devices...');
+      setScanProgress('Scanning for Bluetooth devices (10s)...');
       await new Promise(resolve => setTimeout(resolve, 10000));
       await BleClient.stopLEScan();
       setScanProgress('');
@@ -228,7 +203,7 @@ const PrinterSettings = () => {
       }
     } catch (bleError) {
       setScanProgress('');
-      setScanError(`Bluetooth error: ${bleError.message}. Make sure Bluetooth is turned on in your device settings.`);
+      setScanError(`Bluetooth error: ${bleError.message}. Make sure Bluetooth is turned on.`);
     } finally {
       setScanning(false);
       setScanProgress('');
@@ -413,29 +388,26 @@ const PrinterSettings = () => {
 
           {/* Help Section */}
           <Card className="mt-8">
-            <CardHeader><CardTitle>Printing Guide</CardTitle></CardHeader>
+            <CardHeader><CardTitle>How to Connect a Printer</CardTitle></CardHeader>
             <CardContent className="space-y-5">
               <div>
-                <h4 className="font-semibold mb-1">WiFi / Network Printers</h4>
-                <p className="text-sm text-muted-foreground">Connect your printer to the same WiFi network as your POS device. Use "Discover Printers" to auto-find it, or enter the IP address and port manually. Common ports: 9100 (ESC/POS), 515 (LPR), 631 (IPP). Example: 192.168.1.100:9100</p>
+                <h4 className="font-semibold mb-2">WiFi Printer</h4>
+                <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1.5">
+                  <li>Connect your printer to the same WiFi as your device</li>
+                  <li>Click <strong>Discover Printers</strong> above</li>
+                  <li>Tap <strong>Start Scan</strong> — your printer will appear in the list</li>
+                  <li>Select it and you're done</li>
+                </ol>
               </div>
               <div>
-                <h4 className="font-semibold mb-1">Bluetooth Printers</h4>
-                <p className="text-sm text-muted-foreground mb-2">Bluetooth printing works <strong>only in the Android/iOS app</strong> (built with Capacitor), not in a web browser.</p>
-                <div className="bg-muted rounded-lg p-3 text-sm space-y-1">
-                  <p className="font-medium">To set up Bluetooth:</p>
-                  <ol className="list-decimal list-inside text-xs text-muted-foreground space-y-0.5">
-                    <li>Install HevaPOS APK on your tablet/phone</li>
-                    <li>Power on your BT printer and set it to discoverable mode</li>
-                    <li>In the app: Printers &rarr; Discover &rarr; Bluetooth &rarr; Start Scan</li>
-                    <li>Tap your printer in the results to add it</li>
-                  </ol>
-                  <p className="text-xs text-muted-foreground mt-2">If you know the MAC address, you can also add manually: Add Printer &rarr; Bluetooth &rarr; enter MAC (e.g., 00:11:22:33:44:55)</p>
-                </div>
-              </div>
-              <div>
-                <h4 className="font-semibold mb-1">Supported Printers</h4>
-                <p className="text-sm text-muted-foreground">HevaPOS supports ESC/POS compatible thermal printers: Epson TM series, Star TSP series, and most generic 58mm/80mm thermal printers.</p>
+                <h4 className="font-semibold mb-2">Bluetooth Printer</h4>
+                <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1.5">
+                  <li>Turn on your printer and set it to pairing mode</li>
+                  <li>Open HevaPOS on your tablet/phone (Android app)</li>
+                  <li>Go to <strong>Printers &rarr; Discover &rarr; Bluetooth &rarr; Start Scan</strong></li>
+                  <li>Tap your printer from the list to add it</li>
+                </ol>
+                <p className="text-xs text-muted-foreground mt-2">Bluetooth scanning requires the HevaPOS Android app installed on your device.</p>
               </div>
             </CardContent>
           </Card>
@@ -473,33 +445,11 @@ const PrinterSettings = () => {
             {/* WiFi Discovery Panel */}
             {discoveryType === 'wifi' && (
               <>
-                <div className="p-3 bg-muted rounded-lg text-sm space-y-2">
-                  <p className="font-medium">How WiFi discovery works:</p>
-                  <p>Scans your local network for devices on these ports:</p>
-                  <ul className="list-disc list-inside text-xs space-y-0.5 text-muted-foreground">
-                    <li><strong>Port 9100</strong> — ESC/POS Raw (most thermal printers)</li>
-                    <li><strong>Port 515</strong> — LPR/LPD protocol</li>
-                    <li><strong>Port 631</strong> — IPP / CUPS</li>
-                    <li><strong>Port 80</strong> — Printer web config page</li>
-                  </ul>
-                  <p className="text-xs text-muted-foreground mt-1">Make sure your printer is powered on and connected to the same WiFi network as this device.</p>
-                </div>
-                <div>
-                  <Label className="text-sm">Custom Port (optional)</Label>
-                  <div className="flex gap-2 mt-1">
-                    <Input
-                      data-testid="custom-port-input"
-                      type="number"
-                      placeholder="e.g. 8080"
-                      value={customPort}
-                      onChange={(e) => setCustomPort(e.target.value)}
-                      className="w-32"
-                    />
-                    <span className="text-xs text-muted-foreground self-center">Added to scan if not in default list</span>
-                  </div>
+                <div className="p-3 bg-muted rounded-lg text-sm">
+                  <p>Make sure your printer is <strong>powered on</strong> and connected to the <strong>same WiFi network</strong> as this device, then tap Scan.</p>
                 </div>
                 <Button onClick={startScan} disabled={scanning} data-testid="start-scan-btn" className="w-full">
-                  {scanning ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Scanning...</> : <><Search className="w-4 h-4 mr-2" /> Start WiFi Scan</>}
+                  {scanning ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Scanning your network...</> : <><Search className="w-4 h-4 mr-2" /> Scan for Printers</>}
                 </Button>
                 {scanProgress && (
                   <div className="text-xs text-muted-foreground text-center animate-pulse">{scanProgress}</div>
@@ -526,40 +476,31 @@ const PrinterSettings = () => {
                   </>
                 ) : (
                   <>
-                    {/* Browser — explain clearly that BT doesn't work here */}
-                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg space-y-3">
-                      <div className="flex items-start gap-2">
-                        <Bluetooth className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                        <div>
-                          <p className="font-semibold text-amber-900 text-sm">Bluetooth scanning requires the Android/iOS app</p>
-                          <p className="text-amber-800 text-xs mt-1">Web browsers cannot scan for Bluetooth printers. Bluetooth Low Energy (BLE) scanning is only available when HevaPOS is installed as a native app on your tablet or phone.</p>
-                        </div>
-                      </div>
+                    {/* Browser — simple explanation */}
+                    <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                      <p className="font-semibold text-amber-900 text-sm">Bluetooth requires the HevaPOS app</p>
+                      <p className="text-amber-800 text-xs mt-1">To scan for Bluetooth printers, open HevaPOS on your Android tablet or phone.</p>
                     </div>
-                    <div className="p-4 border rounded-lg space-y-3">
-                      <p className="font-semibold text-sm">How to use Bluetooth printers:</p>
+                    <div className="p-4 border rounded-lg space-y-2">
+                      <p className="font-semibold text-sm">Steps:</p>
                       <div className="space-y-2 text-sm text-muted-foreground">
                         <div className="flex gap-2">
                           <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs shrink-0">1</span>
-                          <span>Build the HevaPOS APK using Capacitor and install it on your Android tablet/phone</span>
+                          <span>Turn on your printer and set it to pairing mode</span>
                         </div>
                         <div className="flex gap-2">
                           <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs shrink-0">2</span>
-                          <span>Turn on your Bluetooth printer and put it in pairing/discoverable mode</span>
+                          <span>Open HevaPOS app on your tablet</span>
                         </div>
                         <div className="flex gap-2">
                           <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs shrink-0">3</span>
-                          <span>Open HevaPOS app &rarr; Printers &rarr; Discover &rarr; Bluetooth &rarr; Start Scan</span>
+                          <span>Printers &rarr; Discover &rarr; Bluetooth &rarr; Scan</span>
                         </div>
                         <div className="flex gap-2">
                           <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs shrink-0">4</span>
-                          <span>Select your printer from the list and it will be added automatically</span>
+                          <span>Tap your printer to add it</span>
                         </div>
                       </div>
-                    </div>
-                    <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
-                      <p className="font-medium text-blue-900 text-xs">Already know the MAC address?</p>
-                      <p className="text-blue-700 text-xs mt-1">You can skip discovery and add your printer manually using "Add Printer" &rarr; Bluetooth &rarr; enter the MAC address (e.g., 00:11:22:33:44:55). Find it on a label on the printer or in its settings menu.</p>
                     </div>
                   </>
                 )}

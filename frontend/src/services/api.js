@@ -395,6 +395,15 @@ export const printerAPI = {
     const response = await api.put(`/printers/${id}`, data);
     return response.data;
   },
+  discover: async (subnet, ports, customPort) => {
+    const response = await api.post('/printers/discover', {
+      subnet,
+      ports: ports || [9100, 515, 631],
+      custom_port: customPort || null,
+      timeout_ms: 800,
+    });
+    return response.data;
+  },
   delete: async (id) => {
     const response = await api.delete(`/printers/${id}`);
     return response.data;
@@ -473,6 +482,28 @@ export const staffAPI = {
 export const stripeAPI = {
   createCheckout: async () => {
     const response = await api.post('/stripe/create-checkout');
+    return response.data;
+  },
+};
+
+export const emailAPI = {
+  send: async (recipientEmail, subject, htmlContent) => {
+    const response = await api.post('/email/send', {
+      recipient_email: recipientEmail,
+      subject: subject,
+      html_content: htmlContent,
+    });
+    return response.data;
+  },
+  sendOrderReceipt: async (orderId, recipientEmail) => {
+    const response = await api.post('/email/order-receipt', {
+      order_id: orderId,
+      recipient_email: recipientEmail,
+    });
+    return response.data;
+  },
+  sendNotification: async (notificationId) => {
+    const response = await api.post(`/email/notification/${notificationId}`);
     return response.data;
   },
 };
