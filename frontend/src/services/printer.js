@@ -1,30 +1,21 @@
 /**
  * HevaPOS Universal Thermal Printer Service
  * 
- * Supports ALL connection types for maximum compatibility:
- * 
  * 1. Bluetooth Classic (SPP) — @kduma-autoid/capacitor-bluetooth-printer
- *    Most thermal receipt printers (Epson, Star, Bixolon, generic Chinese etc.)
- *    Uses Serial Port Profile (UUID 00001101) — the standard for thermal printers.
- *    Requires printer to be PAIRED with the device first via Android Bluetooth settings.
+ *    Most thermal receipt printers (Epson, Star, Bixolon, generic etc.)
+ *    Requires printer to be PAIRED in Android Bluetooth settings first.
  *
  * 2. Bluetooth Low Energy (BLE) — @capacitor-community/bluetooth-le
- *    Fallback for newer printers that only support BLE.
- *    Does NOT require prior pairing.
+ *    Fallback for BLE-only printers.
  *
  * 3. WiFi/Network — Backend TCP proxy (/api/printer/send)
- *    Sends ESC/POS data via TCP to IP:Port.
- *    Requires backend to have network access to the printer.
- *
- * Print strategy for Bluetooth:
- *   → Try Classic SPP first (most common for thermal printers)
- *   → Fall back to BLE if SPP fails or is unavailable
  */
 
 import { BleClient, numbersToDataView } from '@capacitor-community/bluetooth-le';
+import { BluetoothPrinter } from '@kduma-autoid/capacitor-bluetooth-printer';
 import { Capacitor } from '@capacitor/core';
 
-// Known BLE printer service/characteristic UUIDs
+// BLE printer UUIDs (for BLE-only printers)
 const BLE_SERVICE_UUIDS = [
   '0000ffe0-0000-1000-8000-00805f9b34fb',
   '000018f0-0000-1000-8000-00805f9b34fb',
@@ -49,21 +40,6 @@ function base64ToBytes(base64) {
     bytes[i] = raw.charCodeAt(i);
   }
   return bytes;
-}
-
-// ===== Dynamic imports for Capacitor plugins =====
-
-let _BluetoothPrinter = null;
-async function getBluetoothClassicPlugin() {
-  if (_BluetoothPrinter) return _BluetoothPrinter;
-  try {
-    const mod = await import('@kduma-autoid/capacitor-bluetooth-printer');
-    _BluetoothPrinter = mod.BluetoothPrinter;
-    return _BluetoothPrinter;
-  } catch (err) {
-    console.warn('[Printer] Bluetooth Classic plugin not available:', err.message);
-    return null;
-  }
 }
 
 // ===== Printer Service =====
@@ -92,7 +68,7 @@ class ThermalPrinterService {
   }
 
   // ================================================================
-  // MAIN PRINT METHOD — Use this everywhere
+  // MAIN PRINT METHOD
   // ================================================================
   async printToDevice(printer, escposBase64, apiUrl, authToken) {
     if (!printer) throw new Error('No printer configured. Go to Settings > Printers to add one.');
@@ -110,7 +86,7 @@ class ThermalPrinterService {
     }
   }
 
-  // ===== WiFi: Send via backend TCP proxy =====
+  // ===== WiFi: Backend TCP proxy =====
   async _printWifi(printer, base64Data, apiUrl, authToken) {
     const parts = printer.address.split(':');
     const ip = parts[0];
@@ -134,44 +110,40 @@ class ThermalPrinterService {
     return await response.json();
   }
 
-  // ===== Bluetooth: Try Classic SPP first, then BLE =====
+  // ===== Bluetooth: Classic SPP first, BLE fallback =====
   async _printBluetooth(printer, escposBase64) {
     if (!this.isNative) {
-      // Browser fallback: Web Bluetooth (BLE only)
       return this._printWebBluetooth(base64ToBytes(escposBase64));
     }
 
-    // Native APK: Try Classic SPP first (works with most thermal printers)
+    // Step 1: Try Bluetooth Classic (SPP) — works for most thermal printers
     const sppResult = await this._tryClassicSPP(printer.address, escposBase64);
     if (sppResult.success) {
       return sppResult;
     }
 
-    // Fallback: Try BLE
-    console.log(`[Printer] Classic SPP failed (${sppResult.error}), trying BLE...`);
+    // Step 2: Try BLE fallback (only for BLE-capable printers)
+    console.log(`[Printer] Classic SPP: ${sppResult.error}. Trying BLE...`);
     try {
       await this._printViaBLE(printer.address, base64ToBytes(escposBase64));
       return { success: true, method: 'ble', message: `Printed via BLE to ${printer.name}` };
     } catch (bleError) {
-      // Both failed — give a clear error message
       throw new Error(
         `Could not print to ${printer.name}.\n\n` +
-        `Bluetooth Classic: ${sppResult.error}\n` +
-        `Bluetooth LE: ${bleError.message}\n\n` +
-        'Make sure the printer is powered on, paired in Android Bluetooth settings, and in range.'
+        `Classic Bluetooth: ${sppResult.error}\n` +
+        `BLE: ${bleError.message}\n\n` +
+        'Tips:\n' +
+        '1. Make sure the printer is paired in Android Bluetooth Settings\n' +
+        '2. Turn the printer off and on, then try again\n' +
+        '3. Remove and re-pair the printer in Android Settings'
       );
     }
   }
 
-  // Classic SPP print attempt
+  // Classic SPP print
   async _tryClassicSPP(address, escposBase64) {
     try {
-      const BluetoothPrinter = await getBluetoothClassicPlugin();
-      if (!BluetoothPrinter) {
-        return { success: false, error: 'Classic BT plugin not available' };
-      }
-
-      // Convert base64 to raw string (each char = one byte)
+      // Convert base64 ESC/POS to raw string for the SPP plugin
       const rawData = base64ToRawString(escposBase64);
 
       await BluetoothPrinter.connectAndPrint({
@@ -180,27 +152,27 @@ class ThermalPrinterService {
       });
 
       console.log(`[Printer] Classic SPP print sent to ${address}`);
-      return { success: true, method: 'classic-spp', message: 'Printed via Bluetooth Classic' };
+      return { success: true, method: 'classic-spp', message: 'Printed via Bluetooth' };
     } catch (error) {
-      console.warn(`[Printer] Classic SPP failed for ${address}:`, error.message);
-      return { success: false, error: error.message };
+      const msg = error.message || String(error);
+      console.warn(`[Printer] Classic SPP failed: ${msg}`);
+      return { success: false, error: msg };
     }
   }
 
-  // BLE print attempt
+  // BLE print
   async _printViaBLE(deviceId, bytes) {
     await this.initBLE();
 
-    // Connect if needed
+    if (this.bleDeviceId && this.bleDeviceId !== deviceId) {
+      try { await BleClient.disconnect(this.bleDeviceId); } catch {}
+      this.bleDeviceId = null;
+    }
+
     if (this.bleDeviceId !== deviceId) {
-      if (this.bleDeviceId) {
-        try { await BleClient.disconnect(this.bleDeviceId); } catch {}
-        this.bleDeviceId = null;
-      }
       await this._connectBLE(deviceId);
     }
 
-    // Send data in chunks
     const CHUNK_SIZE = 100;
     for (let offset = 0; offset < bytes.length; offset += CHUNK_SIZE) {
       const chunk = bytes.slice(offset, Math.min(offset + CHUNK_SIZE, bytes.length));
@@ -210,7 +182,7 @@ class ThermalPrinterService {
         await new Promise(r => setTimeout(r, 30));
       }
     }
-    console.log(`[Printer] BLE sent ${bytes.length} bytes to ${deviceId}`);
+    console.log(`[Printer] BLE sent ${bytes.length} bytes`);
   }
 
   async _connectBLE(deviceId) {
@@ -231,22 +203,15 @@ class ThermalPrinterService {
         if (!(ch.properties?.write || ch.properties?.writeWithoutResponse)) continue;
         const isKnown = BLE_SERVICE_UUIDS.includes(svc.uuid.toLowerCase()) ||
                         BLE_WRITE_UUIDS.includes(ch.uuid.toLowerCase());
-        if (isKnown) {
-          foundService = svc.uuid;
-          foundChar = ch.uuid;
-          break;
-        }
-        if (!foundService) {
-          foundService = svc.uuid;
-          foundChar = ch.uuid;
-        }
+        if (isKnown) { foundService = svc.uuid; foundChar = ch.uuid; break; }
+        if (!foundService) { foundService = svc.uuid; foundChar = ch.uuid; }
       }
       if (foundChar && BLE_SERVICE_UUIDS.includes(svc.uuid?.toLowerCase())) break;
     }
 
     if (!foundService || !foundChar) {
       await BleClient.disconnect(deviceId);
-      throw new Error('No writable BLE service found on this device.');
+      throw new Error('No writable BLE service found.');
     }
 
     this.bleDeviceId = deviceId;
@@ -254,7 +219,7 @@ class ThermalPrinterService {
     this.bleCharUUID = foundChar;
   }
 
-  // Web Bluetooth fallback (Chrome desktop testing)
+  // Web Bluetooth fallback (Chrome)
   async _printWebBluetooth(bytes) {
     if (!navigator.bluetooth) {
       throw new Error('Bluetooth not available in browser. Use the HevaPOS Android app.');
@@ -285,26 +250,20 @@ class ThermalPrinterService {
         const chars = await svc.getCharacteristics();
         for (const ch of chars) {
           if (ch.properties.write || ch.properties.writeWithoutResponse) {
-            characteristic = ch;
-            break;
+            characteristic = ch; break;
           }
         }
         if (characteristic) break;
       }
     }
 
-    if (!characteristic) {
-      server.disconnect();
-      throw new Error('No writable characteristic found on this Bluetooth device.');
-    }
+    if (!characteristic) { server.disconnect(); throw new Error('No writable characteristic.'); }
 
     const CHUNK_SIZE = 100;
     for (let offset = 0; offset < bytes.length; offset += CHUNK_SIZE) {
       const chunk = bytes.slice(offset, Math.min(offset + CHUNK_SIZE, bytes.length));
       await characteristic.writeValue(chunk);
-      if (offset + CHUNK_SIZE < bytes.length) {
-        await new Promise(r => setTimeout(r, 30));
-      }
+      if (offset + CHUNK_SIZE < bytes.length) await new Promise(r => setTimeout(r, 30));
     }
 
     server.disconnect();
@@ -312,37 +271,30 @@ class ThermalPrinterService {
   }
 
   // ================================================================
-  // DISCOVERY — List available printers
+  // DISCOVERY
   // ================================================================
 
   /**
-   * List paired Bluetooth Classic devices (SPP).
-   * These are devices already paired in Android Bluetooth settings.
-   * Returns: [{ name, address, type }]
+   * Get paired Bluetooth devices from Android settings.
+   * This is the PRIMARY discovery method — shows devices the user already paired.
    */
   async listPairedDevices() {
     if (!this.isNative) return [];
     try {
-      const BluetoothPrinter = await getBluetoothClassicPlugin();
-      if (!BluetoothPrinter) return [];
       const result = await BluetoothPrinter.list();
       return result.devices || [];
     } catch (error) {
-      console.warn('[Printer] Failed to list paired devices:', error.message);
+      console.warn('[Printer] Paired device list failed:', error.message);
       return [];
     }
   }
 
   /**
-   * Scan for nearby BLE devices.
-   * @param {Function} onDeviceFound - callback({deviceId, name, rssi})
-   * @param {number} durationMs - scan duration
+   * BLE scan for nearby devices (secondary — finds BLE-only printers).
    */
   async scanBLEDevices(onDeviceFound, durationMs = 10000) {
     await this.initBLE();
-    if (!this.isNative) {
-      throw new Error('BLE scanning requires the HevaPOS Android app.');
-    }
+    if (!this.isNative) throw new Error('BLE scanning requires the HevaPOS Android app.');
 
     const isEnabled = await BleClient.isEnabled();
     if (!isEnabled) {
@@ -354,11 +306,12 @@ class ThermalPrinterService {
     const seen = new Set();
     await BleClient.requestLEScan({ services: [], allowDuplicates: false }, (result) => {
       const id = result.device.deviceId;
-      if (!seen.has(id) && (result.device.name || id)) {
+      // Only report devices that have a name (skip unknown/unnamed devices)
+      if (!seen.has(id) && result.device.name) {
         seen.add(id);
         onDeviceFound({
           deviceId: id,
-          name: result.device.name || 'Unknown Device',
+          name: result.device.name,
           rssi: result.rssi,
         });
       }
@@ -372,17 +325,8 @@ class ThermalPrinterService {
   // Disconnect
   // ================================================================
   async disconnect() {
-    // Disconnect Classic SPP
-    try {
-      const BluetoothPrinter = await getBluetoothClassicPlugin();
-      if (BluetoothPrinter) await BluetoothPrinter.disconnect();
-    } catch {}
-
-    // Disconnect BLE
-    try {
-      if (this.bleDeviceId) await BleClient.disconnect(this.bleDeviceId);
-    } catch {}
-
+    try { await BluetoothPrinter.disconnect(); } catch {}
+    try { if (this.bleDeviceId) await BleClient.disconnect(this.bleDeviceId); } catch {}
     this.bleDeviceId = null;
     this.bleServiceUUID = null;
     this.bleCharUUID = null;
