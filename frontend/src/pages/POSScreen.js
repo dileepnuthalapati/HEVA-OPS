@@ -74,9 +74,15 @@ const POSScreen = () => {
 
   // Completed orders for today (visible in pending orders panel)
   const [completedOrders, setCompletedOrders] = useState([]);
+  const [isPrinting, setIsPrinting] = useState(false); // Prevent duplicate prints
 
-  // Helper: Send ESC/POS commands to the default printer
-  const sendToPrinter = async (escposCommands) => {
+  // Helper: Send ESC/POS commands to the default printer (with duplicate prevention)
+  const sendToPrinter = async (escposCommands, label = 'receipt') => {
+    if (isPrinting) {
+      console.log('[POS] Print already in progress, skipping');
+      return;
+    }
+    setIsPrinting(true);
     try {
       const defaultPrinter = await printerAPI.getDefault();
       if (!defaultPrinter) {
@@ -86,10 +92,35 @@ const POSScreen = () => {
       const apiUrl = process.env.REACT_APP_BACKEND_URL;
       const token = getAuthToken();
       await printerService.printToDevice(defaultPrinter, escposCommands, apiUrl, token);
-      console.log('[POS] Print sent successfully');
+      console.log(`[POS] ${label} print sent successfully`);
     } catch (printErr) {
-      console.warn('[POS] Print failed:', printErr.message);
-      // Don't block POS flow for print failures
+      console.warn(`[POS] ${label} print failed:`, printErr.message);
+      // Show error only for user-initiated prints (not auto-prints)
+      if (label !== 'kitchen-auto' && label !== 'customer-auto') {
+        toast.error(`Print failed: ${printErr.message}`);
+      }
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
+  // Helper: Print a specific order's kitchen receipt
+  const printOrderReceipt = async (orderId, orderNumber) => {
+    if (isPrinting) {
+      toast.warning('Already printing, please wait...');
+      return;
+    }
+    const toastId = toast.loading(`Printing order #${orderNumber}...`);
+    try {
+      const printResult = await printerAPI.printKitchenReceipt(orderId);
+      if (printResult?.commands) {
+        await sendToPrinter(printResult.commands, 'kitchen-manual');
+        toast.success(`Order #${orderNumber} sent to printer`, { id: toastId });
+      } else {
+        toast.error('No print data generated', { id: toastId });
+      }
+    } catch (err) {
+      toast.error('Failed to print: ' + (err.message || ''), { id: toastId });
     }
   };
 
@@ -391,7 +422,7 @@ const POSScreen = () => {
       try {
         const printResult = await printerAPI.printKitchenReceipt(order.id);
         if (printResult?.commands) {
-          await sendToPrinter(printResult.commands);
+          await sendToPrinter(printResult.commands, 'kitchen-auto');
         }
       } catch (printError) {
         console.log('Kitchen receipt printing skipped:', printError.message);
@@ -519,7 +550,7 @@ const POSScreen = () => {
       try {
         const printResult = await printerAPI.printCustomerReceipt(selectedOrderToComplete.id);
         if (printResult?.commands) {
-          await sendToPrinter(printResult.commands);
+          await sendToPrinter(printResult.commands, 'customer-auto');
         }
       } catch (printError) {
         console.log('Receipt printing skipped:', printError.message);
@@ -714,7 +745,17 @@ const POSScreen = () => {
                           </div>
                         ))}
                       </div>
-                      <div className="grid grid-cols-3 gap-2">
+                      <div className="grid grid-cols-4 gap-2">
+                        <Button
+                          size="sm"
+                          data-testid={`print-order-${order.id}`}
+                          onClick={() => printOrderReceipt(order.id, order.order_number)}
+                          disabled={isPrinting}
+                          className="h-10 bg-blue-500 hover:bg-blue-600 text-white"
+                        >
+                          <Printer className="w-4 h-4 mr-1" />
+                          Print
+                        </Button>
                         <Button
                           size="sm"
                           data-testid={`edit-order-${order.id}`}

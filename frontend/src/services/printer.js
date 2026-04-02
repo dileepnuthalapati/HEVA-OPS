@@ -1,21 +1,30 @@
 /**
  * HevaPOS Universal Thermal Printer Service
  * 
- * 1. Bluetooth Classic (SPP) — @kduma-autoid/capacitor-bluetooth-printer
- *    Most thermal receipt printers (Epson, Star, Bixolon, generic etc.)
- *    Requires printer to be PAIRED in Android Bluetooth settings first.
+ * THREE connection methods — covers ALL printer setups:
+ * 
+ * 1. WiFi (TCP Socket) — capacitor-tcp-socket
+ *    Tablet connects DIRECTLY to printer IP:9100 over WiFi.
+ *    No backend needed. Multiple devices can share one WiFi printer.
+ *    Best for: restaurants sharing one printer between multiple devices.
  *
- * 2. Bluetooth Low Energy (BLE) — @capacitor-community/bluetooth-le
- *    Fallback for BLE-only printers.
+ * 2. Bluetooth Classic (SPP) — @kduma-autoid/capacitor-bluetooth-printer
+ *    Direct connection to paired Bluetooth printer.
+ *    One device at a time (BT limitation).
+ *    Best for: single-device setups, portable POS.
  *
- * 3. WiFi/Network — Backend TCP proxy (/api/printer/send)
+ * 3. Bluetooth Low Energy (BLE) — @capacitor-community/bluetooth-le
+ *    Fallback for newer BLE-only printers.
+ *
+ * WiFi is RECOMMENDED for multi-device setups (no "printer busy" conflicts).
  */
 
 import { BleClient, numbersToDataView } from '@capacitor-community/bluetooth-le';
 import { BluetoothPrinter } from '@kduma-autoid/capacitor-bluetooth-printer';
+import { TcpSocket } from 'capacitor-tcp-socket';
 import { Capacitor } from '@capacitor/core';
 
-// BLE printer UUIDs (for BLE-only printers)
+// BLE printer UUIDs
 const BLE_SERVICE_UUIDS = [
   '0000ffe0-0000-1000-8000-00805f9b34fb',
   '000018f0-0000-1000-8000-00805f9b34fb',
@@ -51,6 +60,7 @@ class ThermalPrinterService {
     this.bleCharUUID = null;
     this.isNative = Capacitor.isNativePlatform();
     this.bleInitialized = false;
+    this._printing = false;
   }
 
   async initBLE() {
@@ -68,30 +78,92 @@ class ThermalPrinterService {
   }
 
   // ================================================================
-  // MAIN PRINT METHOD
+  // MAIN PRINT METHOD — with duplicate prevention
   // ================================================================
   async printToDevice(printer, escposBase64, apiUrl, authToken) {
     if (!printer) throw new Error('No printer configured. Go to Settings > Printers to add one.');
     if (!escposBase64) throw new Error('No print data generated.');
 
-    const byteCount = base64ToBytes(escposBase64).length;
-    console.log(`[Printer] Sending ${byteCount} bytes to "${printer.name}" (${printer.type}) at ${printer.address}`);
+    if (this._printing) {
+      throw new Error('Printer is busy with a previous job. Please wait.');
+    }
 
-    if (printer.type === 'wifi') {
-      return this._printWifi(printer, escposBase64, apiUrl, authToken);
-    } else if (printer.type === 'bluetooth') {
-      return this._printBluetooth(printer, escposBase64);
-    } else {
-      throw new Error(`Unknown printer type: ${printer.type}`);
+    this._printing = true;
+    try {
+      const byteCount = base64ToBytes(escposBase64).length;
+      console.log(`[Printer] Sending ${byteCount} bytes to "${printer.name}" (${printer.type}) at ${printer.address}`);
+
+      if (printer.type === 'wifi') {
+        return await this._printWifi(printer, escposBase64, apiUrl, authToken);
+      } else if (printer.type === 'bluetooth') {
+        return await this._printBluetooth(printer, escposBase64);
+      } else {
+        throw new Error(`Unknown printer type: ${printer.type}`);
+      }
+    } finally {
+      this._printing = false;
     }
   }
 
-  // ===== WiFi: Backend TCP proxy =====
+  // ================================================================
+  // WiFi: Direct TCP from tablet (no backend needed)
+  // ================================================================
   async _printWifi(printer, base64Data, apiUrl, authToken) {
     const parts = printer.address.split(':');
     const ip = parts[0];
     const port = parseInt(parts[1]) || 9100;
 
+    // Native APK: Send directly via TCP socket plugin (recommended)
+    if (this.isNative) {
+      return this._printWifiNative(ip, port, base64Data);
+    }
+
+    // Browser fallback: Send via backend TCP proxy
+    return this._printWifiBackend(ip, port, base64Data, apiUrl, authToken);
+  }
+
+  // Direct TCP from the tablet — works even with Railway backend
+  async _printWifiNative(ip, port, base64Data) {
+    let clientId = null;
+    try {
+      console.log(`[Printer] TCP connecting to ${ip}:${port}...`);
+      const result = await TcpSocket.connect({ ipAddress: ip, port: port });
+      clientId = result.client;
+      console.log(`[Printer] TCP connected (client ${clientId}), sending data...`);
+
+      // Send ESC/POS as base64 — plugin decodes to raw bytes natively
+      await TcpSocket.send({
+        client: clientId,
+        data: base64Data,
+        encoding: 'base64',
+      });
+
+      console.log('[Printer] WiFi TCP print sent successfully');
+      return { success: true, method: 'wifi-tcp', message: 'Printed via WiFi' };
+    } catch (error) {
+      const msg = error.message || String(error);
+      console.error('[Printer] WiFi TCP error:', msg);
+
+      if (msg.includes('timeout') || msg.includes('connect') || msg.includes('refused')) {
+        throw new Error(
+          `Cannot reach printer at ${ip}:${port}.\n\n` +
+          'Check that:\n' +
+          '1. The printer is powered on and connected to WiFi\n' +
+          '2. Your tablet is on the same WiFi network as the printer\n' +
+          '3. The printer IP address is correct (check printer\'s network settings page)'
+        );
+      }
+      throw new Error(`WiFi print failed: ${msg}`);
+    } finally {
+      // Always disconnect
+      if (clientId !== null) {
+        try { await TcpSocket.disconnect({ client: clientId }); } catch {}
+      }
+    }
+  }
+
+  // Backend proxy fallback (for browser/development use)
+  async _printWifiBackend(ip, port, base64Data, apiUrl, authToken) {
     const response = await fetch(`${apiUrl}/api/printer/send`, {
       method: 'POST',
       headers: {
@@ -106,51 +178,52 @@ class ThermalPrinterService {
       throw new Error(err.detail || `WiFi print failed (HTTP ${response.status})`);
     }
 
-    console.log('[Printer] WiFi print sent');
     return await response.json();
   }
 
-  // ===== Bluetooth: Classic SPP first, BLE fallback =====
+  // ================================================================
+  // Bluetooth: Classic SPP first, BLE fallback
+  // ================================================================
   async _printBluetooth(printer, escposBase64) {
     if (!this.isNative) {
       return this._printWebBluetooth(base64ToBytes(escposBase64));
     }
 
-    // Step 1: Try Bluetooth Classic (SPP) — works for most thermal printers
+    // Try Classic SPP first (most thermal printers)
     const sppResult = await this._tryClassicSPP(printer.address, escposBase64);
-    if (sppResult.success) {
-      return sppResult;
-    }
+    if (sppResult.success) return sppResult;
 
-    // Step 2: Try BLE fallback (only for BLE-capable printers)
+    // Try BLE fallback
     console.log(`[Printer] Classic SPP: ${sppResult.error}. Trying BLE...`);
     try {
       await this._printViaBLE(printer.address, base64ToBytes(escposBase64));
       return { success: true, method: 'ble', message: `Printed via BLE to ${printer.name}` };
     } catch (bleError) {
+      const isBusy = sppResult.error?.toLowerCase().includes('connect') ||
+                     sppResult.error?.toLowerCase().includes('socket') ||
+                     sppResult.error?.toLowerCase().includes('busy') ||
+                     sppResult.error?.toLowerCase().includes('refused');
+
+      const busyHint = isBusy
+        ? '\n\nThe printer may be connected to another device. ' +
+          'Bluetooth only allows ONE device at a time. ' +
+          'Switch to WiFi connection to share the printer between multiple devices.'
+        : '';
+
       throw new Error(
-        `Could not print to ${printer.name}.\n\n` +
-        `Classic Bluetooth: ${sppResult.error}\n` +
-        `BLE: ${bleError.message}\n\n` +
-        'Tips:\n' +
-        '1. Make sure the printer is paired in Android Bluetooth Settings\n' +
-        '2. Turn the printer off and on, then try again\n' +
-        '3. Remove and re-pair the printer in Android Settings'
+        `Could not print to ${printer.name}.${busyHint}\n\n` +
+        'Troubleshooting:\n' +
+        '1. Turn the printer off and on\n' +
+        '2. Check it\'s paired in Android Bluetooth Settings\n' +
+        '3. For multi-device setups, use WiFi connection instead'
       );
     }
   }
 
-  // Classic SPP print
   async _tryClassicSPP(address, escposBase64) {
     try {
-      // Convert base64 ESC/POS to raw string for the SPP plugin
       const rawData = base64ToRawString(escposBase64);
-
-      await BluetoothPrinter.connectAndPrint({
-        address: address,
-        data: rawData,
-      });
-
+      await BluetoothPrinter.connectAndPrint({ address, data: rawData });
       console.log(`[Printer] Classic SPP print sent to ${address}`);
       return { success: true, method: 'classic-spp', message: 'Printed via Bluetooth' };
     } catch (error) {
@@ -160,7 +233,6 @@ class ThermalPrinterService {
     }
   }
 
-  // BLE print
   async _printViaBLE(deviceId, bytes) {
     await this.initBLE();
 
@@ -219,7 +291,6 @@ class ThermalPrinterService {
     this.bleCharUUID = foundChar;
   }
 
-  // Web Bluetooth fallback (Chrome)
   async _printWebBluetooth(bytes) {
     if (!navigator.bluetooth) {
       throw new Error('Bluetooth not available in browser. Use the HevaPOS Android app.');
@@ -271,13 +342,52 @@ class ThermalPrinterService {
   }
 
   // ================================================================
-  // DISCOVERY
+  // WiFi Printer Discovery — scan from the tablet itself
   // ================================================================
+  async scanWifiPrinters(subnet, onPrinterFound, ports = [9100]) {
+    if (!this.isNative) {
+      throw new Error('WiFi scanning from browser not supported. Use the backend scanner or enter the printer IP manually.');
+    }
 
-  /**
-   * Get paired Bluetooth devices from Android settings.
-   * This is the PRIMARY discovery method — shows devices the user already paired.
-   */
+    const results = [];
+    const scanPromises = [];
+
+    for (let i = 1; i <= 254; i++) {
+      const ip = `${subnet}.${i}`;
+      for (const port of ports) {
+        scanPromises.push(
+          this._probeWifiPrinter(ip, port).then(found => {
+            if (found) {
+              results.push({ ip, port, name: `Printer at ${ip}` });
+              onPrinterFound({ ip, port, name: `Printer at ${ip}` });
+            }
+          })
+        );
+      }
+    }
+
+    // Run in batches of 20 to avoid overwhelming the network
+    const batchSize = 20;
+    for (let i = 0; i < scanPromises.length; i += batchSize) {
+      await Promise.all(scanPromises.slice(i, i + batchSize));
+    }
+
+    return results;
+  }
+
+  async _probeWifiPrinter(ip, port) {
+    try {
+      const result = await TcpSocket.connect({ ipAddress: ip, port: port });
+      await TcpSocket.disconnect({ client: result.client });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // ================================================================
+  // Bluetooth Discovery
+  // ================================================================
   async listPairedDevices() {
     if (!this.isNative) return [];
     try {
@@ -289,9 +399,6 @@ class ThermalPrinterService {
     }
   }
 
-  /**
-   * BLE scan for nearby devices (secondary — finds BLE-only printers).
-   */
   async scanBLEDevices(onDeviceFound, durationMs = 10000) {
     await this.initBLE();
     if (!this.isNative) throw new Error('BLE scanning requires the HevaPOS Android app.');
@@ -306,14 +413,9 @@ class ThermalPrinterService {
     const seen = new Set();
     await BleClient.requestLEScan({ services: [], allowDuplicates: false }, (result) => {
       const id = result.device.deviceId;
-      // Only report devices that have a name (skip unknown/unnamed devices)
       if (!seen.has(id) && result.device.name) {
         seen.add(id);
-        onDeviceFound({
-          deviceId: id,
-          name: result.device.name,
-          rssi: result.rssi,
-        });
+        onDeviceFound({ deviceId: id, name: result.device.name, rssi: result.rssi });
       }
     });
 
