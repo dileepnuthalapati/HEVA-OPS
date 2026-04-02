@@ -392,6 +392,15 @@ export const printerAPI = {
     const response = await api.put(`/printers/${id}`, data);
     return response.data;
   },
+  discover: async (subnet, ports, customPort) => {
+    const response = await api.post('/printers/discover', {
+      subnet,
+      ports: ports || [9100, 515, 631],
+      custom_port: customPort || null,
+      timeout_ms: 800,
+    });
+    return response.data;
+  },
   delete: async (id) => {
     const response = await api.delete(`/printers/${id}`);
     return response.data;

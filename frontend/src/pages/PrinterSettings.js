@@ -97,85 +97,53 @@ const PrinterSettings = () => {
     } catch (error) { toast.error('Failed to set default printer'); }
   };
 
-  // WiFi Network Discovery — scans multiple common printer ports
+  // WiFi Network Discovery — uses backend TCP port scanner for real detection
   const scanWifiPrinters = async () => {
     setScanning(true);
     setScanError('');
     setDiscoveredDevices([]);
     
-    // Ports to scan: 9100 (ESC/POS raw), 515 (LPR), 631 (IPP/CUPS), 80 (web config)
-    const portsToScan = [9100, 515, 631, 80];
-    if (customPort && !isNaN(customPort) && !portsToScan.includes(Number(customPort))) {
-      portsToScan.unshift(Number(customPort));
-    }
+    const portsToScan = [9100, 515, 631];
+    const customPortNum = customPort ? parseInt(customPort) : null;
+    
+    // Detect local subnet via WebRTC
+    let subnet = '192.168.1';
+    try {
+      const pc = new RTCPeerConnection({ iceServers: [] });
+      pc.createDataChannel('');
+      const offer = await pc.createOffer();
+      await pc.setLocalDescription(offer);
+      await new Promise((resolve) => {
+        const timeout = setTimeout(resolve, 3000);
+        pc.onicecandidate = (e) => {
+          if (!e.candidate) { clearTimeout(timeout); resolve(); return; }
+          const match = e.candidate.candidate.match(/(\d+\.\d+\.\d+)\.\d+/);
+          if (match && !match[1].startsWith('0.')) subnet = match[1];
+        };
+      });
+      pc.close();
+    } catch (e) { /* fallback */ }
+
+    setScanProgress(`Scanning ${subnet}.x on ports ${portsToScan.join(', ')}${customPortNum ? ', ' + customPortNum : ''}...`);
     
     try {
-      // Detect local subnet via WebRTC
-      const localIPs = [];
-      try {
-        const pc = new RTCPeerConnection({ iceServers: [] });
-        pc.createDataChannel('');
-        const offer = await pc.createOffer();
-        await pc.setLocalDescription(offer);
-        await new Promise((resolve) => {
-          const timeout = setTimeout(resolve, 3000);
-          pc.onicecandidate = (e) => {
-            if (!e.candidate) { clearTimeout(timeout); resolve(); return; }
-            const match = e.candidate.candidate.match(/(\d+\.\d+\.\d+)\.\d+/);
-            if (match && !match[1].startsWith('0.')) localIPs.push(match[1]);
-          };
-        });
-        pc.close();
-      } catch (e) { /* WebRTC unavailable */ }
-
-      const subnet = localIPs.length > 0 ? localIPs[0] : '192.168.1';
-      const found = [];
-      
-      // Scan each port across the subnet
-      for (const port of portsToScan) {
-        setScanProgress(`Scanning ${subnet}.x on port ${port}...`);
-        const ips = [];
-        for (let i = 1; i <= 254; i++) ips.push(`${subnet}.${i}`);
-        
-        const batchSize = 40;
-        for (let batch = 0; batch < Math.min(ips.length, 120); batch += batchSize) {
-          const batchIPs = ips.slice(batch, batch + batchSize);
-          const results = await Promise.allSettled(
-            batchIPs.map(ip =>
-              Promise.race([
-                fetch(`http://${ip}:${port}`, { mode: 'no-cors', signal: AbortSignal.timeout(1200) })
-                  .then(() => ({ ip, port, reachable: true })),
-                new Promise((_, reject) => setTimeout(() => reject(), 1200))
-              ])
-            )
-          );
-          results.forEach((result) => {
-            if (result.status === 'fulfilled' && result.value?.reachable) {
-              const dup = found.find(d => d.ip === result.value.ip && d.port === result.value.port);
-              if (!dup) {
-                const portLabel = { 9100: 'ESC/POS Raw', 515: 'LPR', 631: 'IPP/CUPS', 80: 'Web Config' };
-                found.push({ ...result.value, name: portLabel[port] || `Port ${port}` });
-              }
-            }
-          });
-          if (found.length > 0) setDiscoveredDevices([...found]);
-        }
-      }
-      
-      setScanProgress('');
-      if (found.length === 0) {
+      const result = await printerAPI.discover(subnet, portsToScan, customPortNum);
+      if (result.devices && result.devices.length > 0) {
+        setDiscoveredDevices(result.devices);
+        setScanProgress('');
+      } else {
+        setScanProgress('');
+        setScanError(`No printers found on ${subnet}.x. Make sure your Epson printer is powered on and connected to this WiFi. Check the IP on the printer's network status printout.`);
         setDiscoveredDevices([
-          { ip: `${subnet}.100`, port: 9100, suggested: true, name: 'ESC/POS Raw (common)' },
-          { ip: `${subnet}.200`, port: 9100, suggested: true, name: 'ESC/POS Raw (common)' },
-          { ip: `${subnet}.1`, port: 631, suggested: true, name: 'IPP/CUPS (router/server)' },
+          { ip: `${subnet}.100`, port: 9100, suggested: true, name: 'Common Epson default' },
+          { ip: `${subnet}.168`, port: 9100, suggested: true, name: 'Common printer IP' },
         ]);
-        setScanError(`No printers found on ${subnet}.x across ports ${portsToScan.join(', ')}. Try the suggestions below or enter the IP manually.`);
       }
     } catch (error) {
       setScanProgress('');
-      setScanError('Network scan failed. Enter the printer IP:Port manually.');
+      setScanError(error.response?.data?.detail || 'Scan failed. Enter the printer IP manually — find it via the printer\'s self-test receipt or network config page.');
       setDiscoveredDevices([
-        { ip: '192.168.1.100', port: 9100, suggested: true, name: 'Default ESC/POS' },
+        { ip: `${subnet}.100`, port: 9100, suggested: true, name: 'Common Epson default' },
       ]);
     } finally {
       setScanning(false);
@@ -193,6 +161,9 @@ const PrinterSettings = () => {
       return; // The UI below will show the explanation card
     }
 
+    // Known printer name patterns to prioritize
+    const PRINTER_PATTERNS = ['TM-', 'EPSON', 'STAR', 'TSP', 'BIXOLON', 'THERMAL', 'PRINTER', 'POS', 'RPP', 'SPP'];
+
     // Native APK: Real BLE scan
     setScanning(true);
     setScanError('');
@@ -207,18 +178,22 @@ const PrinterSettings = () => {
         if (result.device?.name || result.device?.deviceId) {
           const existing = devices.find(d => d.deviceId === result.device.deviceId);
           if (!existing) {
+            const name = result.device.name || '';
+            const isPrinter = PRINTER_PATTERNS.some(p => name.toUpperCase().includes(p));
             devices.push({
               deviceId: result.device.deviceId,
-              name: result.device.name || 'Unknown Device',
+              name: name || 'Unknown Device',
               rssi: result.rssi,
+              isPrinter,
             });
+            // Sort: printers first, then by signal strength
+            devices.sort((a, b) => (b.isPrinter ? 1 : 0) - (a.isPrinter ? 1 : 0) || (b.rssi || -999) - (a.rssi || -999));
             setDiscoveredDevices([...devices]);
           }
         }
       });
 
-      // Scan for 10 seconds
-      setScanProgress('Scanning for Bluetooth devices...');
+      setScanProgress('Scanning for Bluetooth devices (10s)...');
       await new Promise(resolve => setTimeout(resolve, 10000));
       await BleClient.stopLEScan();
       setScanProgress('');
@@ -228,7 +203,7 @@ const PrinterSettings = () => {
       }
     } catch (bleError) {
       setScanProgress('');
-      setScanError(`Bluetooth error: ${bleError.message}. Make sure Bluetooth is turned on in your device settings.`);
+      setScanError(`Bluetooth error: ${bleError.message}. Make sure Bluetooth is turned on.`);
     } finally {
       setScanning(false);
       setScanProgress('');

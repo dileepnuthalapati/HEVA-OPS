@@ -84,17 +84,14 @@ const Sidebar = ({ title = 'HevaPOS', subtitle = '' }) => {
             </Link>
           ))}
         </nav>
-        <div className="flex-shrink-0 pt-4 mt-4 border-t border-white/10">
-          <Button
-            variant="outline"
-            data-testid="logout-button"
-            className="w-full justify-start bg-transparent border-white/20 text-white hover:bg-white/10"
-            onClick={handleLogout}
-          >
-            <LogOut className="w-5 h-5 mr-3" />
-            Logout
-          </Button>
-        </div>
+        <button
+          data-testid="logout-button"
+          className="flex items-center gap-3 w-full px-4 py-3 mt-3 rounded-lg text-sm font-medium text-red-300 hover:bg-red-500/20 hover:text-red-200 transition-colors border border-red-400/30 flex-shrink-0"
+          onClick={handleLogout}
+        >
+          <LogOut className="w-5 h-5" />
+          <span>Logout</span>
+        </button>
       </div>
 
       {/* Mobile Header + Sheet Menu */}

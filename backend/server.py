@@ -1589,6 +1589,78 @@ async def send_to_wifi_printer(data: PrinterSendData, current_user: User = Depen
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to send to printer: {str(e)}")
 
+
+import asyncio
+import concurrent.futures
+
+class ScanRequest(BaseModel):
+    subnet: str = "192.168.1"
+    ports: List[int] = [9100, 515, 631]
+    custom_port: Optional[int] = None
+    timeout_ms: int = 800
+
+def _tcp_check(ip: str, port: int, timeout: float) -> dict:
+    """Try TCP connect to ip:port. Returns result dict."""
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        result = s.connect_ex((ip, port))
+        s.close()
+        if result == 0:
+            # Try to identify printer by reading banner
+            name = "Unknown Device"
+            try:
+                s2 = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s2.settimeout(1)
+                s2.connect((ip, port))
+                # Send ESC/POS status request (DLE EOT 1)
+                s2.sendall(b'\x10\x04\x01')
+                data = s2.recv(256)
+                s2.close()
+                if data:
+                    name = "ESC/POS Printer"
+            except:
+                if port == 9100:
+                    name = "ESC/POS Printer (port 9100)"
+                elif port == 515:
+                    name = "LPR Printer"
+                elif port == 631:
+                    name = "IPP Printer"
+            return {"ip": ip, "port": port, "name": name, "reachable": True}
+    except:
+        pass
+    return None
+
+@api_router.post("/printers/discover")
+async def discover_printers(scan: ScanRequest, current_user: User = Depends(get_current_user)):
+    """Scan local network for printers via TCP port checks"""
+    ports = list(scan.ports)
+    if scan.custom_port and scan.custom_port not in ports:
+        ports.append(scan.custom_port)
+    
+    timeout_s = scan.timeout_ms / 1000.0
+    found = []
+    
+    # Run TCP checks in thread pool for parallelism
+    loop = asyncio.get_event_loop()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=50) as pool:
+        tasks = []
+        for port in ports:
+            for i in range(1, 255):
+                ip = f"{scan.subnet}.{i}"
+                tasks.append(loop.run_in_executor(pool, _tcp_check, ip, port, timeout_s))
+        
+        results = await asyncio.gather(*tasks)
+        for r in results:
+            if r and r.get("reachable"):
+                # Deduplicate
+                dup = any(d["ip"] == r["ip"] and d["port"] == r["port"] for d in found)
+                if not dup:
+                    found.append(r)
+    
+    return {"devices": found, "scanned_subnet": scan.subnet, "scanned_ports": ports}
+
+
 @api_router.post("/print/kitchen/{order_id}")
 async def print_kitchen_receipt_escpos(order_id: str, printer_id: Optional[str] = None, current_user: User = Depends(get_current_user)):
     """Generate ESC/POS commands for kitchen receipt"""
