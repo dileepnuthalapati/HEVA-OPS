@@ -30,8 +30,9 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!isOnline) {
-      toast.error('You are offline. Please check your internet connection and try again.');
+    if (!navigator.onLine) {
+      setIsOnline(false);
+      toast.error('You are offline. Check your internet connection.');
       return;
     }
     setLoading(true);
@@ -45,8 +46,10 @@ const Login = () => {
         navigate('/pos');
       }
     } catch (error) {
-      if (!navigator.onLine) {
-        toast.error('Connection lost. Please check your internet and try again.');
+      // Network error = likely offline
+      if (!navigator.onLine || error.message === 'Network Error' || !error.response) {
+        setIsOnline(false);
+        toast.error('No internet connection. Please check your WiFi or mobile data.');
       } else {
         toast.error(error.response?.data?.detail || 'Invalid credentials');
       }

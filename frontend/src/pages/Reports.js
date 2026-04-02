@@ -107,18 +107,17 @@ const Reports = () => {
         });
       }
       
-      // Save as blob for mobile compatibility
-      const pdfBlob = doc.output('blob');
-      const url = URL.createObjectURL(pdfBlob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `HevaPOS_Report_${startDate}_to_${endDate}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      // Save PDF - try direct save, fallback to opening in new tab for mobile
+      const filename = `HevaPOS_Report_${startDate}_to_${endDate}.pdf`;
+      try {
+        doc.save(filename);
+      } catch (saveErr) {
+        // Fallback: open PDF in new browser tab so user can save manually
+        const pdfDataUri = doc.output('dataurlstring');
+        window.open(pdfDataUri, '_blank');
+      }
       
-      toast.success('PDF downloaded!');
+      toast.success('PDF ready! Check your Downloads folder.');
     } catch (error) {
       toast.error('Failed to generate PDF');
     }

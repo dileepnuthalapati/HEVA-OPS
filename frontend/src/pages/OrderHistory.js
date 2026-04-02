@@ -117,7 +117,7 @@ const OrderHistory = () => {
               <h1 className="text-2xl md:text-4xl font-bold tracking-tight" data-testid="orders-heading">Order History</h1>
             </div>
             <p className="text-sm text-muted-foreground ml-11">
-              {fromDate && toDate ? `Showing orders from ${fromDate} to ${toDate}` : `Today's orders (${orders.length}) — resets at 2:00 AM`}
+              {fromDate && toDate ? `Showing orders from ${fromDate} to ${toDate}` : `Today's orders (${orders.length})`}
             </p>
           </div>
 

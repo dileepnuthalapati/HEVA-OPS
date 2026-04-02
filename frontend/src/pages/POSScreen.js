@@ -71,6 +71,9 @@ const POSScreen = () => {
   // Debounce for preventing double clicks
   const [isAddingToCart, setIsAddingToCart] = useState(false);
 
+  // Completed orders for today (visible in pending orders panel)
+  const [completedOrders, setCompletedOrders] = useState([]);
+
   useEffect(() => {
     loadData();
     loadPendingOrders();
@@ -127,6 +130,15 @@ const POSScreen = () => {
       setPendingOrders(orders);
     } catch (error) {
       console.error('Failed to load pending orders:', error);
+    }
+  };
+
+  const loadCompletedOrders = async () => {
+    try {
+      const orders = await orderAPI.getAll({ today_only: true });
+      setCompletedOrders(orders.filter(o => o.status === 'completed'));
+    } catch (error) {
+      console.error('Failed to load completed orders:', error);
     }
   };
 
@@ -509,6 +521,7 @@ const POSScreen = () => {
       setCashAmount('');
       setCardAmount('');
       loadPendingOrders();
+      loadCompletedOrders();
       
       // Return to POS view (hide pending orders panel)
       setShowPendingOrders(false);
@@ -555,7 +568,11 @@ const POSScreen = () => {
             <Button
               variant="outline"
               data-testid="pending-orders-button"
-              onClick={() => setShowPendingOrders(!showPendingOrders)}
+              onClick={() => {
+                const newVal = !showPendingOrders;
+                setShowPendingOrders(newVal);
+                if (newVal) loadCompletedOrders();
+              }}
               className="h-9 text-xs px-2 md:h-12 md:text-base md:px-4"
             >
               <Receipt className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
@@ -672,12 +689,13 @@ const POSScreen = () => {
                           </div>
                         ))}
                       </div>
-                      <div className="flex gap-2">
+                      <div className="grid grid-cols-3 gap-2">
                         <Button
                           variant="outline"
                           size="sm"
                           data-testid={`edit-order-${order.id}`}
                           onClick={() => editPendingOrder(order)}
+                          className="h-10"
                         >
                           <Plus className="w-4 h-4 mr-1" />
                           Edit
@@ -685,7 +703,7 @@ const POSScreen = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="text-red-600 hover:bg-red-50"
+                          className="text-red-600 hover:bg-red-50 h-10"
                           data-testid={`cancel-order-${order.id}`}
                           onClick={() => cancelPendingOrder(order.id)}
                         >
@@ -693,17 +711,65 @@ const POSScreen = () => {
                           Cancel
                         </Button>
                         <Button
-                          className="flex-1 btn-success"
+                          className="btn-success h-10"
+                          size="sm"
                           data-testid={`complete-order-${order.id}`}
                           onClick={() => openCompleteDialog(order)}
                         >
-                          <CreditCard className="w-4 h-4 mr-2" />
-                          Complete Payment
+                          <CreditCard className="w-4 h-4 mr-1" />
+                          Pay
                         </Button>
                       </div>
                     </CardContent>
                   </Card>
                 )})
+              )}
+
+              {/* Completed Orders for Today */}
+              <h2 className="text-xl font-bold mt-8 mb-3 pt-4 border-t" data-testid="completed-orders-heading">
+                Completed Today ({completedOrders.length})
+              </h2>
+              {completedOrders.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground text-sm">No completed orders yet today</div>
+              ) : (
+                completedOrders.map((order) => {
+                  const orderTable = order.table_id ? tables.find(t => t.id === order.table_id) : null;
+                  return (
+                    <Card key={order.id} data-testid={`completed-order-${order.id}`} className="opacity-80">
+                      <CardContent className="p-4">
+                        <div className="flex justify-between items-start">
+                          <div>
+                            <div className="text-base font-bold flex items-center gap-2">
+                              Order #{String(order.order_number).padStart(3, '0')}
+                              {orderTable && (
+                                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                                  Table {orderTable.number}
+                                </span>
+                              )}
+                              <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded">
+                                {order.payment_method === 'card' ? 'Card' : order.payment_method === 'split' ? 'Split' : 'Cash'}
+                              </span>
+                            </div>
+                            <div className="text-xs text-muted-foreground mt-0.5">
+                              {new Date(order.created_at).toLocaleTimeString()}
+                            </div>
+                          </div>
+                          <div className="text-lg font-bold font-mono">
+                            {getCurrencySymbol(currency)}{order.total_amount.toFixed(2)}
+                          </div>
+                        </div>
+                        <div className="mt-2 space-y-1">
+                          {order.items.map((item, idx) => (
+                            <div key={idx} className="flex justify-between text-xs text-muted-foreground">
+                              <span>{item.product_name} x {item.quantity}</span>
+                              <span>{getCurrencySymbol(currency)}{item.total.toFixed(2)}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  );
+                })
               )}
             </div>
           ) : filteredProducts.length === 0 ? (
