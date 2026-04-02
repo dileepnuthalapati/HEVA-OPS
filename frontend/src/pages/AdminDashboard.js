@@ -61,7 +61,7 @@ const AdminDashboard = () => {
             <h1 className="text-2xl md:text-4xl font-bold tracking-tight mb-1 md:mb-2" data-testid="dashboard-heading">Today's Dashboard</h1>
             <p className="text-sm md:text-base text-muted-foreground flex items-center gap-2">
               <Calendar className="w-4 h-4 shrink-0" />
-              <span>{today} &bull; Business day resets at 2:00 AM</span>
+              <span>{today}</span>
             </p>
           </div>
 

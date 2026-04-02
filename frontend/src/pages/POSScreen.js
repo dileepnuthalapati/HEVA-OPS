@@ -689,12 +689,13 @@ const POSScreen = () => {
                           </div>
                         ))}
                       </div>
-                      <div className="flex gap-2">
+                      <div className="grid grid-cols-3 gap-2">
                         <Button
                           variant="outline"
                           size="sm"
                           data-testid={`edit-order-${order.id}`}
                           onClick={() => editPendingOrder(order)}
+                          className="h-10"
                         >
                           <Plus className="w-4 h-4 mr-1" />
                           Edit
@@ -702,7 +703,7 @@ const POSScreen = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="text-red-600 hover:bg-red-50"
+                          className="text-red-600 hover:bg-red-50 h-10"
                           data-testid={`cancel-order-${order.id}`}
                           onClick={() => cancelPendingOrder(order.id)}
                         >
@@ -710,12 +711,13 @@ const POSScreen = () => {
                           Cancel
                         </Button>
                         <Button
-                          className="flex-1 btn-success"
+                          className="btn-success h-10"
+                          size="sm"
                           data-testid={`complete-order-${order.id}`}
                           onClick={() => openCompleteDialog(order)}
                         >
-                          <CreditCard className="w-4 h-4 mr-2" />
-                          Complete Payment
+                          <CreditCard className="w-4 h-4 mr-1" />
+                          Pay
                         </Button>
                       </div>
                     </CardContent>
