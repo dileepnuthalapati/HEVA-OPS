@@ -284,10 +284,12 @@ const POSScreen = () => {
     if (!confirm('Are you sure you want to cancel this order?')) return;
     
     try {
-      await orderAPI.cancel(orderId);
+      await orderAPI.cancel(orderId, 'Cancelled by staff');
+      toast.success('Order cancelled');
       loadPendingOrders();
+      loadCompletedOrders();
     } catch (error) {
-      console.error('Failed to cancel order:', error);
+      toast.error(error.response?.data?.detail || 'Failed to cancel order');
     }
   };
 
@@ -691,19 +693,17 @@ const POSScreen = () => {
                       </div>
                       <div className="grid grid-cols-3 gap-2">
                         <Button
-                          variant="outline"
                           size="sm"
                           data-testid={`edit-order-${order.id}`}
                           onClick={() => editPendingOrder(order)}
-                          className="h-10"
+                          className="h-10 bg-amber-500 hover:bg-amber-600 text-white"
                         >
                           <Plus className="w-4 h-4 mr-1" />
                           Edit
                         </Button>
                         <Button
-                          variant="outline"
                           size="sm"
-                          className="text-red-600 hover:bg-red-50 h-10"
+                          className="h-10 bg-red-500 hover:bg-red-600 text-white"
                           data-testid={`cancel-order-${order.id}`}
                           onClick={() => cancelPendingOrder(order.id)}
                         >
@@ -711,8 +711,8 @@ const POSScreen = () => {
                           Cancel
                         </Button>
                         <Button
-                          className="btn-success h-10"
                           size="sm"
+                          className="h-10 bg-emerald-500 hover:bg-emerald-600 text-white"
                           data-testid={`complete-order-${order.id}`}
                           onClick={() => openCompleteDialog(order)}
                         >
@@ -751,7 +751,7 @@ const POSScreen = () => {
                               </span>
                             </div>
                             <div className="text-xs text-muted-foreground mt-0.5">
-                              {new Date(order.created_at).toLocaleTimeString()}
+                              {new Date(order.created_at).toLocaleTimeString()} &bull; by {order.created_by}
                             </div>
                           </div>
                           <div className="text-lg font-bold font-mono">
@@ -765,6 +765,24 @@ const POSScreen = () => {
                               <span>{getCurrencySymbol(currency)}{item.total.toFixed(2)}</span>
                             </div>
                           ))}
+                        </div>
+                        <div className="mt-3">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            data-testid={`print-completed-${order.id}`}
+                            onClick={async () => {
+                              try {
+                                await orderAPI.printCustomerReceipt(order.id);
+                                toast.success('Receipt sent to printer');
+                              } catch (err) {
+                                toast.error('Failed to print receipt');
+                              }
+                            }}
+                            className="h-8"
+                          >
+                            <Printer className="w-3.5 h-3.5 mr-1" /> Print Receipt
+                          </Button>
                         </div>
                       </CardContent>
                     </Card>

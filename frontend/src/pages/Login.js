@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
@@ -17,19 +17,25 @@ const Login = () => {
   const [showPassword, setShowPassword] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
-  useEffect(() => {
-    const goOnline = () => setIsOnline(true);
-    const goOffline = () => setIsOnline(false);
-    window.addEventListener('online', goOnline);
-    window.addEventListener('offline', goOffline);
-    return () => {
-      window.removeEventListener('online', goOnline);
-      window.removeEventListener('offline', goOffline);
-    };
+  const checkOnline = useCallback(() => {
+    setIsOnline(navigator.onLine);
   }, []);
+
+  useEffect(() => {
+    window.addEventListener('online', checkOnline);
+    window.addEventListener('offline', checkOnline);
+    // Poll every 2 seconds as backup for browsers that don't fire events reliably
+    const interval = setInterval(checkOnline, 2000);
+    return () => {
+      window.removeEventListener('online', checkOnline);
+      window.removeEventListener('offline', checkOnline);
+      clearInterval(interval);
+    };
+  }, [checkOnline]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // Double-check right before submitting
     if (!navigator.onLine) {
       setIsOnline(false);
       toast.error('You are offline. Check your internet connection.');
@@ -46,7 +52,6 @@ const Login = () => {
         navigate('/pos');
       }
     } catch (error) {
-      // Network error = likely offline
       if (!navigator.onLine || error.message === 'Network Error' || !error.response) {
         setIsOnline(false);
         toast.error('No internet connection. Please check your WiFi or mobile data.');
@@ -90,7 +95,7 @@ const Login = () => {
               </div>
             </div>
             <Button type="submit" data-testid="login-submit" className="w-full" disabled={loading || !isOnline}>
-              {!isOnline ? 'Offline - Cannot Sign In' : loading ? 'Signing in...' : 'Sign In'}
+              {!isOnline ? 'Offline — Cannot Sign In' : loading ? 'Signing in...' : 'Sign In'}
             </Button>
           </form>
         </CardContent>

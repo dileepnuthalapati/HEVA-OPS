@@ -931,7 +931,7 @@ async def complete_order(order_id: str, complete_data: OrderComplete, current_us
     return Order(**updated)
 
 class CancelOrderRequest(BaseModel):
-    reason: str
+    reason: str = "Cancelled by staff"
 
 @api_router.put("/orders/{order_id}/cancel")
 async def cancel_order(order_id: str, cancel_data: CancelOrderRequest, current_user: User = Depends(get_current_user)):
@@ -954,14 +954,12 @@ async def cancel_order(order_id: str, cancel_data: CancelOrderRequest, current_u
 @api_router.get("/orders/pending", response_model=List[Order])
 async def get_pending_orders(current_user: User = Depends(get_current_user)):
     query = {"status": "pending"}
-    if current_user.role != "admin":
-        query["created_by"] = current_user.username
     orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return [Order(**order) for order in orders]
 
 @api_router.get("/orders", response_model=List[Order])
 async def get_orders(current_user: User = Depends(get_current_user), from_date: str = None, to_date: str = None, today_only: bool = False):
-    query = {} if current_user.role == "admin" else {"created_by": current_user.username}
+    query = {}
     
     if today_only:
         now = datetime.now(timezone.utc)
