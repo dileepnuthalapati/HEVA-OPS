@@ -73,41 +73,28 @@ const PrinterSettings = () => {
   const handleTest = async (printer) => {
     const toastId = toast.loading(`Sending test print to ${printer.name}...`);
     try {
+      // Get ESC/POS test receipt from backend
       const result = await printerAPI.test(printer.id);
-
-      // WiFi printers: backend already sent the data via TCP
-      if (printer.type === 'wifi') {
-        if (result.sent) {
-          toast.success(`Test receipt printed on ${printer.name}!`, { id: toastId });
-          setTestResult({ ...result, printSuccess: true });
-        } else {
-          // Backend couldn't reach the printer — show error + commands
-          toast.error(`Could not reach printer: ${result.send_error || 'Connection failed'}`, { id: toastId });
-          setTestResult({ ...result, printSuccess: false });
-        }
+      if (!result.commands) {
+        toast.error('No test data generated', { id: toastId });
         return;
       }
 
-      // Bluetooth printers: send from the device via BLE
-      if (printer.type === 'bluetooth') {
-        try {
-          const apiUrl = process.env.REACT_APP_BACKEND_URL;
-          const token = getAuthToken();
-          await printerService.printToDevice(printer, result.commands, apiUrl, token);
-          toast.success(`Test receipt printed on ${printer.name}!`, { id: toastId });
-          setTestResult({ ...result, printSuccess: true });
-        } catch (bleError) {
-          toast.error(`Bluetooth print failed: ${bleError.message}`, { id: toastId });
-          setTestResult({ ...result, printSuccess: false, send_error: bleError.message });
-        }
-        return;
+      // Send to printer using the universal print service
+      // WiFi: uses direct TCP from tablet (or backend proxy in browser)
+      // Bluetooth: uses Classic SPP then BLE fallback
+      try {
+        const apiUrl = process.env.REACT_APP_BACKEND_URL;
+        const token = getAuthToken();
+        await printerService.printToDevice(printer, result.commands, apiUrl, token);
+        toast.success(`Test receipt printed on ${printer.name}!`, { id: toastId });
+        setTestResult({ ...result, printSuccess: true });
+      } catch (printError) {
+        toast.error(`Print failed: ${printError.message}`, { id: toastId });
+        setTestResult({ ...result, printSuccess: false, send_error: printError.message });
       }
-
-      // Fallback
-      toast.success('Test receipt generated', { id: toastId });
-      setTestResult(result);
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to test printer', { id: toastId });
+      toast.error(error.response?.data?.detail || 'Failed to generate test receipt', { id: toastId });
     }
   };
 
@@ -125,15 +112,53 @@ const PrinterSettings = () => {
     } catch (error) { toast.error('Failed to set default printer'); }
   };
 
-  // WiFi Network Discovery — uses backend TCP port scanner for real detection
+  // WiFi Network Discovery
+  // Native APK: scans directly from tablet using TCP socket plugin
+  // Browser: uses backend TCP port scanner
   const scanWifiPrinters = async () => {
     setScanning(true);
     setScanError('');
     setDiscoveredDevices([]);
-    
+
+    if (isNativeApp) {
+      // Native APK: scan from tablet directly using TCP socket
+      setScanProgress('Scanning your WiFi network for printers...');
+      try {
+        // Try common subnets
+        const subnets = ['192.168.1', '192.168.0', '192.168.2', '10.0.0', '172.16.0'];
+        const allDevices = [];
+
+        for (const subnet of subnets) {
+          setScanProgress(`Scanning ${subnet}.x ...`);
+          const found = await printerService.scanWifiPrinters(subnet, (device) => {
+            allDevices.push(device);
+            setDiscoveredDevices([...allDevices]);
+          });
+          if (found.length > 0) break; // Found printers, stop scanning other subnets
+        }
+
+        setScanProgress('');
+        if (allDevices.length === 0) {
+          setScanError(
+            'No WiFi printers found.\n\n' +
+            'Make sure:\n' +
+            '1. Your printer is on and connected to WiFi\n' +
+            '2. Your tablet is on the same WiFi network\n' +
+            '3. Or add the printer manually using its IP address\n\n' +
+            'Tip: Print a network status page from your printer to find its IP address.'
+          );
+        }
+      } catch (err) {
+        setScanProgress('');
+        setScanError('WiFi scan failed: ' + err.message);
+      } finally {
+        setScanning(false);
+      }
+      return;
+    }
+
+    // Browser: use backend scanner
     const portsToScan = [9100, 515, 631];
-    
-    // Auto-detect subnet from the backend server's actual network
     let subnet = '192.168.1';
     setScanProgress('Detecting your network...');
     try {
@@ -141,8 +166,8 @@ const PrinterSettings = () => {
       subnet = subnetData.primary || '192.168.1';
     } catch (e) { /* fallback */ }
 
-    setScanProgress(`Scanning your network for printers...`);
-    
+    setScanProgress('Scanning your network for printers...');
+
     try {
       const result = await printerAPI.discover(subnet, portsToScan, null);
       if (result.devices && result.devices.length > 0) {
@@ -154,7 +179,7 @@ const PrinterSettings = () => {
       }
     } catch (error) {
       setScanProgress('');
-      setScanError(error.response?.data?.detail || 'Scan failed. Make sure the printer is powered on and connected to WiFi. You can also add it manually using the IP shown on the printer\'s network status printout.');
+      setScanError(error.response?.data?.detail || 'Scan failed. You can add the printer manually using its IP address.');
     } finally {
       setScanning(false);
       setScanProgress('');
@@ -439,13 +464,15 @@ const PrinterSettings = () => {
             <CardHeader><CardTitle>How to Connect a Printer</CardTitle></CardHeader>
             <CardContent className="space-y-5">
               <div>
-                <h4 className="font-semibold mb-2">WiFi Printer</h4>
+                <h4 className="font-semibold mb-2">WiFi Printer (Recommended for Multi-Device)</h4>
                 <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1.5">
-                  <li>Connect your printer to the same WiFi as your device</li>
-                  <li>Click <strong>Discover Printers</strong> above</li>
-                  <li>Tap <strong>Start Scan</strong> — your printer will appear in the list</li>
-                  <li>Select it and you're done</li>
+                  <li>Connect your printer to your restaurant's WiFi network</li>
+                  <li>Find the printer's IP (print a network status page from the printer)</li>
+                  <li>In HevaPOS: <strong>Add Printer &rarr; WiFi &rarr; Enter IP</strong> (e.g., 192.168.1.100)</li>
+                  <li>Or use <strong>Discover &rarr; WiFi &rarr; Scan</strong> to auto-detect</li>
+                  <li>Hit <strong>Test</strong> to verify</li>
                 </ol>
+                <p className="text-xs text-emerald-700 mt-2 font-medium">WiFi printing connects directly from your tablet to the printer. Multiple devices can share one WiFi printer simultaneously.</p>
               </div>
               <div>
                 <h4 className="font-semibold mb-2">Bluetooth Printer</h4>
