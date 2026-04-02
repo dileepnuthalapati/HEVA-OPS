@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { categoryAPI, productAPI, orderAPI, tableAPI, printerAPI, restaurantAPI } from '../services/api';
+import { categoryAPI, productAPI, orderAPI, tableAPI, printerAPI, restaurantAPI, getAuthToken } from '../services/api';
+import printerService from '../services/printer';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { ScrollArea } from '../components/ui/scroll-area';
@@ -73,6 +74,24 @@ const POSScreen = () => {
 
   // Completed orders for today (visible in pending orders panel)
   const [completedOrders, setCompletedOrders] = useState([]);
+
+  // Helper: Send ESC/POS commands to the default printer
+  const sendToPrinter = async (escposCommands) => {
+    try {
+      const defaultPrinter = await printerAPI.getDefault();
+      if (!defaultPrinter) {
+        console.log('[POS] No default printer configured, skipping print');
+        return;
+      }
+      const apiUrl = process.env.REACT_APP_BACKEND_URL;
+      const token = getAuthToken();
+      await printerService.printToDevice(defaultPrinter, escposCommands, apiUrl, token);
+      console.log('[POS] Print sent successfully');
+    } catch (printErr) {
+      console.warn('[POS] Print failed:', printErr.message);
+      // Don't block POS flow for print failures
+    }
+  };
 
   useEffect(() => {
     loadData();
@@ -371,9 +390,10 @@ const POSScreen = () => {
       // Try to print kitchen receipt (silently fail if no printer)
       try {
         const printResult = await printerAPI.printKitchenReceipt(order.id);
-        console.log('Kitchen receipt ESC/POS commands generated:', printResult);
+        if (printResult?.commands) {
+          await sendToPrinter(printResult.commands);
+        }
       } catch (printError) {
-        // Silently handle print errors - receipt printing is optional
         console.log('Kitchen receipt printing skipped:', printError.message);
       }
       
@@ -498,9 +518,10 @@ const POSScreen = () => {
       // Try to print customer receipt (silently fail if no printer)
       try {
         const printResult = await printerAPI.printCustomerReceipt(selectedOrderToComplete.id);
-        console.log('Customer receipt ESC/POS commands generated:', printResult);
+        if (printResult?.commands) {
+          await sendToPrinter(printResult.commands);
+        }
       } catch (printError) {
-        // Silently handle print errors - receipt printing is optional
         console.log('Receipt printing skipped:', printError.message);
       }
       
@@ -775,10 +796,15 @@ const POSScreen = () => {
                             data-testid={`print-completed-${order.id}`}
                             onClick={async () => {
                               try {
-                                await orderAPI.printCustomerReceipt(order.id);
-                                toast.success('Receipt sent to printer');
+                                const printResult = await printerAPI.printCustomerReceipt(order.id);
+                                if (printResult?.commands) {
+                                  await sendToPrinter(printResult.commands);
+                                  toast.success('Receipt sent to printer');
+                                } else {
+                                  toast.error('No print data generated');
+                                }
                               } catch (err) {
-                                toast.error('Failed to print receipt');
+                                toast.error('Failed to print receipt: ' + (err.message || ''));
                               }
                             }}
                             className="h-8"

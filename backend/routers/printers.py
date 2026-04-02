@@ -72,6 +72,23 @@ async def delete_printer(printer_id: str, current_user: User = Depends(require_a
     return {"message": "Printer deleted"}
 
 
+@router.get("/printers/default")
+async def get_default_printer(current_user: User = Depends(get_current_user)):
+    """Get the default printer for the current user's restaurant."""
+    query = {}
+    if current_user.role != 'platform_owner' and current_user.restaurant_id:
+        query["restaurant_id"] = current_user.restaurant_id
+    query["is_default"] = True
+    printer = await db.printers.find_one(query, {"_id": 0})
+    if not printer:
+        # Fall back to any printer
+        query.pop("is_default")
+        printer = await db.printers.find_one(query, {"_id": 0})
+    if not printer:
+        return None
+    return Printer(**printer)
+
+
 @router.post("/printers/{printer_id}/test")
 async def test_printer(printer_id: str, current_user: User = Depends(require_admin)):
     printer = await db.printers.find_one({"id": printer_id}, {"_id": 0})
@@ -79,13 +96,35 @@ async def test_printer(printer_id: str, current_user: User = Depends(require_adm
         raise HTTPException(status_code=404, detail="Printer not found")
 
     test_commands = generate_escpos_test_receipt(printer)
+
+    # For WiFi printers: attempt to send directly via TCP
+    sent = False
+    send_error = None
+    if printer["type"] == "wifi":
+        try:
+            parts = printer["address"].split(":")
+            ip = parts[0]
+            port = int(parts[1]) if len(parts) > 1 else 9100
+            raw_data = base64.b64decode(test_commands)
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
+            try:
+                sock.connect((ip, port))
+                sock.sendall(raw_data)
+                sent = True
+            finally:
+                sock.close()
+        except Exception as e:
+            send_error = str(e)
+
     return {
-        "message": "Test receipt generated",
+        "message": "Test receipt sent to printer" if sent else "Test receipt generated",
         "printer": printer["name"],
         "type": printer["type"],
         "address": printer["address"],
         "commands": test_commands,
-        "instructions": "Send these commands to the printer via Bluetooth or TCP socket"
+        "sent": sent,
+        "send_error": send_error,
     }
 
 
