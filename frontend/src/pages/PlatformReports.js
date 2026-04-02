@@ -103,7 +103,7 @@ const PlatformReports = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">${stats.totalRevenue.toFixed(2)}</div>
+                <div className="text-2xl font-bold">{stats.totalRevenue.toFixed(2)}</div>
                 <p className="text-xs text-emerald-600">Monthly recurring revenue</p>
               </CardContent>
             </Card>

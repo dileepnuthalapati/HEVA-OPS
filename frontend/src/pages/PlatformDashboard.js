@@ -124,7 +124,7 @@ const PlatformDashboard = () => {
                 <DollarSign className="h-5 w-5 text-emerald-500" />
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">${stats.thisMonthRevenue.toFixed(2)}</div>
+                <div className="text-3xl font-bold">{stats.thisMonthRevenue.toFixed(2)}</div>
                 <p className={`text-xs mt-1 ${Number(revenueGrowth) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
                   {Number(revenueGrowth) >= 0 ? '+' : ''}{revenueGrowth}% from last month
                 </p>

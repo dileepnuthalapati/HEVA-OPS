@@ -995,16 +995,17 @@ async def generate_report(report_req: ReportRequest, current_user: User = Depend
         {"_id": 0}
     ).to_list(10000)
     
-    total_sales = sum(order["total_amount"] for order in orders)
+    total_sales = sum(order.get("total_amount", 0) for order in orders)
     total_orders = len(orders)
     
     product_sales = {}
     for order in orders:
-        for item in order["items"]:
-            if item["product_name"] not in product_sales:
-                product_sales[item["product_name"]] = {"quantity": 0, "revenue": 0}
-            product_sales[item["product_name"]]["quantity"] += item["quantity"]
-            product_sales[item["product_name"]]["revenue"] += item["total"]
+        for item in order.get("items", []):
+            pname = item.get("product_name", "Unknown")
+            if pname not in product_sales:
+                product_sales[pname] = {"quantity": 0, "revenue": 0}
+            product_sales[pname]["quantity"] += item.get("quantity", 0)
+            product_sales[pname]["revenue"] += item.get("total", 0)
     
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=40, bottomMargin=40)
@@ -1203,13 +1204,13 @@ async def print_customer_receipt(order_id: str, current_user: User = Depends(get
         ])
     
     table_data.append(["", "", "", ""])
-    table_data.append(["", "", "Subtotal:", f"${order['subtotal']:.2f}"])
+    table_data.append(["", "", "Subtotal:", f"{order.get('subtotal', 0):.2f}"])
     
     if order.get('tip_amount', 0) > 0:
         tip_label = f"Tip ({order.get('tip_percentage', 0)}%)"
-        table_data.append(["", "", tip_label, f"${order['tip_amount']:.2f}"])
+        table_data.append(["", "", tip_label, f"{order.get('tip_amount', 0):.2f}"])
     
-    table_data.append(["", "", "TOTAL:", f"${order['total_amount']:.2f}"])
+    table_data.append(["", "", "TOTAL:", f"{order.get('total_amount', 0):.2f}"])
     
     table = ReportLabTable(table_data, colWidths=[200, 80, 80, 100])
     table.setStyle(TableStyle([
@@ -1303,7 +1304,7 @@ async def get_current_cash_drawer(current_user: User = Depends(require_admin)):
         {"_id": 0}
     ).to_list(10000)
     
-    total_cash_sales = sum(order["total_amount"] for order in cash_orders)
+    total_cash_sales = sum(order.get("total_amount", 0) for order in cash_orders)
     drawer["expected_cash"] = drawer["opening_balance"] + total_cash_sales
     
     return CashDrawer(**drawer)
@@ -1325,7 +1326,7 @@ async def close_cash_drawer(close_data: CashDrawerClose, current_user: User = De
         {"_id": 0}
     ).to_list(10000)
     
-    total_cash_sales = sum(order["total_amount"] for order in cash_orders)
+    total_cash_sales = sum(order.get("total_amount", 0) for order in cash_orders)
     expected_cash = drawer["opening_balance"] + total_cash_sales
     difference = close_data.actual_cash - expected_cash
     
@@ -2430,6 +2431,11 @@ class StaffCreate(BaseModel):
     password: str
     role: str = "user"
 
+class StaffUpdate(BaseModel):
+    username: str
+    password: Optional[str] = None
+    role: str = "user"
+
 class PasswordReset(BaseModel):
     new_password: str
 
@@ -2471,7 +2477,7 @@ async def reset_staff_password(user_id: str, data: PasswordReset, current_user: 
     return {"message": f"Password reset for {user.get('username', user_id)}"}
 
 @api_router.put("/restaurant/staff/{user_id}")
-async def update_staff(user_id: str, staff: StaffCreate, current_user: User = Depends(require_admin)):
+async def update_staff(user_id: str, staff: StaffUpdate, current_user: User = Depends(require_admin)):
     """Restaurant Admin: edit staff profile"""
     user = await db.users.find_one({"id": user_id, "restaurant_id": current_user.restaurant_id})
     if not user:
