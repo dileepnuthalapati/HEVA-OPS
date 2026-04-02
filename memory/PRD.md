@@ -1,90 +1,65 @@
 # HevaPOS - Product Requirements Document
 
 ## Original Problem Statement
-Build a multi-tenant SaaS POS system called "HevaPOS" with:
-- Cloud-based backend (FastAPI) and DB (MongoDB Atlas) for real-time multi-device syncing
-- Android APK capability for tablets/phones via Capacitor
-- Three user roles: Platform Owner, Restaurant Admin, Staff
-- Full POS functionality: cart, discounts, order notes, cash/card split payments, receipt printing
-- Customization per tenant (currency, receipt details, tables, menus)
-
-## User Personas
-1. **Platform Owner**: Manages all restaurants, global settings, user creation
-2. **Restaurant Admin**: Manages single restaurant's dashboard, settings, POS operations
-3. **Staff User**: Access only to dedicated POS screen for taking orders
+Build a multi-tenant SaaS POS system called "HevaPOS" with cloud backend (FastAPI/MongoDB), Android APK (Capacitor), three user roles (Platform Owner, Restaurant Admin, Staff), and full POS functionality.
 
 ## Technical Architecture
-
-### Stack
-- **Frontend**: React, Tailwind CSS, Shadcn UI, Capacitor
+- **Frontend**: React, Tailwind CSS, Shadcn UI, Capacitor, @capacitor-community/bluetooth-le
 - **Backend**: FastAPI, Motor (async MongoDB)
-- **Database**: MongoDB Atlas (Production), Local MongoDB (Development)
+- **Database**: MongoDB Atlas (Production), Local MongoDB (Dev)
 - **Hosting**: Railway (Backend)
 
 ### Key Files
-- `/app/backend/server.py` - Monolithic API (~2400 lines)
-- `/app/frontend/src/pages/POSScreen.js` - Main POS UI
-- `/app/frontend/src/pages/PrinterSettings.js` - Consolidated printer management
-- `/app/frontend/src/pages/OrderHistory.js` - Orders list with Reprint Receipt
-- `/app/frontend/src/components/Sidebar.js` - Role-based nav, mobile hamburger sheet
-- `/app/frontend/src/index.css` - Minimal global styles, pos-screen responsive rules
+- `/app/backend/server.py` - API (~2600 lines)
+- `/app/frontend/src/pages/POSScreen.js` - POS with mobile cart Sheet
+- `/app/frontend/src/pages/SubscriptionManagement.js` - Subscription lifecycle
+- `/app/frontend/src/pages/OrderHistory.js` - Orders + Reprint Receipt
+- `/app/frontend/src/components/Sidebar.js` - Responsive nav + mobile sheet
+- `/app/frontend/src/services/printer.js` - BLE native + Web Bluetooth
+- `/app/frontend/src/index.css` - Minimal, responsive CSS
 
 ### Database Schema
-- `restaurants`: {id, business_info, currency, users}
+- `restaurants`: {id, business_info, currency, subscription_status, trial_ends_at, subscription_plan, price}
 - `users`: {id, username, role, restaurant_id}
 - `orders`: {notes, discount, payment_details, status, items}
+- `notifications`: {id, restaurant_id, type, message, email, status, created_at, sent_at}
 - `tables`, `printers`, `reservations`
-
-### Key API Endpoints
-- `GET /api/dashboard/today` - Today's stats
-- `GET /api/orders` - List all orders
-- `POST /api/orders/{order_id}/cancel` - Cancel order
-- `POST /api/orders/{order_id}/print-customer-receipt` - Reprint receipt
-- `PUT /api/auth/password` - Change password
 
 ---
 
-## Implementation Status
-
-### Completed Features
+## Completed Features
 - [x] JWT Authentication with role-based access
-- [x] Restaurant Management (CRUD)
-- [x] Table Management (CRUD + status tracking)
-- [x] Printer Management - consolidated to PrinterSettings page
-- [x] POS Screen (text-only layout, no images, compact cart)
-- [x] Product Search, Custom Items, Categories
-- [x] Split Payments, Discounts, Order Notes
-- [x] Kitchen & Customer Receipt generation
-- [x] Dynamic Currency Symbols
-- [x] Railway Deployment, Capacitor Config
-- [x] **Full Mobile Responsiveness** (all screen sizes: 320px → 1920px+)
-  - Sidebar hidden on mobile with hamburger Sheet menu (all items visible)
-  - Fixed mobile header with username + menu toggle
-  - flex-col/flex-row layout switching via Tailwind md: breakpoint
-  - Responsive headings (text-2xl → text-4xl), padding (p-4 → p-8)
-  - POS compact header, scrollable categories, 2-col product grid on mobile
-  - Cart stacks below products on mobile (40vh max)
-- [x] **Reprint Receipt** button on Orders page (printer icon + download)
-- [x] **Dashboard Total Orders clickable** → navigates to /orders
-- [x] Printer setup removed from POS & RestaurantSettings (only in /printers)
-- [x] Orders API resilient to legacy data formats (Optional defaults on model)
+- [x] Full POS: cart, discounts, notes, split payments, custom items
+- [x] Mobile cart as slide-out Sheet drawer (floating button trigger)
+- [x] Desktop cart as always-visible right sidebar
+- [x] Full mobile responsiveness (320px → 1920px+, all screen sizes)
+- [x] Mobile hamburger sidebar with ALL menu items visible + logout
+- [x] Subscription Management (trial/active/suspended/cancelled lifecycle)
+- [x] Trial expiration checking + auto-suspend
+- [x] Notifications system (pending/sent, platform owner dashboard)
+- [x] Admin dashboard subscription banner (trial days warning)
+- [x] Reprint Receipt button on Orders page
+- [x] Dashboard Total Orders → click navigates to /orders
+- [x] Bluetooth Printer: native BLE (@capacitor-community/bluetooth-le) + Web Bluetooth fallback
+- [x] WiFi/Network printer support
+- [x] OfflineIndicator only shows when offline (no "Online" badge blocking UI)
+- [x] Toast notifications: bottom-right, 2s, non-intrusive
+- [x] Printer setup consolidated to /printers page only
+- [x] Orders API resilient to legacy data formats
 
-### Upcoming Tasks (P0)
-- [ ] Bluetooth Printer Discovery fix for Android APK (Capacitor plugin)
-
-### Upcoming Tasks (P1)
-- [ ] Subscription Management (trial → active/suspended lifecycle)
-- [ ] Email Notifications (trial expiry alerts)
-
-### Future Tasks (P2)
+## Upcoming Tasks (P1)
+- [ ] Email delivery integration (SendGrid/Resend) for notification emails
 - [ ] Payment Gateway Integration (Stripe/Square/Razorpay)
-- [ ] Revenue Dashboard for Platform Owner
+
+## Future Tasks (P2)
+- [ ] Revenue Dashboard for Platform Owner (charts/analytics)
 - [ ] Kitchen Display System (KDS)
 - [ ] iOS App Build Prep
+- [ ] Deliverect/Middleware API (UberEats, Deliveroo)
 
-### Backlog
-- [ ] Backend refactoring (split server.py ~2400 lines into routers)
-- [ ] POSScreen.js split into sub-components (~1350 lines)
+## Backlog
+- [ ] Backend refactoring (split server.py into routers)
+- [ ] POSScreen.js split into sub-components
 
 ---
 
@@ -93,8 +68,14 @@ Build a multi-tenant SaaS POS system called "HevaPOS" with:
 - Restaurant Admin: `restaurant_admin` / `admin123`
 - Staff User: `user` / `user123`
 
-## Deployment Notes
-- Backend on Railway requires `PORT` env var
-- MongoDB Atlas requires IP whitelist
-- APK built locally via Capacitor
-- User syncs to GitHub for Railway auto-deploy
+## Key API Endpoints
+- `GET /api/subscriptions` - List all (platform owner)
+- `PUT /api/subscriptions/{id}` - Change status
+- `GET /api/subscriptions/my` - Own subscription
+- `POST /api/subscriptions/check-trials` - Check + auto-suspend expired
+- `GET /api/notifications` - List notifications
+- `GET /api/notifications/my` - Own notifications
+- `PUT /api/notifications/{id}/mark-sent` - Mark as sent
+- `GET /api/dashboard/today` - Today's stats
+- `GET /api/orders` - All orders
+- `POST /api/orders/{id}/print-customer-receipt` - Reprint receipt

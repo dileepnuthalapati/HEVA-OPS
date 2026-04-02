@@ -14,6 +14,7 @@ import PlatformCategories from './pages/PlatformCategories';
 import PlatformReports from './pages/PlatformReports';
 import PlatformSettings from './pages/PlatformSettings';
 import RestaurantManagement from './pages/RestaurantManagement';
+import SubscriptionManagement from './pages/SubscriptionManagement';
 
 // Pages - Restaurant Admin
 import AdminDashboard from './pages/AdminDashboard';
@@ -104,6 +105,7 @@ const AppRoutes = () => {
       <Route path="/platform/categories" element={<ProtectedRoute platformOwnerOnly><PlatformCategories /></ProtectedRoute>} />
       <Route path="/platform/reports" element={<ProtectedRoute platformOwnerOnly><PlatformReports /></ProtectedRoute>} />
       <Route path="/platform/settings" element={<ProtectedRoute platformOwnerOnly><PlatformSettings /></ProtectedRoute>} />
+      <Route path="/platform/subscriptions" element={<ProtectedRoute platformOwnerOnly><SubscriptionManagement /></ProtectedRoute>} />
       
       {/* Restaurant Admin Only (not platform owner) */}
       <Route path="/dashboard" element={<ProtectedRoute restaurantAdminOnly><AdminDashboard /></ProtectedRoute>} />
@@ -132,7 +134,7 @@ function App() {
           <div className="App">
             <OfflineIndicator />
             <AppRoutes />
-            <Toaster position="top-center" richColors />
+            <Toaster position="bottom-right" duration={2000} closeButton toastOptions={{ style: { fontSize: '13px' } }} />
           </div>
         </BrowserRouter>
       </OfflineProvider>

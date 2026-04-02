@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
-import { reportAPI, restaurantAPI } from '../services/api';
+import { reportAPI, restaurantAPI, subscriptionAPI } from '../services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
-import { TrendingUp, ShoppingBag, Package, Coins, Calendar } from 'lucide-react';
+import { TrendingUp, ShoppingBag, Package, Coins, Calendar, AlertTriangle, Clock } from 'lucide-react';
 
 const getCurrencySymbol = (currency) => {
   const symbols = { 'GBP': '£', 'USD': '$', 'EUR': '€', 'INR': '₹' };
@@ -15,11 +15,20 @@ const AdminDashboard = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currency, setCurrency] = useState('GBP');
+  const [subscription, setSubscription] = useState(null);
 
   useEffect(() => {
     loadStats();
     loadCurrency();
+    loadSubscription();
   }, []);
+
+  const loadSubscription = async () => {
+    try {
+      const data = await subscriptionAPI.getMy();
+      setSubscription(data);
+    } catch (error) {}
+  };
 
   const loadCurrency = async () => {
     try {
@@ -60,6 +69,28 @@ const AdminDashboard = () => {
             <div className="text-center py-12">Loading...</div>
           ) : (
             <>
+              {/* Subscription Status Banner */}
+              {subscription && (subscription.subscription_status === 'trial' || subscription.subscription_status === 'suspended') && (
+                <Card className={`mb-4 ${subscription.subscription_status === 'suspended' ? 'border-red-300 bg-red-50' : subscription.trial_days_left <= 3 ? 'border-amber-300 bg-amber-50' : 'border-blue-200 bg-blue-50'}`} data-testid="subscription-banner">
+                  <CardContent className="p-3 md:p-4 flex items-center gap-3">
+                    {subscription.subscription_status === 'suspended' ? (
+                      <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
+                    ) : (
+                      <Clock className="w-5 h-5 text-blue-600 shrink-0" />
+                    )}
+                    <div className="text-sm">
+                      {subscription.subscription_status === 'suspended' ? (
+                        <span className="font-semibold text-red-700">Account suspended. Contact support to reactivate.</span>
+                      ) : (
+                        <span className={subscription.trial_days_left <= 3 ? 'font-semibold text-amber-700' : 'text-blue-700'}>
+                          Trial: <strong>{subscription.trial_days_left} days left</strong>
+                          {subscription.trial_days_left <= 3 && ' — Subscribe now to avoid interruption'}
+                        </span>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
                 <Card className="metric-card" data-testid="metric-total-sales">
                   <CardHeader className="pb-2 px-4 pt-4 md:px-6 md:pt-6">

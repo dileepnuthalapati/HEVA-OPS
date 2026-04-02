@@ -21,7 +21,6 @@ const Login = () => {
 
     try {
       const response = await login(username, password);
-      toast.success(`Welcome back, ${response.user.username}!`);
       
       // Route based on role
       if (response.user.role === 'platform_owner') {
