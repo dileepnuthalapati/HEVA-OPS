@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { orderAPI, restaurantAPI, printerAPI } from '../services/api';
 import { Button } from '../components/ui/button';
@@ -16,6 +16,7 @@ const getCurrencySymbol = (currency) => {
 
 const OrderHistory = () => {
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currency, setCurrency] = useState('GBP');
@@ -101,8 +102,13 @@ const OrderHistory = () => {
       <div className="flex-1 min-w-0 p-4 md:p-8">
         <div className="max-w-7xl mx-auto">
           <div className="mb-4 md:mb-6">
-            <h1 className="text-2xl md:text-4xl font-bold tracking-tight mb-1" data-testid="orders-heading">Order History</h1>
-            <p className="text-sm text-muted-foreground">
+            <div className="flex items-center gap-3 mb-1">
+              <Button variant="ghost" size="sm" onClick={() => navigate(-1)} data-testid="back-button" className="h-8 w-8 p-0">
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+              <h1 className="text-2xl md:text-4xl font-bold tracking-tight" data-testid="orders-heading">Order History</h1>
+            </div>
+            <p className="text-sm text-muted-foreground ml-11">
               {fromDate && toDate ? `Showing orders from ${fromDate} to ${toDate}` : `${orders.length} total orders`}
             </p>
           </div>

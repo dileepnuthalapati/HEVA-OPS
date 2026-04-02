@@ -40,7 +40,6 @@ export const authAPI = {
     return response.data;
   },
   login: async (username, password) => {
-    // Use the proper login endpoint
     const response = await api.post('/auth/login', { username, password });
     if (response.data.access_token) {
       setAuthToken(response.data.access_token);
@@ -52,7 +51,7 @@ export const authAPI = {
     return response.data;
   },
   changePassword: async (currentPassword, newPassword) => {
-    const response = await api.post('/auth/change-password', {
+    const response = await api.put('/auth/change-password', {
       current_password: currentPassword,
       new_password: newPassword
     });
@@ -463,13 +462,11 @@ export const staffAPI = {
   },
 };
 
-export const authAPI = {
-  changePassword: async (currentPassword, newPassword) => {
-    const response = await api.put('/auth/change-password', { current_password: currentPassword, new_password: newPassword });
+export const stripeAPI = {
+  createCheckout: async () => {
+    const response = await api.post('/stripe/create-checkout');
     return response.data;
   },
 };
-
-
 
 export default api;

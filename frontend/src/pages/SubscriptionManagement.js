@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import { subscriptionAPI, notificationAPI } from '../services/api';
+import { subscriptionAPI, notificationAPI, stripeAPI } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { CreditCard, AlertTriangle, CheckCircle, XCircle, Clock, Bell, RefreshCw, Mail } from 'lucide-react';
+import { CreditCard, AlertTriangle, CheckCircle, XCircle, Clock, Bell, RefreshCw, Mail, ExternalLink } from 'lucide-react';
 
 const statusConfig = {
   trial: { color: 'bg-blue-100 text-blue-700', icon: Clock, label: 'Trial' },
@@ -22,6 +22,7 @@ const SubscriptionManagement = () => {
   const [selectedRestaurant, setSelectedRestaurant] = useState(null);
   const [newStatus, setNewStatus] = useState('');
   const [checking, setChecking] = useState(false);
+  const [creatingCheckout, setCreatingCheckout] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -68,6 +69,22 @@ const SubscriptionManagement = () => {
     }
   };
 
+  const handleStripeCheckout = async () => {
+    setCreatingCheckout(true);
+    try {
+      const result = await stripeAPI.createCheckout();
+      if (result.checkout_url) {
+        window.open(result.checkout_url, '_blank');
+      } else {
+        toast.error('No checkout URL returned');
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to create Stripe checkout');
+    } finally {
+      setCreatingCheckout(false);
+    }
+  };
+
   const handleMarkSent = async (notifId) => {
     try {
       await notificationAPI.markSent(notifId);
@@ -89,10 +106,16 @@ const SubscriptionManagement = () => {
               <h1 className="text-2xl md:text-4xl font-bold tracking-tight" data-testid="subscriptions-heading">Subscriptions</h1>
               <p className="text-sm md:text-base text-muted-foreground">{subscriptions.length} restaurants</p>
             </div>
-            <Button onClick={handleCheckTrials} disabled={checking} data-testid="check-trials-btn" className="shrink-0">
-              <RefreshCw className={`w-4 h-4 mr-2 ${checking ? 'animate-spin' : ''}`} />
-              Check Trial Expirations
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handleStripeCheckout} disabled={creatingCheckout} data-testid="stripe-checkout-btn" variant="outline" className="shrink-0">
+                <ExternalLink className={`w-4 h-4 mr-2 ${creatingCheckout ? 'animate-spin' : ''}`} />
+                {creatingCheckout ? 'Opening...' : 'Stripe Billing'}
+              </Button>
+              <Button onClick={handleCheckTrials} disabled={checking} data-testid="check-trials-btn" className="shrink-0">
+                <RefreshCw className={`w-4 h-4 mr-2 ${checking ? 'animate-spin' : ''}`} />
+                Check Trial Expirations
+              </Button>
+            </div>
           </div>
 
           {/* Notifications Banner */}

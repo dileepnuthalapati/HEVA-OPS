@@ -396,8 +396,9 @@ async def login(credentials: UserLogin):
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
-    # Verify password
-    if not verify_password(credentials.password, user["password"]):
+    # Verify password (handle both field names for backward compat)
+    stored_hash = user.get("password_hash") or user.get("password")
+    if not stored_hash or not verify_password(credentials.password, stored_hash):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
     access_token = create_access_token(data={"sub": user["username"]})
@@ -421,20 +422,18 @@ async def get_me(current_user: User = Depends(get_current_user)):
 @api_router.post("/auth/change-password")
 async def change_password(password_data: PasswordChange, current_user: User = Depends(get_current_user)):
     """Change current user's password"""
-    # Get user from database
     user = await db.users.find_one({"username": current_user.username})
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
     
-    # Verify current password
-    if not verify_password(password_data.current_password, user["password"]):
+    stored_hash = user.get("password_hash") or user.get("password")
+    if not stored_hash or not verify_password(password_data.current_password, stored_hash):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     
-    # Hash new password and update
     new_hashed = get_password_hash(password_data.new_password)
     await db.users.update_one(
         {"username": current_user.username},
-        {"$set": {"password": new_hashed}}
+        {"$set": {"password_hash": new_hashed, "password": new_hashed}}
     )
     
     return {"message": "Password changed successfully"}
@@ -2487,9 +2486,12 @@ async def update_staff(user_id: str, staff: StaffCreate, current_user: User = De
 async def change_own_password(data: PasswordChange, current_user: User = Depends(get_current_user)):
     """Any user: change own password"""
     user = await db.users.find_one({"username": current_user.username})
-    if not user or not verify_password(data.current_password, user["password_hash"]):
+    stored_hash = user.get("password_hash") or user.get("password") if user else None
+    if not user or not stored_hash or not verify_password(data.current_password, stored_hash):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
-    await db.users.update_one({"username": current_user.username}, {"$set": {"password_hash": get_password_hash(data.new_password)}})
+    new_hashed = get_password_hash(data.new_password)
+    await db.users.update_one({"username": current_user.username}, {"$set": {"password_hash": new_hashed, "password": new_hashed}})
+    return {"message": "Password changed successfully"}
     return {"message": "Password changed successfully"}
 
 @api_router.delete("/restaurant/staff/{user_id}")

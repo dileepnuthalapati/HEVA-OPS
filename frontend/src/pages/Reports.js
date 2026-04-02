@@ -89,8 +89,13 @@ const Reports = () => {
         <div className="max-w-7xl mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
             <div>
-              <h1 className="text-2xl md:text-4xl font-bold tracking-tight" data-testid="reports-heading">Sales Reports</h1>
-              <p className="text-sm text-muted-foreground">Analyze your business performance</p>
+              <div className="flex items-center gap-3 mb-1">
+                <Button variant="ghost" size="sm" onClick={() => navigate(-1)} data-testid="reports-back-btn" className="h-8 w-8 p-0">
+                  <ArrowLeft className="w-4 h-4" />
+                </Button>
+                <h1 className="text-2xl md:text-4xl font-bold tracking-tight" data-testid="reports-heading">Sales Reports</h1>
+              </div>
+              <p className="text-sm text-muted-foreground ml-11">Analyze your business performance</p>
             </div>
             <Button onClick={downloadPDF} disabled={!stats} data-testid="download-pdf-btn" className="shrink-0">
               <BarChart3 className="w-4 h-4 mr-2" /> Download PDF
