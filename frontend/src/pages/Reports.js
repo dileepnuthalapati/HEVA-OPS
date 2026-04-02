@@ -3,11 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { reportAPI, restaurantAPI } from '../services/api';
 import { Button } from '../components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
-import { BarChart3, TrendingUp, ShoppingBag, Coins, Calendar, ArrowLeft, Banknote, CreditCard } from 'lucide-react';
+import { BarChart3, TrendingUp, ShoppingBag, Coins, Calendar, ArrowLeft, Banknote, CreditCard, Download, FileText } from 'lucide-react';
 import jsPDF from 'jspdf';
 
 const getCurrencySymbol = (currency) => {
@@ -15,24 +14,26 @@ const getCurrencySymbol = (currency) => {
   return symbols[currency] || currency || '£';
 };
 
+const RANGES = [
+  { label: 'Today', days: 0 },
+  { label: '7 Days', days: 7 },
+  { label: '30 Days', days: 30 },
+  { label: '90 Days', days: 90 },
+];
+
 const Reports = () => {
   const navigate = useNavigate();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState({ start: '', end: '' });
   const [currency, setCurrency] = useState('GBP');
+  const [activeRange, setActiveRange] = useState('Today');
+  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
 
   useEffect(() => {
-    const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-    const end = now.toISOString().split('T')[0];
-    setDateRange({ start, end });
     loadCurrency();
+    handleRangeSelect('Today', 0);
   }, []);
-
-  useEffect(() => {
-    if (dateRange.start && dateRange.end) loadStats();
-  }, [dateRange]);
 
   const loadCurrency = async () => {
     try {
@@ -41,52 +42,95 @@ const Reports = () => {
     } catch (e) {}
   };
 
-  const loadStats = async () => {
+  const handleRangeSelect = (label, days) => {
+    setActiveRange(label);
+    const end = new Date();
+    const start = new Date();
+    if (days > 0) start.setDate(start.getDate() - days);
+    const sd = start.toISOString().split('T')[0];
+    const ed = end.toISOString().split('T')[0];
+    setStartDate(sd);
+    setEndDate(ed);
+    loadStats(sd, ed);
+  };
+
+  const loadStats = async (from, to) => {
     setLoading(true);
     try {
-      const data = await reportAPI.getStats(dateRange.start, dateRange.end);
+      const data = await reportAPI.getStats(from, to);
       setStats(data);
     } catch (error) {
-      toast.error('Failed to load report');
+      toast.error('Failed to load reports');
     } finally {
       setLoading(false);
     }
   };
 
+  const handleCustomDateSearch = () => {
+    setActiveRange('');
+    loadStats(startDate, endDate);
+  };
+
   const downloadPDF = () => {
     if (!stats) return;
-    const doc = new jsPDF();
-    const cs = getCurrencySymbol(currency);
-    doc.setFontSize(20);
-    doc.text('HevaPOS Sales Report', 20, 20);
-    doc.setFontSize(11);
-    doc.text(`Period: ${dateRange.start} to ${dateRange.end}`, 20, 30);
-    doc.setFontSize(14);
-    doc.text('Summary', 20, 45);
-    doc.setFontSize(11);
-    doc.text(`Total Sales: ${cs}${stats.total_sales?.toFixed(2)}`, 20, 55);
-    doc.text(`Cash: ${cs}${stats.cash_total?.toFixed(2) || '0.00'}  |  Card: ${cs}${stats.card_total?.toFixed(2) || '0.00'}`, 20, 62);
-    doc.text(`Total Orders: ${stats.total_orders}`, 20, 69);
-    doc.text(`Average Order Value: ${cs}${stats.avg_order_value?.toFixed(2)}`, 20, 76);
-    
-    if (stats.top_products?.length > 0) {
+    try {
+      const doc = new jsPDF();
+      const cs = getCurrencySymbol(currency);
+      
+      doc.setFontSize(20);
+      doc.text('Sales Report', 105, 20, { align: 'center' });
+      doc.setFontSize(10);
+      doc.text(`Period: ${startDate} to ${endDate}`, 105, 30, { align: 'center' });
+      doc.text(`Generated: ${new Date().toLocaleString()}`, 105, 36, { align: 'center' });
+      
+      // Summary
       doc.setFontSize(14);
-      doc.text('Top Products', 20, 92);
+      doc.text('Summary', 14, 50);
       doc.setFontSize(11);
-      stats.top_products.forEach((p, i) => {
-        doc.text(`${i + 1}. ${p.name} - ${p.quantity} sold - ${cs}${p.revenue.toFixed(2)}`, 25, 102 + i * 8);
-      });
+      const summaryY = 60;
+      doc.text(`Total Sales: ${cs}${stats.total_sales?.toFixed(2) || '0.00'}`, 14, summaryY);
+      doc.text(`Total Orders: ${stats.total_orders || 0}`, 14, summaryY + 8);
+      doc.text(`Average Order: ${cs}${stats.avg_order_value?.toFixed(2) || '0.00'}`, 14, summaryY + 16);
+      doc.text(`Cash Total: ${cs}${stats.cash_total?.toFixed(2) || '0.00'}`, 14, summaryY + 24);
+      doc.text(`Card Total: ${cs}${stats.card_total?.toFixed(2) || '0.00'}`, 14, summaryY + 32);
+      
+      // Product breakdown
+      if (stats.top_products?.length > 0) {
+        doc.setFontSize(14);
+        doc.text('Top Products', 14, summaryY + 50);
+        doc.setFontSize(10);
+        let y = summaryY + 60;
+        stats.top_products.forEach((p, i) => {
+          if (y > 270) { doc.addPage(); y = 20; }
+          doc.text(`${i + 1}. ${p.name} — Qty: ${p.quantity}, Revenue: ${cs}${p.revenue?.toFixed(2)}`, 14, y);
+          y += 8;
+        });
+      }
+      
+      // Save as blob for mobile compatibility
+      const pdfBlob = doc.output('blob');
+      const url = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `HevaPOS_Report_${startDate}_to_${endDate}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+      toast.success('PDF downloaded!');
+    } catch (error) {
+      toast.error('Failed to generate PDF');
     }
-    
-    doc.save(`HevaPOS_Report_${dateRange.start}_${dateRange.end}.pdf`);
-    toast.success('PDF downloaded');
   };
+
+  const cs = getCurrencySymbol(currency);
 
   return (
     <div className="flex flex-col md:flex-row min-h-screen">
       <Sidebar />
       <div className="flex-1 min-w-0 p-4 md:p-8">
-        <div className="max-w-7xl mx-auto">
+        <div className="max-w-5xl mx-auto">
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
             <div>
               <div className="flex items-center gap-3 mb-1">
@@ -97,109 +141,135 @@ const Reports = () => {
               </div>
               <p className="text-sm text-muted-foreground ml-11">Analyze your business performance</p>
             </div>
-            <Button onClick={downloadPDF} disabled={!stats} data-testid="download-pdf-btn" className="shrink-0">
-              <BarChart3 className="w-4 h-4 mr-2" /> Download PDF
+            <Button onClick={downloadPDF} disabled={!stats} variant="outline" data-testid="download-pdf-btn">
+              <Download className="w-4 h-4 mr-2" /> Download PDF
             </Button>
           </div>
 
-          {/* Date Range */}
-          <Card className="mb-6">
-            <CardContent className="p-4 flex flex-wrap gap-4 items-end">
-              <div>
-                <Label className="text-xs">Start Date</Label>
-                <Input type="date" value={dateRange.start} onChange={(e) => setDateRange({ ...dateRange, start: e.target.value })} className="w-40" data-testid="start-date" />
-              </div>
-              <div>
-                <Label className="text-xs">End Date</Label>
-                <Input type="date" value={dateRange.end} onChange={(e) => setDateRange({ ...dateRange, end: e.target.value })} className="w-40" data-testid="end-date" />
-              </div>
-            </CardContent>
-          </Card>
+          {/* Quick Range Buttons */}
+          <div className="flex flex-wrap gap-2 mb-4" data-testid="range-buttons">
+            {RANGES.map(({ label, days }) => (
+              <Button
+                key={label}
+                variant={activeRange === label ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleRangeSelect(label, days)}
+                data-testid={`range-${label.toLowerCase().replace(' ', '-')}`}
+              >
+                {label}
+              </Button>
+            ))}
+          </div>
+
+          {/* Custom Date Range */}
+          <div className="flex flex-wrap items-end gap-3 mb-6">
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">From</label>
+              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} data-testid="start-date" className="w-40" />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-muted-foreground">To</label>
+              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} data-testid="end-date" className="w-40" />
+            </div>
+            <Button onClick={handleCustomDateSearch} variant="outline" size="sm" data-testid="custom-date-btn">
+              <Calendar className="w-4 h-4 mr-1" /> Apply
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => navigate(`/orders?from=${startDate}&to=${endDate}`)} data-testid="view-orders-btn">
+              <FileText className="w-4 h-4 mr-1" /> View Orders
+            </Button>
+          </div>
 
           {loading ? (
-            <div className="text-center py-12">Loading...</div>
+            <div className="text-center py-12 text-muted-foreground">Loading reports...</div>
           ) : stats ? (
             <>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
-                <Card data-testid="report-total-sales">
-                  <CardHeader className="pb-2 px-4 pt-4">
-                    <CardDescription className="text-xs font-medium uppercase">Total Sales</CardDescription>
-                  </CardHeader>
-                  <CardContent className="px-4 pb-4">
-                    <div className="flex items-center gap-2">
-                      <Coins className="w-6 h-6 text-emerald-500 shrink-0" />
-                      <span className="text-xl md:text-2xl font-bold font-mono">{getCurrencySymbol(currency)}{stats.total_sales?.toFixed(2)}</span>
+              {/* Stats Cards */}
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
+                <Card data-testid="stat-total-sales">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Coins className="w-4 h-4 text-emerald-500" />
+                      <span className="text-xs text-muted-foreground">Total Sales</span>
                     </div>
-                    <div className="flex gap-3 mt-2 text-xs text-muted-foreground">
-                      <span className="flex items-center gap-1"><Banknote className="w-3 h-3" /> Cash: <strong className="font-mono">{getCurrencySymbol(currency)}{stats.cash_total?.toFixed(2) || '0.00'}</strong></span>
-                      <span className="flex items-center gap-1"><CreditCard className="w-3 h-3" /> Card: <strong className="font-mono">{getCurrencySymbol(currency)}{stats.card_total?.toFixed(2) || '0.00'}</strong></span>
-                    </div>
+                    <div className="text-xl md:text-2xl font-bold">{cs}{stats.total_sales?.toFixed(2)}</div>
                   </CardContent>
                 </Card>
-
-                <Card className="cursor-pointer hover:ring-2 hover:ring-blue-400 transition-all" data-testid="report-total-orders" onClick={() => navigate(`/orders?from=${dateRange.start}&to=${dateRange.end}`)}>
-                  <CardHeader className="pb-2 px-4 pt-4">
-                    <CardDescription className="text-xs font-medium uppercase">Total Orders</CardDescription>
-                  </CardHeader>
-                  <CardContent className="px-4 pb-4">
-                    <div className="flex items-center gap-2">
-                      <ShoppingBag className="w-6 h-6 text-blue-500 shrink-0" />
-                      <span className="text-xl md:text-2xl font-bold font-mono">{stats.total_orders}</span>
+                <Card data-testid="stat-total-orders">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <ShoppingBag className="w-4 h-4 text-blue-500" />
+                      <span className="text-xs text-muted-foreground">Orders</span>
                     </div>
-                    <p className="text-xs text-muted-foreground mt-1">Click to view orders</p>
+                    <div className="text-xl md:text-2xl font-bold">{stats.total_orders}</div>
                   </CardContent>
                 </Card>
-
-                <Card data-testid="report-avg-order">
-                  <CardHeader className="pb-2 px-4 pt-4">
-                    <CardDescription className="text-xs font-medium uppercase">Avg Order Value</CardDescription>
-                  </CardHeader>
-                  <CardContent className="px-4 pb-4">
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="w-6 h-6 text-amber-500 shrink-0" />
-                      <span className="text-xl md:text-2xl font-bold font-mono">{getCurrencySymbol(currency)}{stats.avg_order_value?.toFixed(2)}</span>
+                <Card data-testid="stat-avg-order">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <TrendingUp className="w-4 h-4 text-purple-500" />
+                      <span className="text-xs text-muted-foreground">Avg Order</span>
                     </div>
+                    <div className="text-xl md:text-2xl font-bold">{cs}{stats.avg_order_value?.toFixed(2)}</div>
                   </CardContent>
                 </Card>
-
-                <Card data-testid="report-top-count">
-                  <CardHeader className="pb-2 px-4 pt-4">
-                    <CardDescription className="text-xs font-medium uppercase">Products Sold</CardDescription>
-                  </CardHeader>
-                  <CardContent className="px-4 pb-4">
-                    <div className="flex items-center gap-2">
-                      <BarChart3 className="w-6 h-6 text-purple-500 shrink-0" />
-                      <span className="text-xl md:text-2xl font-bold font-mono">{stats.top_products?.length || 0}</span>
+                <Card data-testid="stat-cash-total">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Banknote className="w-4 h-4 text-green-500" />
+                      <span className="text-xs text-muted-foreground">Cash</span>
                     </div>
+                    <div className="text-xl md:text-2xl font-bold">{cs}{stats.cash_total?.toFixed(2)}</div>
+                  </CardContent>
+                </Card>
+                <Card data-testid="stat-card-total">
+                  <CardContent className="p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <CreditCard className="w-4 h-4 text-orange-500" />
+                      <span className="text-xs text-muted-foreground">Card</span>
+                    </div>
+                    <div className="text-xl md:text-2xl font-bold">{cs}{stats.card_total?.toFixed(2)}</div>
                   </CardContent>
                 </Card>
               </div>
 
+              {/* Top Products */}
               {stats.top_products?.length > 0 && (
-                <Card data-testid="report-top-products">
-                  <CardHeader className="px-4">
-                    <CardTitle className="text-lg">Top Products</CardTitle>
+                <Card data-testid="top-products-card">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5" /> Top Products
+                    </CardTitle>
                   </CardHeader>
-                  <CardContent className="px-4">
-                    <div className="space-y-2">
-                      {stats.top_products.map((p, i) => (
-                        <div key={i} className="flex items-center justify-between p-3 rounded-lg border bg-card">
-                          <div className="flex items-center gap-3 min-w-0">
-                            <div className="w-8 h-8 rounded-lg bg-primary/10 flex items-center justify-center font-bold text-sm shrink-0">#{i + 1}</div>
-                            <div className="min-w-0">
-                              <div className="font-semibold text-sm truncate">{p.name}</div>
-                              <div className="text-xs text-muted-foreground">{p.quantity} sold</div>
-                            </div>
-                          </div>
-                          <div className="font-bold font-mono text-emerald-600 shrink-0 ml-2">{getCurrencySymbol(currency)}{p.revenue.toFixed(2)}</div>
-                        </div>
-                      ))}
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b">
+                            <th className="py-2 text-left font-semibold">#</th>
+                            <th className="py-2 text-left font-semibold">Product</th>
+                            <th className="py-2 text-right font-semibold">Qty Sold</th>
+                            <th className="py-2 text-right font-semibold">Revenue</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {stats.top_products.map((product, index) => (
+                            <tr key={index} className="border-b last:border-0">
+                              <td className="py-2 text-muted-foreground">{index + 1}</td>
+                              <td className="py-2 font-medium">{product.name}</td>
+                              <td className="py-2 text-right">{product.quantity}</td>
+                              <td className="py-2 text-right font-medium">{cs}{product.revenue?.toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
                   </CardContent>
                 </Card>
               )}
             </>
-          ) : null}
+          ) : (
+            <Card><CardContent className="py-12 text-center text-muted-foreground">No data for the selected period.</CardContent></Card>
+          )}
         </div>
       </div>
     </div>

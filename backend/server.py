@@ -960,8 +960,21 @@ async def get_pending_orders(current_user: User = Depends(get_current_user)):
     return [Order(**order) for order in orders]
 
 @api_router.get("/orders", response_model=List[Order])
-async def get_orders(current_user: User = Depends(get_current_user)):
+async def get_orders(current_user: User = Depends(get_current_user), from_date: str = None, to_date: str = None, today_only: bool = False):
     query = {} if current_user.role == "admin" else {"created_by": current_user.username}
+    
+    if today_only:
+        now = datetime.now(timezone.utc)
+        if now.hour < 2:
+            biz_start = (now - timedelta(days=1)).replace(hour=2, minute=0, second=0, microsecond=0)
+        else:
+            biz_start = now.replace(hour=2, minute=0, second=0, microsecond=0)
+        biz_end = biz_start + timedelta(days=1)
+        query["created_at"] = {"$gte": biz_start.isoformat(), "$lt": biz_end.isoformat()}
+    elif from_date and to_date:
+        end_dt = datetime.fromisoformat(to_date) + timedelta(days=1)
+        query["created_at"] = {"$gte": from_date + "T00:00:00", "$lt": end_dt.isoformat()}
+    
     orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return [Order(**order) for order in orders]
 
@@ -2446,7 +2459,7 @@ class PasswordChange(BaseModel):
 @api_router.get("/restaurant/staff")
 async def list_restaurant_staff(current_user: User = Depends(require_admin)):
     """Restaurant Admin: list staff in their restaurant"""
-    users = await db.users.find({"restaurant_id": current_user.restaurant_id}, {"_id": 0, "password_hash": 0}).to_list(100)
+    users = await db.users.find({"restaurant_id": current_user.restaurant_id}, {"_id": 0, "password": 0, "password_hash": 0}).to_list(100)
     return users
 
 @api_router.post("/restaurant/staff")
@@ -2497,7 +2510,6 @@ async def change_own_password(data: PasswordChange, current_user: User = Depends
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     new_hashed = get_password_hash(data.new_password)
     await db.users.update_one({"username": current_user.username}, {"$set": {"password_hash": new_hashed, "password": new_hashed}})
-    return {"message": "Password changed successfully"}
     return {"message": "Password changed successfully"}
 
 @api_router.delete("/restaurant/staff/{user_id}")

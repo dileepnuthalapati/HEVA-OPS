@@ -131,9 +131,14 @@ export const productAPI = {
 };
 
 export const orderAPI = {
-  getAll: async () => {
+  getAll: async (params = {}) => {
     try {
-      const response = await api.get('/orders');
+      const queryParts = [];
+      if (params.today_only) queryParts.push('today_only=true');
+      if (params.from_date) queryParts.push(`from_date=${params.from_date}`);
+      if (params.to_date) queryParts.push(`to_date=${params.to_date}`);
+      const qs = queryParts.length > 0 ? `?${queryParts.join('&')}` : '';
+      const response = await api.get(`/orders${qs}`);
       return response.data;
     } catch (error) {
       if (!navigator.onLine) {
