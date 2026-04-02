@@ -8,30 +8,18 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 - **Restaurant Admin**: Manages menu, orders, staff, reports, printers
 - **Staff User**: Takes orders, processes payments, prints receipts
 
-## Architecture (Modularized - April 2, 2026)
+## Architecture (Modularized)
 ```
 /app/backend/
-├── server.py           # Slim FastAPI entrypoint (~65 lines)
+├── server.py           # Slim FastAPI entrypoint
 ├── database.py         # MongoDB connection
 ├── models.py           # All Pydantic models
 ├── dependencies.py     # Auth helpers (JWT, password hashing)
-├── routers/
-│   ├── auth.py         # Login, register, change-password
-│   ├── platform.py     # Platform admin CRUD
-│   ├── restaurants.py  # Restaurant CRUD + settings
-│   ├── menu.py         # Categories + Products CRUD
-│   ├── orders.py       # Order CRUD + sync
-│   ├── reports.py      # Reports + stats (2AM business day)
-│   ├── receipts.py     # PDF + ESC/POS receipt generation
-│   ├── cash_drawer.py  # Cash drawer management
-│   ├── printers.py     # Printer CRUD + TCP discovery + auto-detect subnet + default printer
-│   ├── tables.py       # Table management + merge/split
-│   ├── reservations.py # Reservation CRUD
-│   ├── subscriptions.py# Stripe + subscription management
-│   ├── notifications.py# Notification CRUD
-│   ├── staff.py        # Staff management
-│   ├── health.py       # Root, status, seed
-│   └── email.py        # Resend email (welcome, trial, payment reminders)
+├── routers/            # 15 modular routers
+│   ├── auth.py, platform.py, restaurants.py, menu.py, orders.py
+│   ├── reports.py, receipts.py, cash_drawer.py, printers.py, tables.py
+│   ├── reservations.py, subscriptions.py, notifications.py, staff.py
+│   ├── health.py, email.py
 ```
 
 ## Completed Features
@@ -46,21 +34,41 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 - [x] PDF receipt generation (kitchen + customer)
 - [x] ESC/POS thermal printer support
 - [x] WiFi printer TCP discovery with auto-subnet detection
-- [x] Bluetooth printer support (Capacitor BLE plugin)
 - [x] Dynamic currency (removed hardcoded $)
 - [x] Staff Management UI
 - [x] Subscription management + Stripe integration
 - [x] Offline detection on login
 - [x] Admin/Staff order syncing
-- [x] Backend modularization (15 routers) - April 2, 2026
-- [x] Email service (Resend) - platform owner only - April 2, 2026
-- [x] **Print execution pipeline fixed** - April 2, 2026
-  - WiFi printers: ESC/POS sent via backend TCP proxy (/api/printer/send)
-  - BLE printers: ESC/POS sent via Capacitor BLE plugin (native APK)
-  - POS Screen: Kitchen + Customer receipts now auto-print to default printer
-  - Test Print button: Actually sends data to printer, shows success/failure status
-  - Default printer API endpoint: GET /api/printers/default
-  - Customer receipt uses dynamic currency (no more hardcoded $)
+- [x] Backend modularization (15 routers)
+- [x] Email service (Resend) - platform owner only
+- [x] **Universal Print Pipeline (April 2, 2026)**
+  - Bluetooth Classic (SPP): @kduma-autoid/capacitor-bluetooth-printer
+  - Bluetooth Low Energy (BLE): @capacitor-community/bluetooth-le
+  - WiFi: Backend TCP proxy (/api/printer/send)
+  - Strategy: Try Classic SPP first → Fall back to BLE → Error with guidance
+  - Discovery: Shows paired BT devices + BLE scan results
+  - POS Screen auto-prints kitchen/customer receipts to default printer
+  - Test Print shows actual success/failure (no more raw base64 display)
+  - Customer receipt uses dynamic currency symbol
+  - API: GET /api/printers/default
+
+## Print Architecture
+```
+Bluetooth (APK):
+  POS → /api/print/kitchen/{id} → base64 ESC/POS → printer.js
+    → Try Classic SPP (BluetoothPrinter.connectAndPrint)
+    → Fall back to BLE (BleClient.write)
+    → Printer receives data
+
+WiFi:
+  POS → /api/print/kitchen/{id} → base64 ESC/POS
+    → /api/printer/send → backend TCP socket → Printer
+  Note: Backend must be on same network as printer (not Railway)
+
+Discovery:
+  Bluetooth: BluetoothPrinter.list() (paired) + BleClient scan (nearby)
+  WiFi: Backend TCP scanner on port 9100/515/631
+```
 
 ## In Progress
 - [ ] Email: RESEND_API_KEY needs to be added to Railway env vars
@@ -73,21 +81,22 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 ## Future (P2)
 - [ ] Deliverect / Middleware API Integration (UberEats, Deliveroo)
 - [ ] iOS App Build Prep
-- [ ] Bluetooth Classic (SPP) support for older printers
-
-## Print Architecture
-```
-WiFi Flow:   POS Screen → /api/print/kitchen/{id} → ESC/POS base64 → /api/printer/send → TCP socket → Printer
-BLE Flow:    POS Screen → /api/print/kitchen/{id} → ESC/POS base64 → Capacitor BLE → Printer
-Test Flow:   PrinterSettings → /api/printers/{id}/test → ESC/POS + TCP attempt → Result
-Note: WiFi printing requires backend to have network access to printer IP.
-      For cloud-hosted backend (Railway), printer must be on same network or use BLE.
-```
+- [ ] Direct TCP from APK for WiFi printing (capacitor-tcp-socket-manager)
 
 ## Tech Stack
 - Frontend: React, Tailwind CSS, Shadcn UI, Capacitor
 - Backend: FastAPI, Motor (async MongoDB)
 - Database: MongoDB Atlas
-- Email: Resend (free tier: 100 emails/day)
+- Email: Resend
 - Payments: Stripe
-- Hardware: ESC/POS printers (WiFi TCP + Bluetooth BLE)
+- Printing: 
+  - Classic BT: @kduma-autoid/capacitor-bluetooth-printer (SPP)
+  - BLE: @capacitor-community/bluetooth-le
+  - WiFi: Raw TCP via backend proxy
+
+## APK Build Steps (for user)
+1. `cd frontend && yarn build`
+2. `npx cap sync android`
+3. Open `android/` in Android Studio
+4. Build > Generate Signed APK
+Note: `npx cap sync` will auto-register both BT plugins
