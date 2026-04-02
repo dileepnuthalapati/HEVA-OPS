@@ -24,7 +24,7 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 │   ├── reports.py      # Reports + stats (2AM business day)
 │   ├── receipts.py     # PDF + ESC/POS receipt generation
 │   ├── cash_drawer.py  # Cash drawer management
-│   ├── printers.py     # Printer CRUD + TCP discovery + auto-detect subnet
+│   ├── printers.py     # Printer CRUD + TCP discovery + auto-detect subnet + default printer
 │   ├── tables.py       # Table management + merge/split
 │   ├── reservations.py # Reservation CRUD
 │   ├── subscriptions.py# Stripe + subscription management
@@ -54,10 +54,13 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 - [x] Admin/Staff order syncing
 - [x] Backend modularization (15 routers) - April 2, 2026
 - [x] Email service (Resend) - platform owner only - April 2, 2026
-  - Welcome emails on restaurant onboarding
-  - Trial expiry reminders
-  - Payment reminders
-  - Email config status on Settings page
+- [x] **Print execution pipeline fixed** - April 2, 2026
+  - WiFi printers: ESC/POS sent via backend TCP proxy (/api/printer/send)
+  - BLE printers: ESC/POS sent via Capacitor BLE plugin (native APK)
+  - POS Screen: Kitchen + Customer receipts now auto-print to default printer
+  - Test Print button: Actually sends data to printer, shows success/failure status
+  - Default printer API endpoint: GET /api/printers/default
+  - Customer receipt uses dynamic currency (no more hardcoded $)
 
 ## In Progress
 - [ ] Email: RESEND_API_KEY needs to be added to Railway env vars
@@ -70,7 +73,16 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 ## Future (P2)
 - [ ] Deliverect / Middleware API Integration (UberEats, Deliveroo)
 - [ ] iOS App Build Prep
-- [ ] BLE device search UI (native Capacitor)
+- [ ] Bluetooth Classic (SPP) support for older printers
+
+## Print Architecture
+```
+WiFi Flow:   POS Screen → /api/print/kitchen/{id} → ESC/POS base64 → /api/printer/send → TCP socket → Printer
+BLE Flow:    POS Screen → /api/print/kitchen/{id} → ESC/POS base64 → Capacitor BLE → Printer
+Test Flow:   PrinterSettings → /api/printers/{id}/test → ESC/POS + TCP attempt → Result
+Note: WiFi printing requires backend to have network access to printer IP.
+      For cloud-hosted backend (Railway), printer must be on same network or use BLE.
+```
 
 ## Tech Stack
 - Frontend: React, Tailwind CSS, Shadcn UI, Capacitor
@@ -78,4 +90,4 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 - Database: MongoDB Atlas
 - Email: Resend (free tier: 100 emails/day)
 - Payments: Stripe
-- Hardware: ESC/POS printers (WiFi TCP + Bluetooth)
+- Hardware: ESC/POS printers (WiFi TCP + Bluetooth BLE)
