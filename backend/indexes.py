@@ -55,6 +55,15 @@ async def ensure_indexes():
         await db.reservations.create_index("id", unique=True)
         await db.reservations.create_index([("restaurant_id", 1), ("reservation_time", 1)])
 
+        # --- Audit Logs ---
+        await db.audit_logs.create_index("id", unique=True)
+        await db.audit_logs.create_index("action")
+        await db.audit_logs.create_index("performed_by")
+        await db.audit_logs.create_index("created_at")
+        await db.audit_logs.create_index("order_id")
+        await db.audit_logs.create_index([("restaurant_id", 1), ("created_at", -1)])
+        await db.audit_logs.create_index([("restaurant_id", 1), ("action", 1), ("created_at", -1)])
+
         logger.info("[DB] All indexes created/verified successfully")
     except Exception as e:
         logger.error(f"[DB] Index creation failed: {e}")

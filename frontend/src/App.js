@@ -26,6 +26,7 @@ import CashDrawer from './pages/CashDrawer';
 import RestaurantSettings from './pages/RestaurantSettings';
 import TableManagement from './pages/TableManagement';
 import PrinterSettings from './pages/PrinterSettings';
+import AuditLog from './pages/AuditLog';
 
 // Pages - All Users
 import Login from './pages/Login';
@@ -122,6 +123,7 @@ const AppRoutes = () => {
       <Route path="/reports" element={<ProtectedRoute restaurantAdminOnly><Reports /></ProtectedRoute>} />
       <Route path="/cash-drawer" element={<ProtectedRoute restaurantAdminOnly><CashDrawer /></ProtectedRoute>} />
       <Route path="/printers" element={<ProtectedRoute restaurantAdminOnly><PrinterSettings /></ProtectedRoute>} />
+      <Route path="/audit" element={<ProtectedRoute restaurantAdminOnly><AuditLog /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute restaurantAdminOnly><RestaurantSettings /></ProtectedRoute>} />
       
       {/* POS Staff & Restaurant Admin */}

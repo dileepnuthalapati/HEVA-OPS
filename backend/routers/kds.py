@@ -71,7 +71,7 @@ async def get_kds_orders(current_user: User = Depends(get_current_user)):
     return result
 
 
-async def _update_kds_status(order_id: str, new_status: str, time_field: str):
+async def _update_kds_status(order_id: str, new_status: str, time_field: str, username: str = None, restaurant_id_ctx: str = None):
     """Helper: Update KDS status and emit WebSocket event."""
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
@@ -99,25 +99,39 @@ async def _update_kds_status(order_id: str, new_status: str, time_field: str):
     except Exception:
         pass
 
+    # Audit log
+    try:
+        from routers.audit import log_audit
+        await log_audit(
+            action=f"kds_{new_status}",
+            performed_by=username or "kitchen",
+            restaurant_id=restaurant_id_ctx or order.get("restaurant_id"),
+            order_id=order_id,
+            order_number=order.get("order_number"),
+            details={"new_status": new_status},
+        )
+    except Exception:
+        pass
+
     return {"order_id": order_id, "kds_status": new_status}
 
 
 @router.put("/orders/{order_id}/acknowledge")
 async def acknowledge_order(order_id: str, current_user: User = Depends(get_current_user)):
     """Kitchen acknowledges they've seen the order."""
-    return await _update_kds_status(order_id, "acknowledged", "acknowledged_at")
+    return await _update_kds_status(order_id, "acknowledged", "acknowledged_at", current_user.username, current_user.restaurant_id)
 
 
 @router.put("/orders/{order_id}/preparing")
 async def start_preparing(order_id: str, current_user: User = Depends(get_current_user)):
     """Kitchen starts preparing the order."""
-    return await _update_kds_status(order_id, "preparing", "prep_started_at")
+    return await _update_kds_status(order_id, "preparing", "prep_started_at", current_user.username, current_user.restaurant_id)
 
 
 @router.put("/orders/{order_id}/ready")
 async def mark_ready(order_id: str, current_user: User = Depends(get_current_user)):
     """Order is ready for pickup."""
-    return await _update_kds_status(order_id, "ready", "ready_at")
+    return await _update_kds_status(order_id, "ready", "ready_at", current_user.username, current_user.restaurant_id)
 
 
 @router.put("/orders/{order_id}/recall")
