@@ -180,6 +180,25 @@ async def get_today_stats(current_user: User = Depends(require_admin)):
 
     top_products = sorted(product_sales.items(), key=lambda x: x[1]["quantity"], reverse=True)[:5]
 
+    # Hourly revenue breakdown for the mini-chart
+    hourly = {}
+    for o in orders:
+        try:
+            ts = o.get("created_at", "")
+            hour = int(ts[11:13]) if len(ts) > 13 else 0
+            hourly[hour] = hourly.get(hour, 0) + o.get("total_amount", 0)
+        except (ValueError, IndexError):
+            pass
+    hourly_data = [{"hour": h, "label": f"{h:02d}:00", "revenue": round(hourly.get(h, 0), 2)} for h in range(24)]
+
+    # QR vs POS breakdown
+    qr_orders = len([o for o in orders if o.get("source") == "qr"])
+    pos_orders = total_orders - qr_orders
+
+    # Open tables count
+    open_tables = await db.tables.count_documents({"status": "occupied"})
+    total_tables = await db.tables.count_documents({})
+
     return {
         "total_sales": round(total_sales, 2),
         "total_orders": total_orders,
@@ -189,4 +208,9 @@ async def get_today_stats(current_user: User = Depends(require_admin)):
         "top_products": [{"name": n, "quantity": d["quantity"], "revenue": round(d["revenue"], 2)} for n, d in top_products],
         "date": biz_start.date().isoformat(),
         "business_day_start": biz_start.isoformat(),
+        "hourly_revenue": hourly_data,
+        "qr_orders": qr_orders,
+        "pos_orders": pos_orders,
+        "open_tables": open_tables,
+        "total_tables": total_tables,
     }

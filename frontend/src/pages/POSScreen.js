@@ -161,14 +161,16 @@ const POSScreen = () => {
     }
   }, []);
 
-  // Sync offline orders to the backend
+  // Sync offline orders to the backend (with jitter to prevent reconnection storms)
   const syncOfflineOrders = useCallback(async () => {
     try {
       const unsynced = await getUnsyncedOrders();
       if (unsynced.length === 0) return;
-      console.log(`[POS] Syncing ${unsynced.length} offline orders...`);
+      // Add random jitter (1-5s) to prevent all tablets syncing at once
+      const jitter = 1000 + Math.random() * 4000;
+      await new Promise(r => setTimeout(r, jitter));
+      console.log(`[POS] Syncing ${unsynced.length} offline orders (after ${(jitter/1000).toFixed(1)}s jitter)...`);
       await orderAPI.sync(unsynced);
-      // Mark as synced in IndexedDB
       for (const order of unsynced) {
         await saveToIndexedDB('orders', { ...order, synced: true });
       }

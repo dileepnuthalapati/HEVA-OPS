@@ -100,6 +100,10 @@ async def get_guest_menu(request: Request, restaurant_id: str, table_hash: str):
     if not restaurant:
         raise HTTPException(status_code=404, detail="Restaurant not found")
 
+    # QR Kill Switch — admin can disable QR ordering
+    if not restaurant.get("qr_ordering_enabled", True):
+        raise HTTPException(status_code=503, detail="QR ordering is temporarily disabled by the restaurant")
+
     table = await db.tables.find_one(
         {"restaurant_id": restaurant_id, "qr_hash": table_hash},
         {"_id": 0}
@@ -158,6 +162,10 @@ async def place_guest_order(request: Request, restaurant_id: str, table_hash: st
     restaurant = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0})
     if not restaurant:
         raise HTTPException(status_code=404, detail="Restaurant not found")
+
+    # QR Kill Switch
+    if not restaurant.get("qr_ordering_enabled", True):
+        raise HTTPException(status_code=503, detail="QR ordering is temporarily disabled by the restaurant")
 
     table = await db.tables.find_one(
         {"restaurant_id": restaurant_id, "qr_hash": table_hash},

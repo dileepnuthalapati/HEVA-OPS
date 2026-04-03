@@ -164,6 +164,7 @@ class Restaurant(BaseModel):
     created_at: Optional[str] = None
     trial_ends_at: Optional[str] = None
     stripe_customer_id: Optional[str] = None
+    qr_ordering_enabled: Optional[bool] = True
 
 
 class RestaurantCreate(BaseModel):
@@ -178,6 +179,7 @@ class RestaurantUpdate(BaseModel):
     business_info: Optional[dict] = None
     currency: Optional[str] = None
     owner_email: Optional[str] = None
+    qr_ordering_enabled: Optional[bool] = None
 
 
 class SyncData(BaseModel):

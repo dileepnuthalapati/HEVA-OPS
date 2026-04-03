@@ -124,6 +124,7 @@ class ThermalPrinterService {
   }
 
   // Direct TCP from the tablet — works even with Railway backend
+  // Supports chunked sending for large receipts (50+ items)
   async _printWifiNative(ip, port, base64Data) {
     let clientId = null;
     try {
@@ -132,12 +133,39 @@ class ThermalPrinterService {
       clientId = result.client;
       console.log(`[Printer] TCP connected (client ${clientId}), sending data...`);
 
-      // Send ESC/POS as base64 — plugin decodes to raw bytes natively
-      await TcpSocket.send({
-        client: clientId,
-        data: base64Data,
-        encoding: 'base64',
-      });
+      // Chunk large receipts to prevent buffer overflow
+      // Max chunk size: 4KB (safe for most thermal printers)
+      const CHUNK_SIZE = 4096;
+      const rawBytes = base64ToBytes(base64Data);
+      
+      if (rawBytes.length <= CHUNK_SIZE) {
+        // Small receipt: send in one shot
+        await TcpSocket.send({
+          client: clientId,
+          data: base64Data,
+          encoding: 'base64',
+        });
+      } else {
+        // Large receipt: chunk with 50ms delays between chunks
+        console.log(`[Printer] Large receipt (${rawBytes.length} bytes), chunking into ${Math.ceil(rawBytes.length / CHUNK_SIZE)} parts`);
+        for (let offset = 0; offset < rawBytes.length; offset += CHUNK_SIZE) {
+          const chunk = rawBytes.slice(offset, Math.min(offset + CHUNK_SIZE, rawBytes.length));
+          // Convert chunk to base64
+          let binary = '';
+          for (let i = 0; i < chunk.length; i++) binary += String.fromCharCode(chunk[i]);
+          const chunkBase64 = btoa(binary);
+          
+          await TcpSocket.send({
+            client: clientId,
+            data: chunkBase64,
+            encoding: 'base64',
+          });
+          // 50ms delay between chunks to let the printer buffer clear
+          if (offset + CHUNK_SIZE < rawBytes.length) {
+            await new Promise(r => setTimeout(r, 50));
+          }
+        }
+      }
 
       console.log('[Printer] WiFi TCP print sent successfully');
       return { success: true, method: 'wifi-tcp', message: 'Printed via WiFi' };

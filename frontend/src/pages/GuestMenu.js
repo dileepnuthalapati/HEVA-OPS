@@ -112,12 +112,17 @@ export default function GuestMenu() {
 
   // Error state
   if (error) {
+    const isDisabled = error.includes('temporarily disabled');
     return (
       <div className="max-w-md mx-auto min-h-screen bg-stone-50 flex items-center justify-center px-6" style={{ fontFamily: 'Manrope, sans-serif' }}>
         <div className="text-center">
-          <div className="text-6xl mb-4">&#x1f615;</div>
-          <h2 className="text-xl font-bold text-stone-900 mb-2">Menu Not Found</h2>
-          <p className="text-stone-500" data-testid="error-message">{error}</p>
+          <div className="text-6xl mb-4">{isDisabled ? '\u23F8\uFE0F' : '\uD83D\uDE15'}</div>
+          <h2 className="text-xl font-bold text-stone-900 mb-2">
+            {isDisabled ? 'Ordering Paused' : 'Menu Not Found'}
+          </h2>
+          <p className="text-stone-500" data-testid="error-message">
+            {isDisabled ? 'The restaurant has temporarily paused QR ordering. Please ask your server to place your order.' : error}
+          </p>
         </div>
       </div>
     );
