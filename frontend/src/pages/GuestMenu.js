@@ -130,6 +130,22 @@ export default function GuestMenu() {
 
   // Order confirmation screen
   if (orderPlaced) {
+    const handlePayBill = async () => {
+      try {
+        const currentUrl = window.location.href;
+        const res = await axios.post(`${API_URL}/api/payments/create-checkout-session`, {
+          order_id: orderPlaced.order_id,
+          success_url: `${currentUrl}?paid=true`,
+          cancel_url: currentUrl,
+        });
+        if (res.data.url) {
+          window.location.href = res.data.url;
+        }
+      } catch (err) {
+        alert(err.response?.data?.detail || 'Payment failed. Please ask your server.');
+      }
+    };
+
     return (
       <motion.div
         initial={{ opacity: 0 }}
@@ -181,6 +197,17 @@ export default function GuestMenu() {
           transition={{ delay: 0.7 }}
         >
           Order More
+        </motion.button>
+        <motion.button
+          data-testid="pay-bill-button"
+          className="mt-4 bg-emerald-600 text-white px-8 py-3 rounded-full font-semibold text-base flex items-center gap-2 mx-auto"
+          whileTap={{ scale: 0.95 }}
+          onClick={handlePayBill}
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          transition={{ delay: 0.8 }}
+        >
+          Pay Bill &middot; {sym}{orderPlaced.total?.toFixed(2) || '0.00'}
         </motion.button>
       </motion.div>
     );

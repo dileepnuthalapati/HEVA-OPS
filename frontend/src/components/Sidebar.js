@@ -21,8 +21,7 @@ const platformOwnerMenu = [
 const restaurantAdminMenu = [
   { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/tables', icon: Users, label: 'Tables' },
-  { path: '/categories', icon: FolderTree, label: 'Categories' },
-  { path: '/products', icon: Package, label: 'Products' },
+  { path: '/menu-management', icon: Package, label: 'Menu' },
   { path: '/pos', icon: ShoppingCart, label: 'POS' },
   { path: '/kds', icon: ChefHat, label: 'Kitchen (KDS)' },
   { path: '/orders', icon: FileText, label: 'Orders' },

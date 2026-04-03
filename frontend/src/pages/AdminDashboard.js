@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { 
   TrendingUp, ShoppingBag, Package, Coins, Calendar, 
   AlertTriangle, Clock, CreditCard, Banknote, QrCode,
-  MonitorSmartphone, UtensilsCrossed, Power
+  MonitorSmartphone, UtensilsCrossed, Power, ChefHat
 } from 'lucide-react';
 
 const getCurrencySymbol = (currency) => {
@@ -26,18 +26,21 @@ const AdminDashboard = () => {
   const [subscription, setSubscription] = useState(null);
   const [qrEnabled, setQrEnabled] = useState(true);
   const [togglingQR, setTogglingQR] = useState(false);
+  const [kdsStats, setKdsStats] = useState(null);
 
   const loadAll = useCallback(async () => {
     try {
-      const [statsData, restaurant, sub] = await Promise.all([
+      const [statsData, restaurant, sub, kds] = await Promise.all([
         reportAPI.getTodayStats().catch(() => null),
         restaurantAPI.getMy().catch(() => null),
         subscriptionAPI.getMy().catch(() => null),
+        api.get('/kds/stats').then(r => r.data).catch(() => null),
       ]);
       if (statsData) setStats(statsData);
       if (restaurant?.currency) setCurrency(restaurant.currency);
       if (restaurant) setQrEnabled(restaurant.qr_ordering_enabled !== false);
       if (sub) setSubscription(sub);
+      if (kds) setKdsStats(kds);
     } catch (error) {
       console.error('Dashboard load error:', error);
     } finally {
@@ -201,6 +204,32 @@ const AdminDashboard = () => {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Kitchen Efficiency Widget */}
+              {kdsStats && (
+                <Card className="mb-6 border-orange-200 bg-orange-50/30" data-testid="kitchen-efficiency-card">
+                  <CardContent className="p-4 md:p-6 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-xl bg-orange-100 flex items-center justify-center">
+                        <ChefHat className="w-5 h-5 text-orange-600" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-orange-900">Kitchen Efficiency</p>
+                        <p className="text-xs text-orange-700/70">Avg time from Acknowledged to Ready</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-2xl md:text-3xl font-bold font-mono text-orange-700" data-testid="avg-prep-time">
+                        {kdsStats.avg_prep_time_display || '--:--'}
+                      </div>
+                      <div className="flex gap-3 mt-1 text-xs text-orange-600/80">
+                        <span>{kdsStats.active_orders || 0} in kitchen</span>
+                        <span>{kdsStats.completed_today || 0} completed</span>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
 
               {/* Revenue Chart */}
               <Card className="mb-6" data-testid="revenue-chart-card">

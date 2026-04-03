@@ -20,6 +20,7 @@ import SubscriptionManagement from './pages/SubscriptionManagement';
 import AdminDashboard from './pages/AdminDashboard';
 import ProductManagement from './pages/ProductManagement';
 import CategoryManagement from './pages/CategoryManagement';
+import MenuManagement from './pages/MenuManagement';
 import OrderHistory from './pages/OrderHistory';
 import Reports from './pages/Reports';
 import CashDrawer from './pages/CashDrawer';
@@ -120,6 +121,7 @@ const AppRoutes = () => {
       <Route path="/tables" element={<ProtectedRoute restaurantAdminOnly><TableManagement /></ProtectedRoute>} />
       <Route path="/categories" element={<ProtectedRoute restaurantAdminOnly><CategoryManagement /></ProtectedRoute>} />
       <Route path="/products" element={<ProtectedRoute restaurantAdminOnly><ProductManagement /></ProtectedRoute>} />
+      <Route path="/menu-management" element={<ProtectedRoute restaurantAdminOnly><MenuManagement /></ProtectedRoute>} />
       <Route path="/reports" element={<ProtectedRoute restaurantAdminOnly><Reports /></ProtectedRoute>} />
       <Route path="/cash-drawer" element={<ProtectedRoute restaurantAdminOnly><CashDrawer /></ProtectedRoute>} />
       <Route path="/printers" element={<ProtectedRoute restaurantAdminOnly><PrinterSettings /></ProtectedRoute>} />

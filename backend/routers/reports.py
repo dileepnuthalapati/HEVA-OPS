@@ -15,18 +15,40 @@ router = APIRouter()
 
 @router.post("/reports/generate")
 async def generate_report(report_req: ReportRequest, current_user: User = Depends(require_admin)):
-    start_dt = datetime.fromisoformat(report_req.start_date.replace('Z', '+00:00') if 'Z' in report_req.start_date else report_req.start_date)
-    end_dt = datetime.fromisoformat(report_req.end_date.replace('Z', '+00:00') if 'Z' in report_req.end_date else report_req.end_date)
-    end_dt_inclusive = end_dt + timedelta(days=1)
+    start_str = f"{report_req.start_date[:10]}T00:00:00"
+    end_str = f"{report_req.end_date[:10]}T23:59:59"
 
-    orders = await db.orders.find(
-        {"created_at": {"$gte": start_dt.isoformat(), "$lt": end_dt_inclusive.isoformat()}, "status": "completed"},
-        {"_id": 0}
-    ).to_list(10000)
+    query = {"created_at": {"$gte": start_str, "$lte": end_str}, "status": "completed"}
+    if current_user.restaurant_id:
+        query["restaurant_id"] = current_user.restaurant_id
+
+    orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
+
+    # Get currency symbol from restaurant settings
+    cs = "$"
+    if current_user.restaurant_id:
+        rest = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0, "currency": 1})
+        currency_map = {"GBP": "£", "USD": "$", "EUR": "€", "INR": "₹"}
+        cs = currency_map.get((rest or {}).get("currency", "GBP"), "$")
 
     total_sales = sum(o.get("total_amount", 0) for o in orders)
     total_orders = len(orders)
     avg_order = total_sales / total_orders if total_orders > 0 else 0
+
+    # Cash vs Card breakdown
+    cash_total = 0
+    card_total = 0
+    for o in orders:
+        pm = o.get("payment_method", "cash")
+        amt = o.get("total_amount", 0)
+        if pm == "card":
+            card_total += amt
+        elif pm == "split":
+            pd = o.get("payment_details") or {}
+            cash_total += pd.get("cash", 0)
+            card_total += pd.get("card", 0)
+        else:
+            cash_total += amt
 
     buffer = BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=A4, topMargin=40, bottomMargin=40)
@@ -34,17 +56,19 @@ async def generate_report(report_req: ReportRequest, current_user: User = Depend
     story = []
 
     title_style = ParagraphStyle('ReportTitle', parent=styles['Heading1'], fontSize=24, textColor=colors.HexColor('#0f172a'), spaceAfter=20, alignment=1)
-    story.append(Paragraph(f"Sales Report", title_style))
+    story.append(Paragraph("Sales Report", title_style))
     story.append(Spacer(1, 10))
-    story.append(Paragraph(f"Period: {start_dt.strftime('%Y-%m-%d')} to {end_dt.strftime('%Y-%m-%d')}", styles['Normal']))
+    story.append(Paragraph(f"Period: {report_req.start_date[:10]} to {report_req.end_date[:10]}", styles['Normal']))
     story.append(Paragraph(f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}", styles['Normal']))
     story.append(Spacer(1, 20))
 
     summary_data = [
         ["Metric", "Value"],
-        ["Total Sales", f"${total_sales:.2f}"],
+        ["Total Sales", f"{cs}{total_sales:.2f}"],
         ["Total Orders", str(total_orders)],
-        ["Average Order Value", f"${avg_order:.2f}"],
+        ["Average Order Value", f"{cs}{avg_order:.2f}"],
+        ["Cash Total", f"{cs}{cash_total:.2f}"],
+        ["Card Total", f"{cs}{card_total:.2f}"],
     ]
     summary_table = ReportLabTable(summary_data, colWidths=[200, 200])
     summary_table.setStyle(TableStyle([
@@ -67,7 +91,7 @@ async def generate_report(report_req: ReportRequest, current_user: User = Depend
                 str(o.get("order_number", "N/A")).zfill(3),
                 o.get("created_at", "")[:10],
                 str(len(o.get("items", []))),
-                f"${o.get('total_amount', 0):.2f}",
+                f"{cs}{o.get('total_amount', 0):.2f}",
                 o.get("payment_method", "N/A").upper()
             ])
         order_table = ReportLabTable(order_data, colWidths=[60, 80, 60, 80, 80])
@@ -83,20 +107,19 @@ async def generate_report(report_req: ReportRequest, current_user: User = Depend
 
     doc.build(story)
     buffer.seek(0)
-    return StreamingResponse(buffer, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=sales_report_{start_dt.strftime('%Y%m%d')}_{end_dt.strftime('%Y%m%d')}.pdf"})
+    return StreamingResponse(buffer, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=sales_report_{report_req.start_date[:10]}_{report_req.end_date[:10]}.pdf"})
 
 
 @router.get("/reports/stats")
 async def get_report_stats(start_date: str, end_date: str, current_user: User = Depends(require_admin)):
-    start_dt = datetime.fromisoformat(start_date.replace('Z', '+00:00') if 'Z' in start_date else start_date)
-    end_dt = datetime.fromisoformat(end_date.replace('Z', '+00:00') if 'Z' in end_date else end_date)
-    end_dt_str = (end_dt + timedelta(days=1)).isoformat()
-    start_dt_str = start_dt.isoformat()
+    start_str = f"{start_date[:10]}T00:00:00"
+    end_str = f"{end_date[:10]}T23:59:59"
 
-    orders = await db.orders.find(
-        {"created_at": {"$gte": start_dt_str, "$lt": end_dt_str}, "status": "completed"},
-        {"_id": 0}
-    ).to_list(10000)
+    query = {"created_at": {"$gte": start_str, "$lte": end_str}, "status": "completed"}
+    if current_user.restaurant_id:
+        query["restaurant_id"] = current_user.restaurant_id
+
+    orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
 
     total_sales = sum(order.get("total_amount", 0) for order in orders)
     total_orders = len(orders)
@@ -140,16 +163,15 @@ async def get_report_stats(start_date: str, end_date: str, current_user: User = 
 @router.get("/reports/today")
 async def get_today_stats(current_user: User = Depends(require_admin)):
     now = datetime.now(timezone.utc)
-    if now.hour < 2:
-        biz_start = (now - timedelta(days=1)).replace(hour=2, minute=0, second=0, microsecond=0)
-    else:
-        biz_start = now.replace(hour=2, minute=0, second=0, microsecond=0)
-    biz_end = biz_start + timedelta(days=1)
+    today_str = now.strftime("%Y-%m-%d")
+    start_str = f"{today_str}T00:00:00"
+    end_str = f"{today_str}T23:59:59"
 
-    orders = await db.orders.find(
-        {"created_at": {"$gte": biz_start.isoformat(), "$lt": biz_end.isoformat()}, "status": "completed"},
-        {"_id": 0}
-    ).to_list(1000)
+    query = {"created_at": {"$gte": start_str, "$lte": end_str}, "status": "completed"}
+    if current_user.restaurant_id:
+        query["restaurant_id"] = current_user.restaurant_id
+
+    orders = await db.orders.find(query, {"_id": 0}).to_list(1000)
 
     total_sales = sum(o.get("total_amount", 0) for o in orders)
     total_orders = len(orders)
@@ -206,8 +228,8 @@ async def get_today_stats(current_user: User = Depends(require_admin)):
         "cash_total": round(cash_total, 2),
         "card_total": round(card_total, 2),
         "top_products": [{"name": n, "quantity": d["quantity"], "revenue": round(d["revenue"], 2)} for n, d in top_products],
-        "date": biz_start.date().isoformat(),
-        "business_day_start": biz_start.isoformat(),
+        "date": today_str,
+        "business_day_start": f"{today_str}T00:00:00",
         "hourly_revenue": hourly_data,
         "qr_orders": qr_orders,
         "pos_orders": pos_orders,

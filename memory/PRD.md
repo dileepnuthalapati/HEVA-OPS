@@ -8,81 +8,83 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 /app/
 ├── backend/
 │   ├── server.py           # FastAPI + Socket.IO + Sentry + Rate Limiting
-│   ├── socket_manager.py   # Socket.IO server (new_qr_order, order_update)
+│   ├── socket_manager.py   # Socket.IO server
 │   ├── database.py, indexes.py, rate_limiter.py, dependencies.py, models.py
 │   └── routers/
 │       ├── auth.py, platform.py, restaurants.py, menu.py
-│       ├── orders.py (void modal + manager PIN + WebSocket emit on cancel)
-│       ├── reports.py (hourly_revenue, QR/POS, tables)
-│       ├── receipts.py, printers.py (/printer/check), cash_drawer.py
-│       ├── tables.py (qr_hash), reservations.py
+│       ├── orders.py        # Void modal + Manager PIN + WebSocket cancel
+│       ├── reports.py       # Local-time filtering, real PDF streaming
+│       ├── payments.py      # Stripe Pay-at-Table (Checkout Sessions + Webhook)
+│       ├── docs.py          # Feature Guide PDF generator
+│       ├── receipts.py, printers.py, cash_drawer.py
+│       ├── tables.py, reservations.py
 │       ├── subscriptions.py, notifications.py, staff.py, health.py, email.py
-│       ├── qr_menu.py (rate limited, kill switch)
-│       ├── kds.py (acknowledge, preparing, ready, recall, stats)
-│       └── audit.py (immutable logs with void_category, void_note, manager_approved_by)
+│       ├── qr_menu.py, kds.py, audit.py
 └── frontend/
     ├── src/
     │   ├── components/
-    │   │   ├── VoidReasonModal.js  # Reusable: quick-tap reasons + Manager PIN gate
-    │   │   └── Sidebar.js
+    │   │   ├── VoidReasonModal.js  # Quick-tap reasons + Manager PIN gate
+    │   │   └── Sidebar.js          # Consolidated Menu item
     │   ├── pages/
-    │   │   ├── AdminDashboard.js     # Revenue Analytics + QR Kill Switch
-    │   │   ├── POSScreen.js          # POS + VoidReasonModal integration
-    │   │   ├── KitchenDisplay.js     # KDS — Digital ticket board
-    │   │   ├── GuestMenu.js          # QR Guest Menu (public)
-    │   │   ├── TableManagement.js    # + QR Code Generator
-    │   │   ├── AuditLog.js           # Enriched with void_category badges + manager override
-    │   │   ├── OrderHistory.js       # VoidReasonModal integration
+    │   │   ├── AdminDashboard.js   # + Kitchen Efficiency widget
+    │   │   ├── POSScreen.js        # Debounced + 3 buttons + overflow fix
+    │   │   ├── KitchenDisplay.js   # Keyboard shortcuts + 1080p + position labels
+    │   │   ├── MenuManagement.js   # Categories sidebar + Products grid
+    │   │   ├── GuestMenu.js        # + Pay Bill via Stripe
+    │   │   ├── AuditLog.js         # Enriched void badges + manager override
+    │   │   ├── Reports.js          # Real PDF download + Feature Guide button
+    │   │   ├── TableManagement.js  # Hidden raw QR hashes
+    │   │   ├── OrderHistory.js     # VoidReasonModal
     │   ├── services/
-    │   │   ├── api.js (fixed cancel payload), printer.js, receiptGenerator.js, socket.js, db.js
+    │   │   ├── api.js              # Fixed cancel payload
+    │   │   ├── receiptGenerator.js # CP858 encoding for thermal printers
+    │   │   ├── socket.js, db.js, printer.js
     │   └── context/AuthContext.js
-    └── package.json
 ```
 
-## Completed Features
+## Completed Features (All Phases)
 
-### Core POS
-- Full POS (menu, orders, tables, reports, staff, subscriptions, email)
-- Dynamic currency, 19+ backend routers
-- Universal printer support (WiFi TCP + BT Classic + BLE)
-- Frontend ESC/POS Receipt Generation (offline, chunked for large orders)
+### Phase 1: Core POS & Offline
+- Full POS with cart, discounts, notes, split payments
+- ESC/POS receipt generation in JS (offline capable, chunked)
+- CP858 encoding fix for thermal printers (£, €, etc.)
+- Offline order saving + IndexedDB sync
+- Button debouncing (prevents double orders)
 
-### Audit/Void System (SaaS-Ready) — NEW (Apr 2026)
-- VoidReasonModal with 5 quick-tap reasons: Mispunch, Customer Change, Kitchen Error, Testing, Out of Stock
-- Optional 100-character free-text note
-- Manager PIN authorization required for Staff role (validates against admin password)
-- Backend stores: void_category, void_note, cancelled_by, manager_approved_by
-- Immutable audit logs with enriched details
-- Audit Log page shows void category badges, manager override info, and item details
-- WebSocket emit on cancel so KDS removes voided tickets
-- Fixed api.js bug: cancel reason was silently lost (sent `reason` instead of `cancel_reason`)
+### Phase 2: QR Table Ordering + Pay-at-Table
+- Guest scan QR -> view menu -> order (public route, no login)
+- WebSocket push to POS + KDS
+- QR Kill Switch on admin dashboard
+- Stripe Pay-at-Table: Checkout Sessions + webhook + instant POS sync
+- Rate limiting on public QR endpoints
 
-### Kitchen Display System (KDS)
-- Full-screen digital ticket board at /kds
-- Color-coded: NEW (red) → ACKNOWLEDGED (amber) → PREPARING (yellow) → READY (green)
-- Live wait timer (mm:ss), bump workflow, sound toggle
-- WebSocket real-time updates + 2-min safety poll
+### Phase 3: Real-time KDS
+- Full-screen dark-mode display (1080p optimized, 5-column grid)
+- Color-coded ticket lifecycle: NEW -> SEEN -> COOKING -> READY
+- Live wait timers, sound alerts, recall
+- Keyboard shortcuts: 1-9 bumps tickets, R refreshes
+- WebSocket-powered with safety polling fallback
 
-### QR Table Ordering
-- Public URL: /menu/{restaurant_id}/{table_hash}
-- Premium mobile-first UI, WebSocket notifications to POS + KDS
-- QR Code Generator in Table Management (download PNG)
-- QR Ordering Kill Switch on Admin Dashboard
+### Phase 4: Revenue Analytics & Audit Logs
+- Dashboard: Sales, Orders, Avg Order, Tables, Cash/Card split
+- Kitchen Efficiency widget (avg prep time from Acknowledged->Ready)
+- Hourly revenue chart, top products ranking
+- Immutable audit trail with void_category, void_note, manager_approved_by
+- VoidReasonModal: quick-tap reasons + Manager PIN for staff
+- Local-time date filtering (midnight-to-midnight, not UTC 2AM)
+- Real PDF report download from backend (reportlab, correct currency)
 
-### Revenue Analytics Dashboard
-- Sales (Cash/Card), Orders (POS/QR), Avg Order, Open Tables
-- Hourly Revenue chart (recharts), Top Products, Subscription banner
-
-### Infrastructure
-- MongoDB indexes (25+), Sentry placeholder, Rate limiting
-- Offline mode (UUID orders, IndexedDB, jitter sync)
-- Printer Status Indicator, Receipt chunking, Reconnection storm jitter
+### UX Improvements (Apr 2026)
+- Consolidated Menu Management (categories sidebar + products grid)
+- Pending Orders: 3 buttons (Edit, Cancel, Pay) + printer icon inline
+- POS overflow fix, Table Management responsive fix
+- Hidden raw QR hashes in admin (show only scannable QRs)
+- Feature Guide PDF for sales pitching
 
 ## Upcoming (P1)
-- Stripe Pay-at-Table ("pay after ordering" flow via QR guest menu)
 - Print Void Receipt to Kitchen (optional paper trail)
+- Weekly Email Digest with benchmarks
 
 ## Future/Backlog (P2)
-- Weekly Email Digest with benchmarks
-- Deliverect / Middleware API Integration
+- Deliverect / Middleware API Integration (UberEats, Deliveroo)
 - iOS App Build Prep
