@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
+import { useAuth } from '../context/AuthContext';
 import { orderAPI, restaurantAPI, printerAPI } from '../services/api';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
-import { Textarea } from '../components/ui/textarea';
+import VoidReasonModal from '../components/VoidReasonModal';
 import { toast } from 'sonner';
 import { Calendar, Printer, XCircle, ArrowLeft } from 'lucide-react';
 
@@ -17,13 +17,13 @@ const getCurrencySymbol = (currency) => {
 const OrderHistory = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currency, setCurrency] = useState('GBP');
   const [printingOrderId, setPrintingOrderId] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
-  const [cancelDialog, setCancelDialog] = useState({ open: false, orderId: null });
-  const [cancelReason, setCancelReason] = useState('');
+  const [voidModal, setVoidModal] = useState({ open: false, orderId: null, orderNumber: null });
 
   useEffect(() => {
     loadOrders();
@@ -56,20 +56,11 @@ const OrderHistory = () => {
     }
   };
 
-  const handleCancelOrder = async () => {
-    if (!cancelReason.trim()) {
-      toast.error('Please enter a reason for cancellation');
-      return;
-    }
-    try {
-      await orderAPI.cancel(cancelDialog.orderId, cancelReason);
-      toast.success('Order cancelled');
-      setCancelDialog({ open: false, orderId: null });
-      setCancelReason('');
-      loadOrders();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to cancel');
-    }
+  const handleVoidConfirm = async (payload) => {
+    await orderAPI.cancel(voidModal.orderId, payload);
+    toast.success('Order voided');
+    setVoidModal({ open: false, orderId: null, orderNumber: null });
+    loadOrders();
   };
 
   const handleReprintReceipt = async (orderId) => {
@@ -153,6 +144,7 @@ const OrderHistory = () => {
                         {order.cancel_reason && (
                           <div className="text-xs text-red-600 bg-red-50 px-2 py-1 rounded mt-1" data-testid={`cancel-reason-${order.id}`}>
                             Reason: {order.cancel_reason} {order.cancelled_by && `(by ${order.cancelled_by})`}
+                            {order.manager_approved_by && <span className="text-amber-600 ml-1">[Manager: {order.manager_approved_by}]</span>}
                           </div>
                         )}
                       </div>
@@ -166,7 +158,7 @@ const OrderHistory = () => {
                             <Printer className="w-4 h-4" />
                           </Button>
                           {order.status === 'pending' && (
-                            <Button variant="outline" size="sm" data-testid={`cancel-order-${order.id}`} onClick={() => setCancelDialog({ open: true, orderId: order.id })} className="h-8 px-2 text-red-500 hover:bg-red-50" title="Cancel Order">
+                            <Button variant="outline" size="sm" data-testid={`cancel-order-${order.id}`} onClick={() => setVoidModal({ open: true, orderId: order.id, orderNumber: order.order_number })} className="h-8 px-2 text-red-500 hover:bg-red-50" title="Cancel Order">
                               <XCircle className="w-4 h-4" />
                             </Button>
                           )}
@@ -194,22 +186,14 @@ const OrderHistory = () => {
         </div>
       </div>
 
-      {/* Cancel Order Dialog */}
-      <Dialog open={cancelDialog.open} onOpenChange={(open) => { if (!open) { setCancelDialog({ open: false, orderId: null }); setCancelReason(''); } }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>Cancel Order</DialogTitle>
-            <DialogDescription>Please provide a reason for cancellation. This will be recorded.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 mt-2">
-            <Textarea placeholder="Enter reason for cancellation..." value={cancelReason} onChange={(e) => setCancelReason(e.target.value)} rows={3} data-testid="cancel-reason-input" />
-            <div className="flex gap-2">
-              <Button variant="outline" className="flex-1" onClick={() => { setCancelDialog({ open: false, orderId: null }); setCancelReason(''); }}>Back</Button>
-              <Button variant="destructive" className="flex-1" data-testid="confirm-cancel-btn" onClick={handleCancelOrder} disabled={!cancelReason.trim()}>Confirm Cancel</Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+      {/* Void Reason Modal */}
+      <VoidReasonModal
+        open={voidModal.open}
+        onClose={() => setVoidModal({ open: false, orderId: null, orderNumber: null })}
+        onConfirm={handleVoidConfirm}
+        userRole={user?.role}
+        orderNumber={voidModal.orderNumber}
+      />
     </div>
   );
 };

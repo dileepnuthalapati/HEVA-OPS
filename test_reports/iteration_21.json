@@ -1,0 +1,121 @@
+{
+  "summary": "Completed testing of HevaPOS Iteration 21 production-hardening features. All 13 backend tests PASSED. Frontend UI verified - Revenue Analytics Dashboard with 4 metric cards (Sales, Orders, Avg Order, Tables), Hourly Revenue chart with Recharts, QR Ordering Kill Switch toggle working (disable shows 'Ordering Paused' on guest menu, enable restores normal operation), Subscription banner showing trial days warning, POS screen regression passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Dashboard - Recharts",
+        "issues": ["Console warning: 'The width(-1) and height(-1) of chart should be greater than 0' - appears during initial render but chart displays correctly"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration21_features.py",
+    "/app/test_reports/pytest/pytest_results_iteration21.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AdminDashboard.js: Revenue Analytics Dashboard with 4 metric cards (Sales with Cash/Card breakdown, Orders with POS/QR breakdown, Avg Order, Tables with Open/Total), Hourly Revenue chart using Recharts AreaChart, QR Ordering Kill Switch toggle with visual feedback",
+    "GuestMenu.js: Shows 'Ordering Paused' message with pause emoji when QR ordering is disabled (503 response from backend)",
+    "POSScreen.js: Reconnection storm jitter implemented - random 1-5s delay on offline sync (line 170-171)",
+    "printer.js: Receipt chunking for large orders - 4KB chunks with 50ms delay between chunks (lines 137-168)",
+    "reports.py: /reports/today endpoint returns hourly_revenue array, qr_orders, pos_orders, open_tables, total_tables",
+    "qr_menu.py: QR kill switch checks qr_ordering_enabled field, returns 503 with 'temporarily disabled' message",
+    "restaurants.py: PUT /restaurants/my/settings accepts qr_ordering_enabled boolean",
+    "models.py: Restaurant model has qr_ordering_enabled field (defaults to True)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration21_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13 tests passed, 6 skipped due to fixture dependencies)",
+    "frontend": "100% (all UI tests passed)"
+  },
+  "test_credentials": {
+    "restaurant_admin": {"username": "restaurant_admin", "password": "admin123"},
+    "platform_owner": {"username": "platform_owner", "password": "admin123"},
+    "staff_user": {"username": "user", "password": "user123"},
+    "qr_guest_menu": "NO AUTH REQUIRED - /menu/rest_demo_1/KrGTedTy"
+  },
+  "seed_data_creation": "QR orders created during testing with guest_name prefix 'TEST_Iteration21'",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 21 verified 4 production-hardening features: 1) Revenue Analytics Dashboard at /dashboard with metric cards (data-testid='metric-total-sales', 'metric-total-orders', 'metric-avg-order', 'metric-tables'), Hourly Revenue chart (data-testid='revenue-chart-card'), shows £0.00 because no completed orders in current business day (2AM-2AM window). 2) QR Ordering Kill Switch toggle (data-testid='qr-ordering-toggle', 'qr-toggle-switch') - when disabled, guest menu shows 'Ordering Paused' message. 3) Reconnection storm jitter in POSScreen.js - random 1-5s delay before syncing offline orders. 4) Receipt chunking in printer.js - 4KB chunks with 50ms delay for large receipts. Subscription banner shows trial days warning. POS screen shows printer status indicator. All previous features (QR guest menu, WebSocket alerts, local receipt generation) still working.",
+  "test_results": {
+    "backend_tests": {
+      "test_login_restaurant_admin": "PASSED",
+      "test_reports_today_requires_auth": "PASSED (403 - forbidden without auth)",
+      "test_reports_today_returns_all_fields": "PASSED",
+      "test_hourly_revenue_structure": "PASSED (24 hourly entries)",
+      "test_get_restaurant_settings": "PASSED",
+      "test_disable_qr_ordering": "PASSED",
+      "test_qr_menu_returns_503_when_disabled": "PASSED",
+      "test_enable_qr_ordering": "PASSED",
+      "test_qr_menu_works_when_enabled": "PASSED",
+      "test_qr_menu_loads": "PASSED",
+      "test_qr_order_placement": "PASSED",
+      "test_qr_menu_invalid_hash": "PASSED",
+      "test_cleanup_enable_qr_ordering": "PASSED"
+    },
+    "frontend_tests": {
+      "login_flow": "PASSED - restaurant_admin/admin123 works",
+      "dashboard_loads": "PASSED - Today's Dashboard heading, Friday 3 April 2026",
+      "metric_cards": "PASSED - Sales £0.00 (Cash £0.00, Card £0.00), Orders 0 (POS: 0, QR: 0), Avg Order £0.00, Tables 3/4",
+      "revenue_chart": "PASSED - Hourly Revenue chart with tooltip showing £0.00",
+      "qr_toggle_visible": "PASSED - QR Ordering toggle with 'Guests can order' text",
+      "subscription_banner": "PASSED - Trial: 2 days left — Subscribe now to avoid interruption",
+      "orders_card_clickable": "PASSED - Navigates to /orders",
+      "qr_toggle_disable": "PASSED - Toggle changes to 'Disabled', toast shows 'QR ordering disabled'",
+      "qr_menu_paused": "PASSED - Shows 'Ordering Paused' with pause emoji and message",
+      "qr_toggle_enable": "PASSED - Toggle changes back to 'Guests can order', toast shows 'QR ordering enabled'",
+      "qr_menu_working": "PASSED - Pizza Palace Updated, Table 1, 11 products, add to cart works",
+      "pos_screen_loads": "PASSED - HevaPOS heading, 80 pending orders, 11 products, printer status indicator"
+    }
+  },
+  "features_verified": {
+    "revenue_analytics_dashboard": {
+      "description": "Admin Dashboard with today's stats, hourly chart, QR/POS breakdown",
+      "verification": "All metric cards display correctly, chart renders, data-testid attributes present",
+      "status": "VERIFIED"
+    },
+    "qr_ordering_kill_switch": {
+      "description": "Admin toggle to enable/disable QR ordering",
+      "verification": "Toggle works, disabled state shows 503 on guest menu with 'Ordering Paused' message",
+      "status": "VERIFIED"
+    },
+    "reconnection_storm_jitter": {
+      "description": "Random 1-5s delay on offline sync to prevent reconnection storms",
+      "verification": "Code review confirmed in POSScreen.js lines 170-171",
+      "status": "VERIFIED (code review)"
+    },
+    "receipt_chunking": {
+      "description": "4KB chunks with 50ms delay for large receipts",
+      "verification": "Code review confirmed in printer.js lines 137-168",
+      "status": "VERIFIED (code review)"
+    },
+    "subscription_banner": {
+      "description": "Trial days warning banner on dashboard",
+      "verification": "Banner shows 'Trial: 2 days left — Subscribe now to avoid interruption'",
+      "status": "VERIFIED"
+    },
+    "pos_regression": {
+      "description": "POS screen still works",
+      "verification": "Products load, categories work, pending orders button shows count",
+      "status": "VERIFIED"
+    },
+    "qr_guest_menu_regression": {
+      "description": "QR Guest Menu still works end-to-end",
+      "verification": "Menu loads, add to cart works, order placement works",
+      "status": "VERIFIED"
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "note": "All APIs are real. No mocked endpoints."
+  }
+}

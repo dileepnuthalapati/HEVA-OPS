@@ -4,6 +4,7 @@ from dependencies import get_current_user, require_admin
 from models import User, Table, TableCreate, TableUpdate, TableMerge, TableSplitBill
 from typing import List
 from datetime import datetime, timezone
+import secrets
 
 router = APIRouter()
 
@@ -41,6 +42,7 @@ async def create_table(table_data: TableCreate, current_user: User = Depends(req
         "restaurant_id": restaurant_id,
         "current_order_id": None,
         "merged_with": None,
+        "qr_hash": secrets.token_urlsafe(6),
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.tables.insert_one(table_dict)

@@ -83,6 +83,8 @@ async def update_restaurant_settings(settings: RestaurantUpdate, current_user: U
         update_dict["currency"] = settings.currency
     if settings.owner_email is not None:
         update_dict["owner_email"] = settings.owner_email
+    if settings.qr_ordering_enabled is not None:
+        update_dict["qr_ordering_enabled"] = settings.qr_ordering_enabled
 
     if update_dict:
         await db.restaurants.update_one({"id": current_user.restaurant_id}, {"$set": update_dict})

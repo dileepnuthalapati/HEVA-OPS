@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from database import db
 from dependencies import get_current_user, require_admin
 from models import User, Printer, PrinterCreate, PrinterUpdate, PrinterSendData, ScanRequest
@@ -149,6 +150,33 @@ async def send_to_wifi_printer(data: PrinterSendData, current_user: User = Depen
             sock.close()
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to send to printer: {str(e)}")
+
+
+class PrinterCheckRequest(BaseModel):
+    ip: str
+    port: int = 9100
+
+
+@router.post("/printer/check")
+async def check_printer_reachable(data: PrinterCheckRequest, current_user: User = Depends(get_current_user)):
+    """Quick TCP connectivity check — used by the POS Printer Status indicator."""
+    loop = asyncio.get_event_loop()
+    try:
+        reachable = await loop.run_in_executor(None, _quick_tcp_check, data.ip, data.port)
+        return {"reachable": reachable, "ip": data.ip, "port": data.port}
+    except Exception:
+        return {"reachable": False, "ip": data.ip, "port": data.port}
+
+
+def _quick_tcp_check(ip: str, port: int) -> bool:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(3)
+        result = s.connect_ex((ip, port))
+        s.close()
+        return result == 0
+    except Exception:
+        return False
 
 
 def _tcp_check(ip: str, port: int, timeout: float) -> dict:

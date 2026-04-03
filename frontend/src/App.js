@@ -26,10 +26,15 @@ import CashDrawer from './pages/CashDrawer';
 import RestaurantSettings from './pages/RestaurantSettings';
 import TableManagement from './pages/TableManagement';
 import PrinterSettings from './pages/PrinterSettings';
+import AuditLog from './pages/AuditLog';
 
 // Pages - All Users
 import Login from './pages/Login';
 import POSScreen from './pages/POSScreen';
+import KitchenDisplay from './pages/KitchenDisplay';
+
+// Pages - Public (No Auth)
+import GuestMenu from './pages/GuestMenu';
 
 // Styles
 import './App.css';
@@ -81,6 +86,9 @@ const AppRoutes = () => {
 
   return (
     <Routes>
+      {/* Public routes — no auth required */}
+      <Route path="/menu/:restaurantId/:tableHash" element={<GuestMenu />} />
+      
       <Route path="/login" element={<Login />} />
       <Route
         path="/"
@@ -115,10 +123,12 @@ const AppRoutes = () => {
       <Route path="/reports" element={<ProtectedRoute restaurantAdminOnly><Reports /></ProtectedRoute>} />
       <Route path="/cash-drawer" element={<ProtectedRoute restaurantAdminOnly><CashDrawer /></ProtectedRoute>} />
       <Route path="/printers" element={<ProtectedRoute restaurantAdminOnly><PrinterSettings /></ProtectedRoute>} />
+      <Route path="/audit" element={<ProtectedRoute restaurantAdminOnly><AuditLog /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute restaurantAdminOnly><RestaurantSettings /></ProtectedRoute>} />
       
       {/* POS Staff & Restaurant Admin */}
       <Route path="/pos" element={<ProtectedRoute><POSScreen /></ProtectedRoute>} />
+      <Route path="/kds" element={<ProtectedRoute><KitchenDisplay /></ProtectedRoute>} />
       <Route path="/orders" element={<ProtectedRoute><OrderHistory /></ProtectedRoute>} />
     </Routes>
   );

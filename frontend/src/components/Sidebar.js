@@ -5,7 +5,8 @@ import { Button } from './ui/button';
 import { Sheet, SheetContent, SheetTrigger, SheetTitle } from './ui/sheet';
 import { 
   LayoutDashboard, Package, FolderTree, ShoppingCart, FileText, LogOut, 
-  Wallet, Settings, Users, Printer, BarChart3, Globe, Building2, Menu, CreditCard
+  Wallet, Settings, Users, Printer, BarChart3, Globe, Building2, Menu, CreditCard,
+  ChefHat, Shield
 } from 'lucide-react';
 
 const platformOwnerMenu = [
@@ -23,8 +24,10 @@ const restaurantAdminMenu = [
   { path: '/categories', icon: FolderTree, label: 'Categories' },
   { path: '/products', icon: Package, label: 'Products' },
   { path: '/pos', icon: ShoppingCart, label: 'POS' },
+  { path: '/kds', icon: ChefHat, label: 'Kitchen (KDS)' },
   { path: '/orders', icon: FileText, label: 'Orders' },
   { path: '/reports', icon: BarChart3, label: 'Reports' },
+  { path: '/audit', icon: Shield, label: 'Audit Log' },
   { path: '/cash-drawer', icon: Wallet, label: 'Cash Drawer' },
   { path: '/printers', icon: Printer, label: 'Printers' },
   { path: '/settings', icon: Settings, label: 'Settings' },
@@ -32,6 +35,7 @@ const restaurantAdminMenu = [
 
 const posStaffMenu = [
   { path: '/pos', icon: ShoppingCart, label: 'POS' },
+  { path: '/kds', icon: ChefHat, label: 'Kitchen (KDS)' },
   { path: '/orders', icon: FileText, label: 'Orders' },
 ];
 

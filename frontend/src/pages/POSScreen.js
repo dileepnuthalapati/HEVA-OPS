@@ -1,8 +1,12 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '../context/AuthContext';
 import { categoryAPI, productAPI, orderAPI, tableAPI, printerAPI, restaurantAPI, getAuthToken } from '../services/api';
 import printerService from '../services/printer';
+import { generateKitchenReceipt, generateCustomerReceipt } from '../services/receiptGenerator';
+import { connectSocket, disconnectSocket, startSafetyPoll, stopSafetyPoll } from '../services/socket';
+import { saveToIndexedDB, getUnsyncedOrders } from '../services/db';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { ScrollArea } from '../components/ui/scroll-area';
@@ -15,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Sheet, SheetContent, SheetTitle } from '../components/ui/sheet';
 import { toast } from 'sonner';
 import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, CreditCard, Users, Percent, Tag, MessageSquare, Banknote, Search, PackagePlus, ArrowLeft } from 'lucide-react';
+import VoidReasonModal from '../components/VoidReasonModal';
 
 // Currency helper
 const getCurrencySymbol = (currency) => {
@@ -76,6 +81,110 @@ const POSScreen = () => {
   const [completedOrders, setCompletedOrders] = useState([]);
   const [isPrinting, setIsPrinting] = useState(false); // Prevent duplicate prints
 
+  // WebSocket / QR Alert states
+  const [qrAlert, setQrAlert] = useState(null);
+  const [flashActive, setFlashActive] = useState(false);
+  const [restaurantInfo, setRestaurantInfo] = useState(null);
+  const audioCtxRef = useRef(null);
+
+  // Printer status indicator
+  const [printerStatus, setPrinterStatus] = useState('unknown'); // 'online', 'offline', 'unknown', 'none'
+  const [defaultPrinterName, setDefaultPrinterName] = useState(null);
+
+  // Void modal state
+  const [voidModal, setVoidModal] = useState({ open: false, orderId: null, orderNumber: null });
+
+  // Play loud BEEP sound for QR order alerts
+  const playBeep = useCallback(() => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      // Play 3 quick beeps
+      [0, 0.3, 0.6].forEach((delay) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(880, ctx.currentTime + delay);
+        gain.gain.setValueAtTime(0.8, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + delay + 0.2);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + 0.25);
+      });
+      setTimeout(() => ctx.close(), 2000);
+    } catch (e) {
+      console.warn('[POS] Audio beep failed:', e);
+    }
+  }, []);
+
+  // Handle incoming QR order alert
+  const handleQROrder = useCallback((data) => {
+    console.log('[POS] QR Order received!', data);
+    setQrAlert(data);
+    setFlashActive(true);
+    playBeep();
+    setTimeout(() => setFlashActive(false), 5000);
+    setTimeout(() => setQrAlert(null), 15000);
+    loadPendingOrders();
+  }, [playBeep]);
+
+  // Check printer reachability
+  const checkPrinterStatus = useCallback(async () => {
+    try {
+      const printer = await printerAPI.getDefault();
+      if (!printer) {
+        setPrinterStatus('none');
+        setDefaultPrinterName(null);
+        return;
+      }
+      setDefaultPrinterName(printer.name);
+      if (printer.type === 'wifi') {
+        // For WiFi printers, attempt a quick TCP connection check via the backend
+        try {
+          const parts = printer.address.split(':');
+          const ip = parts[0];
+          const port = parseInt(parts[1]) || 9100;
+          const apiUrl = process.env.REACT_APP_BACKEND_URL;
+          const token = getAuthToken();
+          const res = await fetch(`${apiUrl}/api/printer/check`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ ip, port }),
+            signal: AbortSignal.timeout(5000),
+          });
+          setPrinterStatus(res.ok ? 'online' : 'offline');
+        } catch {
+          setPrinterStatus('offline');
+        }
+      } else {
+        // BT printers — mark as configured (can't ping them from web)
+        setPrinterStatus('online');
+      }
+    } catch {
+      setPrinterStatus('unknown');
+    }
+  }, []);
+
+  // Sync offline orders to the backend (with jitter to prevent reconnection storms)
+  const syncOfflineOrders = useCallback(async () => {
+    try {
+      const unsynced = await getUnsyncedOrders();
+      if (unsynced.length === 0) return;
+      // Add random jitter (1-5s) to prevent all tablets syncing at once
+      const jitter = 1000 + Math.random() * 4000;
+      await new Promise(r => setTimeout(r, jitter));
+      console.log(`[POS] Syncing ${unsynced.length} offline orders (after ${(jitter/1000).toFixed(1)}s jitter)...`);
+      await orderAPI.sync(unsynced);
+      for (const order of unsynced) {
+        await saveToIndexedDB('orders', { ...order, synced: true });
+      }
+      toast.success(`Synced ${unsynced.length} offline order${unsynced.length > 1 ? 's' : ''}`);
+      loadPendingOrders();
+    } catch (err) {
+      console.warn('[POS] Offline sync failed:', err.message);
+    }
+  }, []);
+
   // Helper: Send ESC/POS commands to the default printer (with duplicate prevention)
   const sendToPrinter = async (escposCommands, label = 'receipt') => {
     if (isPrinting) {
@@ -104,7 +213,7 @@ const POSScreen = () => {
     }
   };
 
-  // Helper: Print a specific order's kitchen receipt
+  // Helper: Print a specific order's kitchen receipt (LOCAL generation — no backend needed)
   const printOrderReceipt = async (orderId, orderNumber) => {
     if (isPrinting) {
       toast.warning('Already printing, please wait...');
@@ -112,13 +221,22 @@ const POSScreen = () => {
     }
     const toastId = toast.loading(`Printing order #${orderNumber}...`);
     try {
-      const printResult = await printerAPI.printKitchenReceipt(orderId);
-      if (printResult?.commands) {
-        await sendToPrinter(printResult.commands, 'kitchen-manual');
-        toast.success(`Order #${orderNumber} sent to printer`, { id: toastId });
-      } else {
-        toast.error('No print data generated', { id: toastId });
+      // Find the order from pending/completed orders
+      const order = pendingOrders.find(o => o.id === orderId) || completedOrders.find(o => o.id === orderId);
+      if (!order) {
+        toast.error('Order not found', { id: toastId });
+        return;
       }
+      // Get table info if assigned
+      let tableInfo = null;
+      if (order.table_id) {
+        const table = tables.find(t => t.id === order.table_id);
+        if (table) tableInfo = { number: table.number, name: table.name || `Table ${table.number}` };
+      }
+      const businessInfo = restaurantInfo?.business_info || {};
+      const commands = generateKitchenReceipt(order, businessInfo, tableInfo);
+      await sendToPrinter(commands, 'kitchen-manual');
+      toast.success(`Order #${orderNumber} sent to printer`, { id: toastId });
     } catch (err) {
       toast.error('Failed to print: ' + (err.message || ''), { id: toastId });
     }
@@ -129,7 +247,27 @@ const POSScreen = () => {
     loadPendingOrders();
     loadRestaurantCurrency();
     loadTables();
+    checkPrinterStatus();
+    syncOfflineOrders();
+    // Re-check printer status every 60 seconds
+    const printerCheckInterval = setInterval(checkPrinterStatus, 60000);
+    return () => clearInterval(printerCheckInterval);
   }, []);
+
+  // WebSocket connection for real-time QR order alerts
+  useEffect(() => {
+    if (!user?.restaurant_id) return;
+    const socket = connectSocket(user.restaurant_id, {
+      onNewQROrder: handleQROrder,
+      onConnect: () => console.log('[POS] Socket connected'),
+      onDisconnect: (reason) => console.log('[POS] Socket disconnected:', reason),
+    });
+    // Safety poll: fetch pending orders every 2 min as fallback
+    startSafetyPoll(loadPendingOrders);
+    return () => {
+      disconnectSocket();
+    };
+  }, [user?.restaurant_id, handleQROrder]);
 
   const loadRestaurantCurrency = async () => {
     try {
@@ -137,6 +275,7 @@ const POSScreen = () => {
       if (restaurant?.currency) {
         setCurrency(restaurant.currency);
       }
+      setRestaurantInfo(restaurant);
     } catch (error) {
       // Use default currency
     }
@@ -329,18 +468,16 @@ const POSScreen = () => {
     // Editing banner shows - no toast needed
   };
   
-  // Cancel a pending order
-  const cancelPendingOrder = async (orderId) => {
-    if (!confirm('Are you sure you want to cancel this order?')) return;
-    
-    try {
-      await orderAPI.cancel(orderId, 'Cancelled by staff');
-      toast.success('Order cancelled');
-      loadPendingOrders();
-      loadCompletedOrders();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to cancel order');
-    }
+  // Cancel a pending order — opens VoidReasonModal
+  const cancelPendingOrder = (orderId, orderNumber) => {
+    setVoidModal({ open: true, orderId, orderNumber });
+  };
+
+  const handleVoidConfirm = async (payload) => {
+    await orderAPI.cancel(voidModal.orderId, payload);
+    toast.success('Order voided');
+    loadPendingOrders();
+    loadCompletedOrders();
   };
 
   // Update an existing order
@@ -399,12 +536,10 @@ const POSScreen = () => {
   };
 
   const placeOrder = async () => {
-    if (cart.length === 0) {
-      // Cart is empty - button should be disabled anyway
-      return;
-    }
+    if (cart.length === 0) return;
 
     const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
+    const localId = uuidv4(); // Local UUID — no backend dependency
 
     try {
       const order = await orderAPI.create({
@@ -418,17 +553,20 @@ const POSScreen = () => {
         discount_reason: discountReason || null,
       });
       
-      // Try to print kitchen receipt (silently fail if no printer)
+      // Try to print kitchen receipt LOCALLY (no backend needed — works offline)
       try {
-        const printResult = await printerAPI.printKitchenReceipt(order.id);
-        if (printResult?.commands) {
-          await sendToPrinter(printResult.commands, 'kitchen-auto');
+        let tableInfo = null;
+        if (selectedTable) {
+          const table = tables.find(t => t.id === selectedTable);
+          if (table) tableInfo = { number: table.number, name: table.name || `Table ${table.number}` };
         }
+        const businessInfo = restaurantInfo?.business_info || {};
+        const commands = generateKitchenReceipt(order, businessInfo, tableInfo);
+        await sendToPrinter(commands, 'kitchen-auto');
       } catch (printError) {
         console.log('Kitchen receipt printing skipped:', printError.message);
       }
       
-      // Update table status if assigned
       if (selectedTable) {
         try {
           await tableAPI.assignOrder(selectedTable, order.id);
@@ -438,10 +576,7 @@ const POSScreen = () => {
         }
       }
       
-      // Order placed - cart clears as visual feedback
       setLastOrderNumber(order.order_number);
-      
-      // Clear cart and all related states
       setCart([]);
       setSelectedTable(null);
       setOrderNotes('');
@@ -451,11 +586,47 @@ const POSScreen = () => {
       setShowDiscountPanel(false);
       setShowNotesPanel(false);
       loadPendingOrders();
-      
-      // Clear order number after 5 seconds
       setTimeout(() => setLastOrderNumber(null), 5000);
     } catch (error) {
-      console.error('Failed to place order:', error);
+      // OFFLINE FALLBACK: Save order locally with UUID
+      console.warn('[POS] Backend unreachable, saving order offline:', error.message);
+      const offlineOrder = {
+        id: localId,
+        order_number: `OFF-${Date.now() % 10000}`,
+        items: cart,
+        subtotal,
+        total_amount: subtotal,
+        table_id: selectedTable || null,
+        status: 'pending',
+        created_by: user?.username || 'offline',
+        created_at: new Date().toISOString(),
+        synced: false,
+      };
+      try {
+        await saveToIndexedDB('orders', offlineOrder);
+        toast.info('Saved offline — will sync when connected');
+        // Still print locally
+        try {
+          let tableInfo = null;
+          if (selectedTable) {
+            const table = tables.find(t => t.id === selectedTable);
+            if (table) tableInfo = { number: table.number, name: table.name || `Table ${table.number}` };
+          }
+          const businessInfo = restaurantInfo?.business_info || {};
+          const commands = generateKitchenReceipt(offlineOrder, businessInfo, tableInfo);
+          await sendToPrinter(commands, 'kitchen-offline');
+        } catch {}
+        setLastOrderNumber(offlineOrder.order_number);
+        setCart([]);
+        setSelectedTable(null);
+        setOrderNotes('');
+        setDiscountType('');
+        setDiscountValue('');
+        setDiscountReason('');
+        setTimeout(() => setLastOrderNumber(null), 5000);
+      } catch (dbErr) {
+        toast.error('Failed to save order');
+      }
     }
   };
 
@@ -546,12 +717,21 @@ const POSScreen = () => {
         paymentDetails
       );
       
-      // Try to print customer receipt (silently fail if no printer)
+      // Try to print customer receipt LOCALLY (no backend needed — works offline)
       try {
-        const printResult = await printerAPI.printCustomerReceipt(selectedOrderToComplete.id);
-        if (printResult?.commands) {
-          await sendToPrinter(printResult.commands, 'customer-auto');
+        let tableInfo = null;
+        if (selectedOrderToComplete.table_id) {
+          const table = tables.find(t => t.id === selectedOrderToComplete.table_id);
+          if (table) tableInfo = { number: table.number, name: table.name || `Table ${table.number}` };
         }
+        const businessInfo = restaurantInfo?.business_info || {};
+        const commands = generateCustomerReceipt(
+          { ...selectedOrderToComplete, payment_method: paymentMethod, tip_amount: tipAmount, total_amount: grandTotal },
+          businessInfo,
+          tableInfo,
+          currency
+        );
+        await sendToPrinter(commands, 'customer-auto');
       } catch (printError) {
         console.log('Receipt printing skipped:', printError.message);
       }
@@ -597,7 +777,50 @@ const POSScreen = () => {
   }
 
   return (
-    <div className="flex h-screen pos-screen">
+    <div className="flex h-screen pos-screen relative">
+      {/* QR Order Flash Overlay */}
+      {flashActive && (
+        <div
+          className="fixed inset-0 z-[100] pointer-events-none"
+          style={{
+            animation: 'qr-flash 0.5s ease-in-out 3',
+            background: 'radial-gradient(circle, rgba(249,115,22,0.15) 0%, transparent 70%)',
+          }}
+          data-testid="qr-flash-overlay"
+        />
+      )}
+      <style>{`
+        @keyframes qr-flash {
+          0%, 100% { opacity: 0; }
+          50% { opacity: 1; }
+        }
+      `}</style>
+
+      {/* QR Order Alert Banner */}
+      {qrAlert && (
+        <div
+          className="fixed top-0 left-0 right-0 z-[90] bg-orange-500 text-white px-4 py-3 flex items-center justify-between shadow-lg animate-pulse"
+          data-testid="qr-order-alert"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">&#x1F4F1;</span>
+            <div>
+              <p className="font-bold text-sm">New QR Order #{String(qrAlert.order_number).padStart(3, '0')}</p>
+              <p className="text-xs opacity-90">
+                {qrAlert.table_name} &middot; {qrAlert.items_count} item{qrAlert.items_count > 1 ? 's' : ''} 
+                {qrAlert.guest_name ? ` &middot; ${qrAlert.guest_name}` : ''}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => { setQrAlert(null); setFlashActive(false); }}
+            className="bg-white/20 hover:bg-white/30 rounded-full px-3 py-1 text-xs font-bold"
+            data-testid="dismiss-qr-alert"
+          >
+            Got it
+          </button>
+        </div>
+      )}
       {/* Main Product Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Bar */}
@@ -618,6 +841,30 @@ const POSScreen = () => {
             <div className="min-w-0">
               <h1 className="text-lg md:text-3xl font-bold tracking-tight truncate">HevaPOS</h1>
               <p className="text-xs md:text-base text-muted-foreground truncate">Welcome, {user?.username}</p>
+            </div>
+            {/* Printer Status Indicator */}
+            <div
+              data-testid="printer-status-indicator"
+              className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${
+                printerStatus === 'online' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                printerStatus === 'offline' ? 'bg-red-50 text-red-700 border-red-200' :
+                printerStatus === 'none' ? 'bg-slate-50 text-slate-500 border-slate-200' :
+                'bg-amber-50 text-amber-700 border-amber-200'
+              }`}
+              title={defaultPrinterName ? `${defaultPrinterName}` : 'No printer configured'}
+            >
+              <Printer className="w-3 h-3" />
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                printerStatus === 'online' ? 'bg-emerald-500' :
+                printerStatus === 'offline' ? 'bg-red-500' :
+                printerStatus === 'none' ? 'bg-slate-400' :
+                'bg-amber-500'
+              }`} />
+              <span className="hidden md:inline">
+                {printerStatus === 'online' ? defaultPrinterName || 'Ready' :
+                 printerStatus === 'offline' ? 'Offline' :
+                 printerStatus === 'none' ? 'No Printer' : 'Checking...'}
+              </span>
             </div>
           </div>
           <div className="flex gap-1.5 md:gap-2 shrink-0">
@@ -769,7 +1016,7 @@ const POSScreen = () => {
                           size="sm"
                           className="h-10 bg-red-500 hover:bg-red-600 text-white"
                           data-testid={`cancel-order-${order.id}`}
-                          onClick={() => cancelPendingOrder(order.id)}
+                          onClick={() => cancelPendingOrder(order.id, order.order_number)}
                         >
                           <X className="w-4 h-4 mr-1" />
                           Cancel
@@ -1466,6 +1713,15 @@ const POSScreen = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Void Reason Modal */}
+      <VoidReasonModal
+        open={voidModal.open}
+        onClose={() => setVoidModal({ open: false, orderId: null, orderNumber: null })}
+        onConfirm={handleVoidConfirm}
+        userRole={user?.role}
+        orderNumber={voidModal.orderNumber}
+      />
     </div>
   );
 };
