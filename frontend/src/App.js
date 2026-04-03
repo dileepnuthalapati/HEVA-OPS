@@ -30,6 +30,7 @@ import PrinterSettings from './pages/PrinterSettings';
 // Pages - All Users
 import Login from './pages/Login';
 import POSScreen from './pages/POSScreen';
+import KitchenDisplay from './pages/KitchenDisplay';
 
 // Pages - Public (No Auth)
 import GuestMenu from './pages/GuestMenu';
@@ -125,6 +126,7 @@ const AppRoutes = () => {
       
       {/* POS Staff & Restaurant Admin */}
       <Route path="/pos" element={<ProtectedRoute><POSScreen /></ProtectedRoute>} />
+      <Route path="/kds" element={<ProtectedRoute><KitchenDisplay /></ProtectedRoute>} />
       <Route path="/orders" element={<ProtectedRoute><OrderHistory /></ProtectedRoute>} />
     </Routes>
   );

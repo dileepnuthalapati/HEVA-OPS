@@ -48,6 +48,22 @@ async def create_order(order_data: OrderCreate, current_user: User = Depends(get
         )
 
     await db.orders.insert_one(order_dict)
+    
+    # Emit WebSocket event so KDS picks up the new order instantly
+    try:
+        from socket_manager import emit_order_update
+        restaurant = await db.restaurants.find_one({"restaurant_id": {"$exists": True}}, {"_id": 0})
+        # Get restaurant_id from the user's context
+        if current_user.restaurant_id:
+            await emit_order_update(current_user.restaurant_id, {
+                "order_id": order_id,
+                "order_number": order_number,
+                "event": "new_pos_order",
+                "kds_status": "new",
+            })
+    except Exception:
+        pass
+
     return Order(**order_dict)
 
 
