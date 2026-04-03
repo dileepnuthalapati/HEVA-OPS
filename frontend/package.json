@@ -6,7 +6,7 @@
     "@capacitor-community/bluetooth-le": "^8.1.3",
     "@capacitor/android": "6.1.2",
     "@capacitor/cli": "6.1.2",
-    "@capacitor/core": "6.1.2",
+    "@capacitor/core": "^8.3.0",
     "@capacitor/ios": "6.1.2",
     "@capgo/capacitor-wifi": "^8.1.9",
     "@hookform/resolvers": "^5.0.1",
