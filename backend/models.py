@@ -124,6 +124,10 @@ class OrderComplete(BaseModel):
 
 class CancelOrderRequest(BaseModel):
     cancel_reason: str = ""
+    void_category: Optional[str] = None
+    void_note: Optional[str] = None
+    manager_pin: Optional[str] = None
+    manager_username: Optional[str] = None
 
 
 class CashDrawer(BaseModel):

@@ -197,8 +197,11 @@ export const orderAPI = {
     await saveToIndexedDB('orders', response.data);
     return response.data;
   },
-  cancel: async (orderId, reason) => {
-    const response = await api.put(`/orders/${orderId}/cancel`, { reason });
+  cancel: async (orderId, data) => {
+    const payload = typeof data === 'string'
+      ? { cancel_reason: data }
+      : data;
+    const response = await api.put(`/orders/${orderId}/cancel`, payload);
     return response.data;
   },
   printKitchenReceipt: async (orderId) => {

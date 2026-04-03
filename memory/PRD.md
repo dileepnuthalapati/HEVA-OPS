@@ -12,24 +12,30 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 │   ├── database.py, indexes.py, rate_limiter.py, dependencies.py, models.py
 │   └── routers/
 │       ├── auth.py, platform.py, restaurants.py, menu.py
-│       ├── orders.py (emits WebSocket on create)
+│       ├── orders.py (void modal + manager PIN + WebSocket emit on cancel)
 │       ├── reports.py (hourly_revenue, QR/POS, tables)
 │       ├── receipts.py, printers.py (/printer/check), cash_drawer.py
 │       ├── tables.py (qr_hash), reservations.py
 │       ├── subscriptions.py, notifications.py, staff.py, health.py, email.py
 │       ├── qr_menu.py (rate limited, kill switch)
-│       └── kds.py (acknowledge, preparing, ready, recall, stats)
+│       ├── kds.py (acknowledge, preparing, ready, recall, stats)
+│       └── audit.py (immutable logs with void_category, void_note, manager_approved_by)
 └── frontend/
     ├── src/
+    │   ├── components/
+    │   │   ├── VoidReasonModal.js  # Reusable: quick-tap reasons + Manager PIN gate
+    │   │   └── Sidebar.js
     │   ├── pages/
     │   │   ├── AdminDashboard.js     # Revenue Analytics + QR Kill Switch
-    │   │   ├── POSScreen.js          # POS + WebSocket + Printer Status + Offline
+    │   │   ├── POSScreen.js          # POS + VoidReasonModal integration
     │   │   ├── KitchenDisplay.js     # KDS — Digital ticket board
     │   │   ├── GuestMenu.js          # QR Guest Menu (public)
     │   │   ├── TableManagement.js    # + QR Code Generator
+    │   │   ├── AuditLog.js           # Enriched with void_category badges + manager override
+    │   │   ├── OrderHistory.js       # VoidReasonModal integration
     │   ├── services/
-    │   │   ├── api.js, printer.js (chunked), receiptGenerator.js, socket.js, db.js
-    │   └── components/ (Sidebar with KDS link)
+    │   │   ├── api.js (fixed cancel payload), printer.js, receiptGenerator.js, socket.js, db.js
+    │   └── context/AuthContext.js
     └── package.json
 ```
 
@@ -37,20 +43,25 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 
 ### Core POS
 - Full POS (menu, orders, tables, reports, staff, subscriptions, email)
-- Dynamic currency, 19 backend routers
+- Dynamic currency, 19+ backend routers
 - Universal printer support (WiFi TCP + BT Classic + BLE)
 - Frontend ESC/POS Receipt Generation (offline, chunked for large orders)
 
-### Kitchen Display System (KDS) — NEW
+### Audit/Void System (SaaS-Ready) — NEW (Apr 2026)
+- VoidReasonModal with 5 quick-tap reasons: Mispunch, Customer Change, Kitchen Error, Testing, Out of Stock
+- Optional 100-character free-text note
+- Manager PIN authorization required for Staff role (validates against admin password)
+- Backend stores: void_category, void_note, cancelled_by, manager_approved_by
+- Immutable audit logs with enriched details
+- Audit Log page shows void category badges, manager override info, and item details
+- WebSocket emit on cancel so KDS removes voided tickets
+- Fixed api.js bug: cancel reason was silently lost (sent `reason` instead of `cancel_reason`)
+
+### Kitchen Display System (KDS)
 - Full-screen digital ticket board at /kds
 - Color-coded: NEW (red) → ACKNOWLEDGED (amber) → PREPARING (yellow) → READY (green)
-- Live wait timer (mm:ss) on each ticket, turns red + flame icon after 15 min
-- QR/POS source badge on each ticket
-- Bump workflow: Acknowledge → Start Cooking → Ready for Pickup → Recall
-- Sound toggle for new order beeps
-- Avg prep time stat (tracked from acknowledged_at to ready_at)
+- Live wait timer (mm:ss), bump workflow, sound toggle
 - WebSocket real-time updates + 2-min safety poll
-- Accessible by all roles (admin + staff)
 
 ### QR Table Ordering
 - Public URL: /menu/{restaurant_id}/{table_hash}
@@ -68,8 +79,8 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 - Printer Status Indicator, Receipt chunking, Reconnection storm jitter
 
 ## Upcoming (P1)
-- Audit/Void Logs (security — who deleted/voided, why)
-- Stripe Pay-at-Table ("pay after ordering" flow)
+- Stripe Pay-at-Table ("pay after ordering" flow via QR guest menu)
+- Print Void Receipt to Kitchen (optional paper trail)
 
 ## Future/Backlog (P2)
 - Weekly Email Digest with benchmarks

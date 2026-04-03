@@ -19,6 +19,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Sheet, SheetContent, SheetTitle } from '../components/ui/sheet';
 import { toast } from 'sonner';
 import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, CreditCard, Users, Percent, Tag, MessageSquare, Banknote, Search, PackagePlus, ArrowLeft } from 'lucide-react';
+import VoidReasonModal from '../components/VoidReasonModal';
 
 // Currency helper
 const getCurrencySymbol = (currency) => {
@@ -89,6 +90,9 @@ const POSScreen = () => {
   // Printer status indicator
   const [printerStatus, setPrinterStatus] = useState('unknown'); // 'online', 'offline', 'unknown', 'none'
   const [defaultPrinterName, setDefaultPrinterName] = useState(null);
+
+  // Void modal state
+  const [voidModal, setVoidModal] = useState({ open: false, orderId: null, orderNumber: null });
 
   // Play loud BEEP sound for QR order alerts
   const playBeep = useCallback(() => {
@@ -464,18 +468,16 @@ const POSScreen = () => {
     // Editing banner shows - no toast needed
   };
   
-  // Cancel a pending order
-  const cancelPendingOrder = async (orderId) => {
-    if (!confirm('Are you sure you want to cancel this order?')) return;
-    
-    try {
-      await orderAPI.cancel(orderId, 'Cancelled by staff');
-      toast.success('Order cancelled');
-      loadPendingOrders();
-      loadCompletedOrders();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to cancel order');
-    }
+  // Cancel a pending order — opens VoidReasonModal
+  const cancelPendingOrder = (orderId, orderNumber) => {
+    setVoidModal({ open: true, orderId, orderNumber });
+  };
+
+  const handleVoidConfirm = async (payload) => {
+    await orderAPI.cancel(voidModal.orderId, payload);
+    toast.success('Order voided');
+    loadPendingOrders();
+    loadCompletedOrders();
   };
 
   // Update an existing order
@@ -1014,7 +1016,7 @@ const POSScreen = () => {
                           size="sm"
                           className="h-10 bg-red-500 hover:bg-red-600 text-white"
                           data-testid={`cancel-order-${order.id}`}
-                          onClick={() => cancelPendingOrder(order.id)}
+                          onClick={() => cancelPendingOrder(order.id, order.order_number)}
                         >
                           <X className="w-4 h-4 mr-1" />
                           Cancel
@@ -1711,6 +1713,15 @@ const POSScreen = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Void Reason Modal */}
+      <VoidReasonModal
+        open={voidModal.open}
+        onClose={() => setVoidModal({ open: false, orderId: null, orderNumber: null })}
+        onConfirm={handleVoidConfirm}
+        userRole={user?.role}
+        orderNumber={voidModal.orderNumber}
+      />
     </div>
   );
 };

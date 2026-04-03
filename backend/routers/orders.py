@@ -189,10 +189,40 @@ async def cancel_order(order_id: str, cancel_data: CancelOrderRequest, current_u
     if order["status"] != "pending":
         raise HTTPException(status_code=400, detail="Can only cancel pending orders")
 
-    reason = cancel_data.cancel_reason or "Cancelled by staff"
+    # --- Manager PIN verification for staff role ---
+    manager_approved_by = None
+    if current_user.role == "user":
+        if not cancel_data.manager_pin:
+            raise HTTPException(status_code=403, detail="Staff must provide a manager PIN to void orders")
+        from dependencies import verify_password
+        restaurant_id = current_user.restaurant_id or order.get("restaurant_id")
+        admin_users = await db.users.find(
+            {"restaurant_id": restaurant_id, "role": "admin"}, {"_id": 0}
+        ).to_list(50)
+        pin_valid = False
+        for admin in admin_users:
+            stored_pw = admin.get("password_hash") or admin.get("password")
+            if stored_pw and verify_password(cancel_data.manager_pin, stored_pw):
+                pin_valid = True
+                manager_approved_by = admin.get("username")
+                break
+        if not pin_valid:
+            raise HTTPException(status_code=401, detail="Invalid manager PIN")
+
+    # Build structured reason
+    void_category = cancel_data.void_category or "Other"
+    void_note = (cancel_data.void_note or "")[:100]
+    reason = cancel_data.cancel_reason or void_category
+    if void_note:
+        reason = f"{void_category}: {void_note}"
+
     await db.orders.update_one({"id": order_id}, {"$set": {
         "status": "cancelled",
         "cancel_reason": reason,
+        "void_category": void_category,
+        "void_note": void_note,
+        "cancelled_by": current_user.username,
+        "manager_approved_by": manager_approved_by,
         "cancelled_at": datetime.now(timezone.utc).isoformat()
     }})
 
@@ -202,7 +232,7 @@ async def cancel_order(order_id: str, cancel_data: CancelOrderRequest, current_u
             {"$set": {"current_order_id": None, "status": "available"}}
         )
 
-    # Audit: order cancelled — CRITICAL security event
+    # Audit: order cancelled — CRITICAL security event (immutable)
     try:
         from routers.audit import log_audit
         await log_audit(
@@ -212,7 +242,10 @@ async def cancel_order(order_id: str, cancel_data: CancelOrderRequest, current_u
             order_id=order_id,
             order_number=order.get("order_number"),
             details={
+                "void_category": void_category,
+                "void_note": void_note,
                 "reason": reason,
+                "manager_approved_by": manager_approved_by,
                 "original_total": order.get("total_amount", 0),
                 "items_count": len(order.get("items", [])),
                 "items": [{"name": i.get("product_name"), "qty": i.get("quantity"), "total": i.get("total")} for i in order.get("items", [])[:10]],
@@ -221,7 +254,21 @@ async def cancel_order(order_id: str, cancel_data: CancelOrderRequest, current_u
     except Exception:
         pass
 
-    return {"message": "Order cancelled", "cancel_reason": reason}
+    # Emit WebSocket so KDS removes the voided ticket
+    try:
+        from socket_manager import emit_order_update
+        rid = current_user.restaurant_id or order.get("restaurant_id")
+        if rid:
+            await emit_order_update(rid, {
+                "order_id": order_id,
+                "order_number": order.get("order_number"),
+                "event": "order_cancelled",
+                "kds_status": "cancelled",
+            })
+    except Exception:
+        pass
+
+    return {"message": "Order cancelled", "cancel_reason": reason, "void_category": void_category}
 
 
 @router.get("/orders/pending", response_model=List[Order])

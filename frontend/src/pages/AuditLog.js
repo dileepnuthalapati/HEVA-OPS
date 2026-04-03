@@ -221,8 +221,17 @@ export default function AuditLog() {
                       {/* Details */}
                       {log.details && Object.keys(log.details).length > 0 && (
                         <div className="mt-2 text-xs text-muted-foreground">
-                          {log.details.reason && (
+                          {log.details.void_category && (
+                            <p className="text-red-700 font-semibold">
+                              <span className="inline-block bg-red-100 text-red-700 px-1.5 py-0.5 rounded text-[10px] uppercase font-bold mr-1">{log.details.void_category.replace(/_/g, ' ')}</span>
+                              {log.details.void_note && <span className="font-normal text-red-600">{log.details.void_note}</span>}
+                            </p>
+                          )}
+                          {!log.details.void_category && log.details.reason && (
                             <p className="text-red-600 font-semibold">Reason: {log.details.reason}</p>
+                          )}
+                          {log.details.manager_approved_by && (
+                            <p className="text-amber-700 font-semibold mt-0.5">Manager override: {log.details.manager_approved_by}</p>
                           )}
                           {log.details.original_total !== undefined && (
                             <p>Original total: <strong>{log.details.original_total?.toFixed?.(2) || log.details.original_total}</strong></p>
