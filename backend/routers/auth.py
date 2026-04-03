@@ -1,13 +1,15 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from database import db
 from dependencies import verify_password, get_password_hash, create_access_token, get_current_user
 from models import User, UserCreate, UserLogin, Token, PasswordChange
+from rate_limiter import limiter
 
 router = APIRouter()
 
 
 @router.post("/auth/register", response_model=User)
-async def register(user_data: UserCreate):
+@limiter.limit("5/minute")
+async def register(request: Request, user_data: UserCreate):
     existing = await db.users.find_one({"username": user_data.username})
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
@@ -27,7 +29,8 @@ async def register(user_data: UserCreate):
 
 
 @router.post("/auth/login", response_model=Token)
-async def login(credentials: UserLogin):
+@limiter.limit("10/minute")
+async def login(request: Request, credentials: UserLogin):
     user = await db.users.find_one({"username": credentials.username})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")

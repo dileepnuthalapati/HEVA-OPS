@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useLocation } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import Sidebar from '../components/Sidebar';
 import { tableAPI, reservationAPI, orderAPI } from '../services/api';
+import api from '../services/api';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
@@ -11,8 +13,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { 
   Plus, Users, Clock, Merge, Split, Trash2, 
-  CalendarClock, Phone, User, CheckCircle, XCircle
+  CalendarClock, Phone, User, CheckCircle, XCircle,
+  QrCode, Download, Printer as PrinterIcon, RefreshCw
 } from 'lucide-react';
+
+const API_URL = process.env.REACT_APP_BACKEND_URL;
 
 const TableManagement = () => {
   const [tables, setTables] = useState([]);
@@ -24,6 +29,10 @@ const TableManagement = () => {
   const [selectedTable, setSelectedTable] = useState(null);
   const [selectedTables, setSelectedTables] = useState([]);
   const [mergeMode, setMergeMode] = useState(false);
+  const [showQRDialog, setShowQRDialog] = useState(false);
+  const [qrTables, setQrTables] = useState([]);
+  const [loadingQR, setLoadingQR] = useState(false);
+  const qrRef = useRef(null);
   
   const [newTable, setNewTable] = useState({ number: '', capacity: 4 });
   const [newReservation, setNewReservation] = useState({
@@ -161,6 +170,74 @@ const TableManagement = () => {
     }
   };
 
+  // QR Code functions
+  const loadQRHashes = async () => {
+    setLoadingQR(true);
+    try {
+      const res = await api.get('/qr/tables/hashes');
+      setQrTables(res.data);
+    } catch (error) {
+      toast.error('Failed to load QR hashes');
+    } finally {
+      setLoadingQR(false);
+    }
+  };
+
+  const generateAllHashes = async () => {
+    try {
+      const res = await api.post('/qr/tables/generate-all-hashes');
+      toast.success(res.data.message);
+      loadQRHashes();
+    } catch (error) {
+      toast.error('Failed to generate QR hashes');
+    }
+  };
+
+  const regenerateHash = async (tableId) => {
+    try {
+      await api.post(`/qr/tables/${tableId}/generate-hash`);
+      toast.success('QR code regenerated');
+      loadQRHashes();
+    } catch (error) {
+      toast.error('Failed to regenerate QR hash');
+    }
+  };
+
+  const getQRUrl = (table) => {
+    const rest = tables[0]?.restaurant_id || 'unknown';
+    return `${API_URL}/menu/${rest}/${table.qr_hash}`;
+  };
+
+  const downloadQR = (table) => {
+    const svgEl = document.querySelector(`#qr-svg-${table.id} svg`);
+    if (!svgEl) return;
+    const svgData = new XMLSerializer().serializeToString(svgEl);
+    const canvas = document.createElement('canvas');
+    canvas.width = 512;
+    canvas.height = 580;
+    const ctx = canvas.getContext('2d');
+    const img = new Image();
+    img.onload = () => {
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 6, 6, 500, 500);
+      ctx.fillStyle = '#000000';
+      ctx.font = 'bold 28px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(`${table.name} — Scan to Order`, canvas.width / 2, 545);
+      const a = document.createElement('a');
+      a.download = `QR-${table.name.replace(/\s+/g, '_')}.png`;
+      a.href = canvas.toDataURL('image/png');
+      a.click();
+    };
+    img.src = 'data:image/svg+xml;base64,' + btoa(unescape(encodeURIComponent(svgData)));
+  };
+
+  const openQRDialog = () => {
+    loadQRHashes();
+    setShowQRDialog(true);
+  };
+
   const toggleTableSelection = (tableId) => {
     if (selectedTables.includes(tableId)) {
       setSelectedTables(selectedTables.filter(id => id !== tableId));
@@ -181,7 +258,7 @@ const TableManagement = () => {
 
   const todayReservations = reservations.filter(r => {
     const today = new Date().toISOString().split('T')[0];
-    return r.reservation_time.startsWith(today) && ['confirmed', 'seated'].includes(r.status);
+    return r.reservation_time?.startsWith(today) && ['confirmed', 'seated'].includes(r.status);
   });
 
   if (loading) {
@@ -219,6 +296,10 @@ const TableManagement = () => {
                 </>
               ) : (
                 <>
+                  <Button variant="outline" onClick={openQRDialog} data-testid="qr-codes-button">
+                    <QrCode className="w-4 h-4 mr-2" />
+                    QR Codes
+                  </Button>
                   <Button variant="outline" onClick={() => setMergeMode(true)}>
                     <Merge className="w-4 h-4 mr-2" />
                     Merge Tables
@@ -536,6 +617,79 @@ const TableManagement = () => {
               </div>
             )}
           </div>
+          {/* QR Code Generator Dialog */}
+          <Dialog open={showQRDialog} onOpenChange={setShowQRDialog}>
+            <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <QrCode className="w-5 h-5" />
+                  Table QR Codes
+                </DialogTitle>
+                <DialogDescription>
+                  Guests scan these QR codes to order directly from their phones
+                </DialogDescription>
+              </DialogHeader>
+              <div className="mt-4">
+                <div className="flex justify-end mb-4">
+                  <Button onClick={generateAllHashes} disabled={loadingQR} data-testid="generate-all-qr-button">
+                    <RefreshCw className={`w-4 h-4 mr-2 ${loadingQR ? 'animate-spin' : ''}`} />
+                    Generate Missing QR Codes
+                  </Button>
+                </div>
+                {loadingQR ? (
+                  <div className="text-center py-8 text-muted-foreground">Loading...</div>
+                ) : qrTables.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No tables found. Create tables first, then generate QR codes.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {qrTables.map((table) => (
+                      <Card key={table.id} className="overflow-hidden" data-testid={`qr-card-${table.id}`}>
+                        <CardContent className="p-4 text-center">
+                          <h3 className="font-bold text-lg mb-2">{table.name}</h3>
+                          {table.qr_hash ? (
+                            <>
+                              <div id={`qr-svg-${table.id}`} className="flex justify-center mb-3">
+                                <QRCodeSVG
+                                  value={getQRUrl(table)}
+                                  size={160}
+                                  level="H"
+                                  includeMargin
+                                  bgColor="#ffffff"
+                                  fgColor="#1c1917"
+                                />
+                              </div>
+                              <p className="text-xs text-muted-foreground mb-3 break-all font-mono">
+                                {getQRUrl(table)}
+                              </p>
+                              <div className="flex gap-2 justify-center">
+                                <Button size="sm" variant="outline" onClick={() => downloadQR(table)} data-testid={`download-qr-${table.id}`}>
+                                  <Download className="w-3 h-3 mr-1" />
+                                  Download
+                                </Button>
+                                <Button size="sm" variant="outline" onClick={() => regenerateHash(table.id)}>
+                                  <RefreshCw className="w-3 h-3 mr-1" />
+                                  Regen
+                                </Button>
+                              </div>
+                            </>
+                          ) : (
+                            <div className="py-6 text-muted-foreground text-sm">
+                              <p>No QR code yet</p>
+                              <Button size="sm" className="mt-2" onClick={() => regenerateHash(table.id)}>
+                                Generate
+                              </Button>
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     </div>

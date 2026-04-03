@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '../context/AuthContext';
 import { categoryAPI, productAPI, orderAPI, tableAPI, printerAPI, restaurantAPI, getAuthToken } from '../services/api';
 import printerService from '../services/printer';
 import { generateKitchenReceipt, generateCustomerReceipt } from '../services/receiptGenerator';
 import { connectSocket, disconnectSocket, startSafetyPoll, stopSafetyPoll } from '../services/socket';
+import { saveToIndexedDB, getUnsyncedOrders } from '../services/db';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { ScrollArea } from '../components/ui/scroll-area';
@@ -79,10 +81,14 @@ const POSScreen = () => {
   const [isPrinting, setIsPrinting] = useState(false); // Prevent duplicate prints
 
   // WebSocket / QR Alert states
-  const [qrAlert, setQrAlert] = useState(null); // {order_number, table_name, ...}
+  const [qrAlert, setQrAlert] = useState(null);
   const [flashActive, setFlashActive] = useState(false);
   const [restaurantInfo, setRestaurantInfo] = useState(null);
   const audioCtxRef = useRef(null);
+
+  // Printer status indicator
+  const [printerStatus, setPrinterStatus] = useState('unknown'); // 'online', 'offline', 'unknown', 'none'
+  const [defaultPrinterName, setDefaultPrinterName] = useState(null);
 
   // Play loud BEEP sound for QR order alerts
   const playBeep = useCallback(() => {
@@ -113,13 +119,65 @@ const POSScreen = () => {
     setQrAlert(data);
     setFlashActive(true);
     playBeep();
-    // Auto-dismiss flash after 5s
     setTimeout(() => setFlashActive(false), 5000);
-    // Auto-dismiss alert after 15s
     setTimeout(() => setQrAlert(null), 15000);
-    // Refresh pending orders
     loadPendingOrders();
   }, [playBeep]);
+
+  // Check printer reachability
+  const checkPrinterStatus = useCallback(async () => {
+    try {
+      const printer = await printerAPI.getDefault();
+      if (!printer) {
+        setPrinterStatus('none');
+        setDefaultPrinterName(null);
+        return;
+      }
+      setDefaultPrinterName(printer.name);
+      if (printer.type === 'wifi') {
+        // For WiFi printers, attempt a quick TCP connection check via the backend
+        try {
+          const parts = printer.address.split(':');
+          const ip = parts[0];
+          const port = parseInt(parts[1]) || 9100;
+          const apiUrl = process.env.REACT_APP_BACKEND_URL;
+          const token = getAuthToken();
+          const res = await fetch(`${apiUrl}/api/printer/check`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+            body: JSON.stringify({ ip, port }),
+            signal: AbortSignal.timeout(5000),
+          });
+          setPrinterStatus(res.ok ? 'online' : 'offline');
+        } catch {
+          setPrinterStatus('offline');
+        }
+      } else {
+        // BT printers — mark as configured (can't ping them from web)
+        setPrinterStatus('online');
+      }
+    } catch {
+      setPrinterStatus('unknown');
+    }
+  }, []);
+
+  // Sync offline orders to the backend
+  const syncOfflineOrders = useCallback(async () => {
+    try {
+      const unsynced = await getUnsyncedOrders();
+      if (unsynced.length === 0) return;
+      console.log(`[POS] Syncing ${unsynced.length} offline orders...`);
+      await orderAPI.sync(unsynced);
+      // Mark as synced in IndexedDB
+      for (const order of unsynced) {
+        await saveToIndexedDB('orders', { ...order, synced: true });
+      }
+      toast.success(`Synced ${unsynced.length} offline order${unsynced.length > 1 ? 's' : ''}`);
+      loadPendingOrders();
+    } catch (err) {
+      console.warn('[POS] Offline sync failed:', err.message);
+    }
+  }, []);
 
   // Helper: Send ESC/POS commands to the default printer (with duplicate prevention)
   const sendToPrinter = async (escposCommands, label = 'receipt') => {
@@ -183,6 +241,11 @@ const POSScreen = () => {
     loadPendingOrders();
     loadRestaurantCurrency();
     loadTables();
+    checkPrinterStatus();
+    syncOfflineOrders();
+    // Re-check printer status every 60 seconds
+    const printerCheckInterval = setInterval(checkPrinterStatus, 60000);
+    return () => clearInterval(printerCheckInterval);
   }, []);
 
   // WebSocket connection for real-time QR order alerts
@@ -469,12 +532,10 @@ const POSScreen = () => {
   };
 
   const placeOrder = async () => {
-    if (cart.length === 0) {
-      // Cart is empty - button should be disabled anyway
-      return;
-    }
+    if (cart.length === 0) return;
 
     const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
+    const localId = uuidv4(); // Local UUID — no backend dependency
 
     try {
       const order = await orderAPI.create({
@@ -502,7 +563,6 @@ const POSScreen = () => {
         console.log('Kitchen receipt printing skipped:', printError.message);
       }
       
-      // Update table status if assigned
       if (selectedTable) {
         try {
           await tableAPI.assignOrder(selectedTable, order.id);
@@ -512,10 +572,7 @@ const POSScreen = () => {
         }
       }
       
-      // Order placed - cart clears as visual feedback
       setLastOrderNumber(order.order_number);
-      
-      // Clear cart and all related states
       setCart([]);
       setSelectedTable(null);
       setOrderNotes('');
@@ -525,11 +582,47 @@ const POSScreen = () => {
       setShowDiscountPanel(false);
       setShowNotesPanel(false);
       loadPendingOrders();
-      
-      // Clear order number after 5 seconds
       setTimeout(() => setLastOrderNumber(null), 5000);
     } catch (error) {
-      console.error('Failed to place order:', error);
+      // OFFLINE FALLBACK: Save order locally with UUID
+      console.warn('[POS] Backend unreachable, saving order offline:', error.message);
+      const offlineOrder = {
+        id: localId,
+        order_number: `OFF-${Date.now() % 10000}`,
+        items: cart,
+        subtotal,
+        total_amount: subtotal,
+        table_id: selectedTable || null,
+        status: 'pending',
+        created_by: user?.username || 'offline',
+        created_at: new Date().toISOString(),
+        synced: false,
+      };
+      try {
+        await saveToIndexedDB('orders', offlineOrder);
+        toast.info('Saved offline — will sync when connected');
+        // Still print locally
+        try {
+          let tableInfo = null;
+          if (selectedTable) {
+            const table = tables.find(t => t.id === selectedTable);
+            if (table) tableInfo = { number: table.number, name: table.name || `Table ${table.number}` };
+          }
+          const businessInfo = restaurantInfo?.business_info || {};
+          const commands = generateKitchenReceipt(offlineOrder, businessInfo, tableInfo);
+          await sendToPrinter(commands, 'kitchen-offline');
+        } catch {}
+        setLastOrderNumber(offlineOrder.order_number);
+        setCart([]);
+        setSelectedTable(null);
+        setOrderNotes('');
+        setDiscountType('');
+        setDiscountValue('');
+        setDiscountReason('');
+        setTimeout(() => setLastOrderNumber(null), 5000);
+      } catch (dbErr) {
+        toast.error('Failed to save order');
+      }
     }
   };
 
@@ -744,6 +837,30 @@ const POSScreen = () => {
             <div className="min-w-0">
               <h1 className="text-lg md:text-3xl font-bold tracking-tight truncate">HevaPOS</h1>
               <p className="text-xs md:text-base text-muted-foreground truncate">Welcome, {user?.username}</p>
+            </div>
+            {/* Printer Status Indicator */}
+            <div
+              data-testid="printer-status-indicator"
+              className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${
+                printerStatus === 'online' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+                printerStatus === 'offline' ? 'bg-red-50 text-red-700 border-red-200' :
+                printerStatus === 'none' ? 'bg-slate-50 text-slate-500 border-slate-200' :
+                'bg-amber-50 text-amber-700 border-amber-200'
+              }`}
+              title={defaultPrinterName ? `${defaultPrinterName}` : 'No printer configured'}
+            >
+              <Printer className="w-3 h-3" />
+              <span className={`w-1.5 h-1.5 rounded-full ${
+                printerStatus === 'online' ? 'bg-emerald-500' :
+                printerStatus === 'offline' ? 'bg-red-500' :
+                printerStatus === 'none' ? 'bg-slate-400' :
+                'bg-amber-500'
+              }`} />
+              <span className="hidden md:inline">
+                {printerStatus === 'online' ? defaultPrinterName || 'Ready' :
+                 printerStatus === 'offline' ? 'Offline' :
+                 printerStatus === 'none' ? 'No Printer' : 'Checking...'}
+              </span>
             </div>
           </div>
           <div className="flex gap-1.5 md:gap-2 shrink-0">

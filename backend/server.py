@@ -1,8 +1,10 @@
-from fastapi import FastAPI, APIRouter
+from fastapi import FastAPI, APIRouter, Request
+from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from pathlib import Path
 import socketio
+import sentry_sdk
 import os
 import logging
 
@@ -10,14 +12,31 @@ import logging
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
 
+# Sentry error monitoring (optional — set SENTRY_DSN in .env to enable)
+sentry_dsn = os.environ.get('SENTRY_DSN')
+if sentry_dsn:
+    sentry_sdk.init(
+        dsn=sentry_dsn,
+        traces_sample_rate=0.2,
+        profiles_sample_rate=0.1,
+        environment=os.environ.get('ENVIRONMENT', 'production'),
+    )
+
 # Import database to ensure connection is established
 from database import client
 
 # Import Socket.IO server
 from socket_manager import sio
 
+# Rate limiter
+from rate_limiter import limiter
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+
 # Create FastAPI app
 fastapi_app = FastAPI(title="HevaPOS API")
+fastapi_app.state.limiter = limiter
+fastapi_app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Create the main API router with /api prefix
 api_router = APIRouter(prefix="/api")
@@ -69,6 +88,12 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
+
+
+@fastapi_app.on_event("startup")
+async def startup_event():
+    from indexes import ensure_indexes
+    await ensure_indexes()
 
 
 @fastapi_app.on_event("shutdown")

@@ -8,13 +8,14 @@ Endpoints:
   GET  /qr/{restaurant_id}/{table_hash}         → Menu + table info for guests (PUBLIC)
   POST /qr/{restaurant_id}/{table_hash}/order   → Place a guest order (PUBLIC)
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from database import db
 from dependencies import get_current_user, require_admin
 from models import User
 from datetime import datetime, timezone
 from pydantic import BaseModel
 from typing import List, Optional
+from rate_limiter import limiter
 import secrets
 
 router = APIRouter(prefix="/qr", tags=["QR Menu"])
@@ -92,7 +93,8 @@ async def generate_all_hashes(current_user: User = Depends(require_admin)):
 # --- Public Endpoints (No Auth) — Wildcard routes MUST be last ---
 
 @router.get("/{restaurant_id}/{table_hash}")
-async def get_guest_menu(restaurant_id: str, table_hash: str):
+@limiter.limit("30/minute")
+async def get_guest_menu(request: Request, restaurant_id: str, table_hash: str):
     """Public: Get restaurant menu and table info for QR ordering."""
     restaurant = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0})
     if not restaurant:
@@ -150,7 +152,8 @@ async def get_guest_menu(restaurant_id: str, table_hash: str):
 
 
 @router.post("/{restaurant_id}/{table_hash}/order")
-async def place_guest_order(restaurant_id: str, table_hash: str, order_data: GuestOrderCreate):
+@limiter.limit("10/minute")
+async def place_guest_order(request: Request, restaurant_id: str, table_hash: str, order_data: GuestOrderCreate):
     """Public: Place a QR guest order (no auth required)."""
     restaurant = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0})
     if not restaurant:
