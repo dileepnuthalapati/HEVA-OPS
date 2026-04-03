@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { categoryAPI, productAPI, orderAPI, tableAPI, printerAPI, restaurantAPI, getAuthToken } from '../services/api';
 import printerService from '../services/printer';
+import { generateKitchenReceipt, generateCustomerReceipt } from '../services/receiptGenerator';
+import { connectSocket, disconnectSocket, startSafetyPoll, stopSafetyPoll } from '../services/socket';
 import { Button } from '../components/ui/button';
 import { Card, CardContent } from '../components/ui/card';
 import { ScrollArea } from '../components/ui/scroll-area';
@@ -76,6 +78,49 @@ const POSScreen = () => {
   const [completedOrders, setCompletedOrders] = useState([]);
   const [isPrinting, setIsPrinting] = useState(false); // Prevent duplicate prints
 
+  // WebSocket / QR Alert states
+  const [qrAlert, setQrAlert] = useState(null); // {order_number, table_name, ...}
+  const [flashActive, setFlashActive] = useState(false);
+  const [restaurantInfo, setRestaurantInfo] = useState(null);
+  const audioCtxRef = useRef(null);
+
+  // Play loud BEEP sound for QR order alerts
+  const playBeep = useCallback(() => {
+    try {
+      const ctx = new (window.AudioContext || window.webkitAudioContext)();
+      // Play 3 quick beeps
+      [0, 0.3, 0.6].forEach((delay) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.type = 'square';
+        osc.frequency.setValueAtTime(880, ctx.currentTime + delay);
+        gain.gain.setValueAtTime(0.8, ctx.currentTime + delay);
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + delay + 0.2);
+        osc.start(ctx.currentTime + delay);
+        osc.stop(ctx.currentTime + delay + 0.25);
+      });
+      setTimeout(() => ctx.close(), 2000);
+    } catch (e) {
+      console.warn('[POS] Audio beep failed:', e);
+    }
+  }, []);
+
+  // Handle incoming QR order alert
+  const handleQROrder = useCallback((data) => {
+    console.log('[POS] QR Order received!', data);
+    setQrAlert(data);
+    setFlashActive(true);
+    playBeep();
+    // Auto-dismiss flash after 5s
+    setTimeout(() => setFlashActive(false), 5000);
+    // Auto-dismiss alert after 15s
+    setTimeout(() => setQrAlert(null), 15000);
+    // Refresh pending orders
+    loadPendingOrders();
+  }, [playBeep]);
+
   // Helper: Send ESC/POS commands to the default printer (with duplicate prevention)
   const sendToPrinter = async (escposCommands, label = 'receipt') => {
     if (isPrinting) {
@@ -104,7 +149,7 @@ const POSScreen = () => {
     }
   };
 
-  // Helper: Print a specific order's kitchen receipt
+  // Helper: Print a specific order's kitchen receipt (LOCAL generation — no backend needed)
   const printOrderReceipt = async (orderId, orderNumber) => {
     if (isPrinting) {
       toast.warning('Already printing, please wait...');
@@ -112,13 +157,22 @@ const POSScreen = () => {
     }
     const toastId = toast.loading(`Printing order #${orderNumber}...`);
     try {
-      const printResult = await printerAPI.printKitchenReceipt(orderId);
-      if (printResult?.commands) {
-        await sendToPrinter(printResult.commands, 'kitchen-manual');
-        toast.success(`Order #${orderNumber} sent to printer`, { id: toastId });
-      } else {
-        toast.error('No print data generated', { id: toastId });
+      // Find the order from pending/completed orders
+      const order = pendingOrders.find(o => o.id === orderId) || completedOrders.find(o => o.id === orderId);
+      if (!order) {
+        toast.error('Order not found', { id: toastId });
+        return;
       }
+      // Get table info if assigned
+      let tableInfo = null;
+      if (order.table_id) {
+        const table = tables.find(t => t.id === order.table_id);
+        if (table) tableInfo = { number: table.number, name: table.name || `Table ${table.number}` };
+      }
+      const businessInfo = restaurantInfo?.business_info || {};
+      const commands = generateKitchenReceipt(order, businessInfo, tableInfo);
+      await sendToPrinter(commands, 'kitchen-manual');
+      toast.success(`Order #${orderNumber} sent to printer`, { id: toastId });
     } catch (err) {
       toast.error('Failed to print: ' + (err.message || ''), { id: toastId });
     }
@@ -131,12 +185,28 @@ const POSScreen = () => {
     loadTables();
   }, []);
 
+  // WebSocket connection for real-time QR order alerts
+  useEffect(() => {
+    if (!user?.restaurant_id) return;
+    const socket = connectSocket(user.restaurant_id, {
+      onNewQROrder: handleQROrder,
+      onConnect: () => console.log('[POS] Socket connected'),
+      onDisconnect: (reason) => console.log('[POS] Socket disconnected:', reason),
+    });
+    // Safety poll: fetch pending orders every 2 min as fallback
+    startSafetyPoll(loadPendingOrders);
+    return () => {
+      disconnectSocket();
+    };
+  }, [user?.restaurant_id, handleQROrder]);
+
   const loadRestaurantCurrency = async () => {
     try {
       const restaurant = await restaurantAPI.getMy();
       if (restaurant?.currency) {
         setCurrency(restaurant.currency);
       }
+      setRestaurantInfo(restaurant);
     } catch (error) {
       // Use default currency
     }
@@ -418,12 +488,16 @@ const POSScreen = () => {
         discount_reason: discountReason || null,
       });
       
-      // Try to print kitchen receipt (silently fail if no printer)
+      // Try to print kitchen receipt LOCALLY (no backend needed — works offline)
       try {
-        const printResult = await printerAPI.printKitchenReceipt(order.id);
-        if (printResult?.commands) {
-          await sendToPrinter(printResult.commands, 'kitchen-auto');
+        let tableInfo = null;
+        if (selectedTable) {
+          const table = tables.find(t => t.id === selectedTable);
+          if (table) tableInfo = { number: table.number, name: table.name || `Table ${table.number}` };
         }
+        const businessInfo = restaurantInfo?.business_info || {};
+        const commands = generateKitchenReceipt(order, businessInfo, tableInfo);
+        await sendToPrinter(commands, 'kitchen-auto');
       } catch (printError) {
         console.log('Kitchen receipt printing skipped:', printError.message);
       }
@@ -546,12 +620,21 @@ const POSScreen = () => {
         paymentDetails
       );
       
-      // Try to print customer receipt (silently fail if no printer)
+      // Try to print customer receipt LOCALLY (no backend needed — works offline)
       try {
-        const printResult = await printerAPI.printCustomerReceipt(selectedOrderToComplete.id);
-        if (printResult?.commands) {
-          await sendToPrinter(printResult.commands, 'customer-auto');
+        let tableInfo = null;
+        if (selectedOrderToComplete.table_id) {
+          const table = tables.find(t => t.id === selectedOrderToComplete.table_id);
+          if (table) tableInfo = { number: table.number, name: table.name || `Table ${table.number}` };
         }
+        const businessInfo = restaurantInfo?.business_info || {};
+        const commands = generateCustomerReceipt(
+          { ...selectedOrderToComplete, payment_method: paymentMethod, tip_amount: tipAmount, total_amount: grandTotal },
+          businessInfo,
+          tableInfo,
+          currency
+        );
+        await sendToPrinter(commands, 'customer-auto');
       } catch (printError) {
         console.log('Receipt printing skipped:', printError.message);
       }
@@ -597,7 +680,50 @@ const POSScreen = () => {
   }
 
   return (
-    <div className="flex h-screen pos-screen">
+    <div className="flex h-screen pos-screen relative">
+      {/* QR Order Flash Overlay */}
+      {flashActive && (
+        <div
+          className="fixed inset-0 z-[100] pointer-events-none"
+          style={{
+            animation: 'qr-flash 0.5s ease-in-out 3',
+            background: 'radial-gradient(circle, rgba(249,115,22,0.15) 0%, transparent 70%)',
+          }}
+          data-testid="qr-flash-overlay"
+        />
+      )}
+      <style>{`
+        @keyframes qr-flash {
+          0%, 100% { opacity: 0; }
+          50% { opacity: 1; }
+        }
+      `}</style>
+
+      {/* QR Order Alert Banner */}
+      {qrAlert && (
+        <div
+          className="fixed top-0 left-0 right-0 z-[90] bg-orange-500 text-white px-4 py-3 flex items-center justify-between shadow-lg animate-pulse"
+          data-testid="qr-order-alert"
+        >
+          <div className="flex items-center gap-3">
+            <span className="text-2xl">&#x1F4F1;</span>
+            <div>
+              <p className="font-bold text-sm">New QR Order #{String(qrAlert.order_number).padStart(3, '0')}</p>
+              <p className="text-xs opacity-90">
+                {qrAlert.table_name} &middot; {qrAlert.items_count} item{qrAlert.items_count > 1 ? 's' : ''} 
+                {qrAlert.guest_name ? ` &middot; ${qrAlert.guest_name}` : ''}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => { setQrAlert(null); setFlashActive(false); }}
+            className="bg-white/20 hover:bg-white/30 rounded-full px-3 py-1 text-xs font-bold"
+            data-testid="dismiss-qr-alert"
+          >
+            Got it
+          </button>
+        </div>
+      )}
       {/* Main Product Area */}
       <div className="flex-1 flex flex-col min-w-0">
         {/* Top Bar */}

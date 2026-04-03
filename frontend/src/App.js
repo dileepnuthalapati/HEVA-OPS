@@ -31,6 +31,9 @@ import PrinterSettings from './pages/PrinterSettings';
 import Login from './pages/Login';
 import POSScreen from './pages/POSScreen';
 
+// Pages - Public (No Auth)
+import GuestMenu from './pages/GuestMenu';
+
 // Styles
 import './App.css';
 import './index.css';
@@ -81,6 +84,9 @@ const AppRoutes = () => {
 
   return (
     <Routes>
+      {/* Public routes — no auth required */}
+      <Route path="/menu/:restaurantId/:tableHash" element={<GuestMenu />} />
+      
       <Route path="/login" element={<Login />} />
       <Route
         path="/"

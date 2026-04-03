@@ -253,6 +253,7 @@ class Table(BaseModel):
     restaurant_id: Optional[str] = None
     current_order_id: Optional[str] = None
     merged_with: Optional[List[str]] = None
+    qr_hash: Optional[str] = None
     created_at: Optional[str] = None
 
 

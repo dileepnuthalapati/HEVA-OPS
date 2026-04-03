@@ -2,6 +2,7 @@ from fastapi import FastAPI, APIRouter
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from pathlib import Path
+import socketio
 import os
 import logging
 
@@ -12,8 +13,11 @@ load_dotenv(ROOT_DIR / '.env')
 # Import database to ensure connection is established
 from database import client
 
+# Import Socket.IO server
+from socket_manager import sio
+
 # Create FastAPI app
-app = FastAPI(title="HevaPOS API")
+fastapi_app = FastAPI(title="HevaPOS API")
 
 # Create the main API router with /api prefix
 api_router = APIRouter(prefix="/api")
@@ -22,6 +26,7 @@ api_router = APIRouter(prefix="/api")
 from routers import auth, platform, restaurants, menu, orders, reports, receipts
 from routers import cash_drawer, printers, tables, reservations
 from routers import subscriptions, notifications, staff, health, email
+from routers import qr_menu
 
 # Include all routers into the api_router
 api_router.include_router(auth.router)
@@ -40,18 +45,23 @@ api_router.include_router(notifications.router)
 api_router.include_router(staff.router)
 api_router.include_router(health.router)
 api_router.include_router(email.router)
+api_router.include_router(qr_menu.router)
 
 # Include the main api_router in the app
-app.include_router(api_router)
+fastapi_app.include_router(api_router)
 
 # CORS middleware
-app.add_middleware(
+fastapi_app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
     allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Wrap FastAPI with Socket.IO ASGI app
+# This handles both HTTP (FastAPI) and WebSocket (Socket.IO) traffic
+app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)
 
 # Logging
 logging.basicConfig(
@@ -61,7 +71,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-@app.on_event("shutdown")
+@fastapi_app.on_event("shutdown")
 async def shutdown_db_client():
     client.close()
 
