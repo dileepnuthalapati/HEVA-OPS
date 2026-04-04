@@ -68,11 +68,11 @@ class ProductCreate(BaseModel):
 
 class OrderItem(BaseModel):
     model_config = ConfigDict(extra="ignore")
-    product_id: str
-    product_name: str
-    quantity: int
-    unit_price: float
-    total: float
+    product_id: str = ""
+    product_name: str = ""
+    quantity: int = 1
+    unit_price: float = 0.0
+    total: float = 0.0
     notes: Optional[str] = None
     discount_amount: Optional[float] = 0.0
     discount_type: Optional[str] = None
@@ -82,15 +82,15 @@ class OrderItem(BaseModel):
 class Order(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
-    order_number: int
-    items: List[OrderItem]
-    subtotal: float
+    order_number: int = 0
+    items: List[OrderItem] = []
+    subtotal: float = 0.0
     discount_amount: Optional[float] = 0.0
     discount_type: Optional[str] = None
     discount_value: Optional[float] = None
     tip_amount: Optional[float] = 0.0
     tip_percentage: Optional[float] = 0.0
-    total_amount: float
+    total_amount: float = 0.0
     payment_method: Optional[str] = None
     payment_details: Optional[dict] = None
     status: str = "pending"

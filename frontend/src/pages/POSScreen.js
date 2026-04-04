@@ -65,6 +65,7 @@ const POSScreen = () => {
   const [splitPaymentMode, setSplitPaymentMode] = useState(false);
   const [cashAmount, setCashAmount] = useState('');
   const [cardAmount, setCardAmount] = useState('');
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
   
   // Product search
   const [searchQuery, setSearchQuery] = useState('');
@@ -555,7 +556,7 @@ const POSScreen = () => {
         discount_reason: discountReason || null,
       });
       
-      // Try to print kitchen receipt LOCALLY (no backend needed — works offline)
+      // Print kitchen receipt in BACKGROUND (fire-and-forget — no UI blocking)
       try {
         let tableInfo = null;
         if (selectedTable) {
@@ -564,9 +565,9 @@ const POSScreen = () => {
         }
         const businessInfo = restaurantInfo?.business_info || {};
         const commands = generateKitchenReceipt(order, businessInfo, tableInfo);
-        await sendToPrinter(commands, 'kitchen-auto');
-      } catch (printError) {
-        console.log('Kitchen receipt printing skipped:', printError.message);
+        sendToPrinter(commands, 'kitchen-auto').catch(() => {}); // fire-and-forget
+      } catch (e) {
+        // silently skip
       }
       
       if (selectedTable) {
@@ -781,7 +782,7 @@ const POSScreen = () => {
   }
 
   return (
-    <div className="flex h-screen pos-screen relative overflow-hidden">
+    <div className="flex h-screen pos-screen relative overflow-x-hidden">
       {/* QR Order Flash Overlay */}
       {flashActive && (
         <div
@@ -954,7 +955,7 @@ const POSScreen = () => {
         </div>
 
         {/* Products Grid or Pending Orders */}
-        <ScrollArea className="flex-1 p-3 md:p-6">
+        <div className="flex-1 overflow-y-auto p-3 md:p-6">
           {showPendingOrders ? (
             <div className="space-y-4">
               <h2 className="text-2xl font-bold mb-4">Pending Orders</h2>
@@ -1147,7 +1148,7 @@ const POSScreen = () => {
               ))}
             </div>
           )}
-        </ScrollArea>
+        </div>
       </div>
 
       {/* Cart Content - reused in desktop sidebar and mobile sheet */}
@@ -1197,7 +1198,7 @@ const POSScreen = () => {
               </Select>
             </div>
 
-            <ScrollArea className="flex-1 p-3">
+            <div className="flex-1 overflow-y-auto p-3">
               {cart.length === 0 ? (
                 <div className="text-center py-6 text-muted-foreground">
                   <ShoppingCart className="w-10 h-10 mx-auto mb-2 opacity-50" />
@@ -1241,7 +1242,7 @@ const POSScreen = () => {
                   ))}
                 </div>
               )}
-            </ScrollArea>
+            </div>
 
             <div className="p-4 border-t space-y-3">
               <div className="flex gap-2">
@@ -1601,31 +1602,42 @@ const POSScreen = () => {
               )}
             </div>
             
-            {/* Single Payment Method Buttons */}
+            {/* Single Payment Method Selection */}
             {!splitPaymentMode && (
-              <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    className={`h-20 flex flex-col items-center justify-center gap-2 rounded-lg border-2 transition-all ${
+                      selectedPaymentMethod === 'cash'
+                        ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200 text-emerald-800'
+                        : 'border-muted bg-card hover:border-muted-foreground/30 text-muted-foreground'
+                    }`}
+                    data-testid="payment-cash-button"
+                    onClick={() => setSelectedPaymentMethod('cash')}
+                  >
+                    <Banknote className="w-8 h-8" />
+                    <span className="text-base font-bold">Cash</span>
+                  </button>
+                  <button
+                    className={`h-20 flex flex-col items-center justify-center gap-2 rounded-lg border-2 transition-all ${
+                      selectedPaymentMethod === 'card'
+                        ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200 text-blue-800'
+                        : 'border-muted bg-card hover:border-muted-foreground/30 text-muted-foreground'
+                    }`}
+                    data-testid="payment-card-button"
+                    onClick={() => setSelectedPaymentMethod('card')}
+                  >
+                    <CreditCard className="w-8 h-8" />
+                    <span className="text-base font-bold">Card</span>
+                  </button>
+                </div>
                 <Button
-                  className="h-20 flex flex-col gap-2"
-                  data-testid="payment-cash-button"
-                  onClick={() => completeOrder('cash')}
+                  className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold"
+                  data-testid="confirm-payment-button"
+                  onClick={() => completeOrder(selectedPaymentMethod)}
+                  disabled={!selectedPaymentMethod}
                 >
-                  <Banknote className="w-8 h-8" />
-                  <span className="text-base font-bold">Cash</span>
-                  {splitCount > 1 && (
-                    <span className="text-xs opacity-75">{getCurrencySymbol(currency)}{calculatePerPersonAmount().toFixed(2)} each</span>
-                  )}
-                </Button>
-                <Button
-                  className="h-20 flex flex-col gap-2"
-                  variant="secondary"
-                  data-testid="payment-card-button"
-                  onClick={() => completeOrder('card')}
-                >
-                  <CreditCard className="w-8 h-8" />
-                  <span className="text-base font-bold">Card</span>
-                  {splitCount > 1 && (
-                    <span className="text-xs opacity-75">{getCurrencySymbol(currency)}{calculatePerPersonAmount().toFixed(2)} each</span>
-                  )}
+                  Complete — {getCurrencySymbol(currency)}{calculateGrandTotal().toFixed(2)}
                 </Button>
               </div>
             )}

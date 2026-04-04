@@ -10,9 +10,14 @@ router = APIRouter()
 
 @router.post("/orders", response_model=Order)
 async def create_order(order_data: OrderCreate, current_user: User = Depends(get_current_user)):
-    last_order = await db.orders.find_one(sort=[("order_number", -1)])
-    if last_order:
-        last_num = last_order.get("order_number", 0)
+    # Daily reset: order numbers start from 1 each day
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    last_today = await db.orders.find_one(
+        {"created_at": {"$gte": f"{today_str}T00:00:00"}},
+        sort=[("order_number", -1)]
+    )
+    if last_today:
+        last_num = last_today.get("order_number", 0)
         order_number = (int(last_num) + 1) if last_num else 1
     else:
         order_number = 1
@@ -201,6 +206,12 @@ async def cancel_order(order_id: str, cancel_data: CancelOrderRequest, current_u
         ).to_list(50)
         pin_valid = False
         for admin in admin_users:
+            # Check dedicated manager PIN first, then fallback to password
+            pin_hash = admin.get("manager_pin_hash")
+            if pin_hash and verify_password(cancel_data.manager_pin, pin_hash):
+                pin_valid = True
+                manager_approved_by = admin.get("username")
+                break
             stored_pw = admin.get("password_hash") or admin.get("password")
             if stored_pw and verify_password(cancel_data.manager_pin, stored_pw):
                 pin_valid = True

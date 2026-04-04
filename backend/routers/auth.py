@@ -80,3 +80,40 @@ async def change_own_password(data: PasswordChange, current_user: User = Depends
     new_hashed = get_password_hash(data.new_password)
     await db.users.update_one({"username": current_user.username}, {"$set": {"password_hash": new_hashed, "password": new_hashed}})
     return {"message": "Password changed successfully"}
+
+
+
+from pydantic import BaseModel as PydanticBaseModel
+
+
+class ManagerPinUpdate(PydanticBaseModel):
+    current_password: str
+    manager_pin: str
+
+
+@router.post("/auth/set-manager-pin")
+async def set_manager_pin(data: ManagerPinUpdate, current_user: User = Depends(get_current_user)):
+    """Admin sets a dedicated Manager PIN for staff void authorization."""
+    if current_user.role not in ["admin", "platform_owner"]:
+        raise HTTPException(status_code=403, detail="Only admins can set the manager PIN")
+
+    user = await db.users.find_one({"username": current_user.username})
+    stored_hash = user.get("password_hash") or user.get("password") if user else None
+    if not user or not stored_hash or not verify_password(data.current_password, stored_hash):
+        raise HTTPException(status_code=400, detail="Current password is incorrect")
+
+    pin_hash = get_password_hash(data.manager_pin)
+    await db.users.update_one(
+        {"username": current_user.username},
+        {"$set": {"manager_pin_hash": pin_hash}}
+    )
+    return {"message": "Manager PIN updated successfully"}
+
+
+@router.get("/auth/has-manager-pin")
+async def has_manager_pin(current_user: User = Depends(get_current_user)):
+    """Check if the admin has set a dedicated manager PIN."""
+    if current_user.role not in ["admin", "platform_owner"]:
+        return {"has_pin": False}
+    user = await db.users.find_one({"username": current_user.username}, {"_id": 0, "manager_pin_hash": 1})
+    return {"has_pin": bool(user and user.get("manager_pin_hash"))}

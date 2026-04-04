@@ -204,8 +204,10 @@ const TableManagement = () => {
   };
 
   const getQRUrl = (table) => {
+    // QR must point to FRONTEND origin (not API_URL) so scanning opens the guest menu
+    const origin = typeof window !== 'undefined' ? window.location.origin : API_URL;
     const rest = tables[0]?.restaurant_id || 'unknown';
-    return `${API_URL}/menu/${rest}/${table.qr_hash}`;
+    return `${origin}/menu/${rest}/${table.qr_hash}`;
   };
 
   const downloadQR = (table) => {

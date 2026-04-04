@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from database import db
-from dependencies import require_admin
+from dependencies import get_current_user
 from models import User, CashDrawer, CashDrawerOpen, CashDrawerClose
 from datetime import datetime, timezone
 
@@ -8,7 +8,7 @@ router = APIRouter()
 
 
 @router.post("/cash-drawer/open", response_model=CashDrawer)
-async def open_cash_drawer(drawer_data: CashDrawerOpen, current_user: User = Depends(require_admin)):
+async def open_cash_drawer(drawer_data: CashDrawerOpen, current_user: User = Depends(get_current_user)):
     today = datetime.now(timezone.utc).date().isoformat()
     existing = await db.cash_drawers.find_one({"date": today, "status": "open"}, {"_id": 0})
     if existing:
@@ -34,7 +34,7 @@ async def open_cash_drawer(drawer_data: CashDrawerOpen, current_user: User = Dep
 
 
 @router.get("/cash-drawer/current", response_model=CashDrawer)
-async def get_current_cash_drawer(current_user: User = Depends(require_admin)):
+async def get_current_cash_drawer(current_user: User = Depends(get_current_user)):
     today = datetime.now(timezone.utc).date().isoformat()
     drawer = await db.cash_drawers.find_one({"date": today, "status": "open"}, {"_id": 0})
     if not drawer:
@@ -51,7 +51,7 @@ async def get_current_cash_drawer(current_user: User = Depends(require_admin)):
 
 
 @router.put("/cash-drawer/close", response_model=CashDrawer)
-async def close_cash_drawer(close_data: CashDrawerClose, current_user: User = Depends(require_admin)):
+async def close_cash_drawer(close_data: CashDrawerClose, current_user: User = Depends(get_current_user)):
     today = datetime.now(timezone.utc).date().isoformat()
     drawer = await db.cash_drawers.find_one({"date": today, "status": "open"}, {"_id": 0})
     if not drawer:
@@ -84,6 +84,6 @@ async def close_cash_drawer(close_data: CashDrawerClose, current_user: User = De
 
 
 @router.get("/cash-drawer/history")
-async def get_cash_drawer_history(current_user: User = Depends(require_admin)):
+async def get_cash_drawer_history(current_user: User = Depends(get_current_user)):
     drawers = await db.cash_drawers.find({}, {"_id": 0}).sort("date", -1).limit(30).to_list(100)
     return drawers

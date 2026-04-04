@@ -3,12 +3,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Textarea } from './ui/textarea';
-import { AlertTriangle, Lock, Ban, RefreshCw, ChefHat, FlaskConical, PackageX } from 'lucide-react';
+import { AlertTriangle, Lock, Ban, RefreshCw, FlaskConical, PackageX } from 'lucide-react';
 
 const VOID_CATEGORIES = [
   { id: 'mispunch', label: 'Mispunch', icon: Ban, color: 'bg-orange-500 hover:bg-orange-600' },
   { id: 'customer_change', label: 'Customer Change', icon: RefreshCw, color: 'bg-blue-500 hover:bg-blue-600' },
-  { id: 'kitchen_error', label: 'Kitchen Error', icon: ChefHat, color: 'bg-red-500 hover:bg-red-600' },
   { id: 'testing', label: 'Testing', icon: FlaskConical, color: 'bg-purple-500 hover:bg-purple-600' },
   { id: 'out_of_stock', label: 'Out of Stock', icon: PackageX, color: 'bg-zinc-600 hover:bg-zinc-700' },
 ];
