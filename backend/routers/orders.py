@@ -10,15 +10,21 @@ router = APIRouter()
 
 @router.post("/orders", response_model=Order)
 async def create_order(order_data: OrderCreate, current_user: User = Depends(get_current_user)):
-    # Daily reset: order numbers start from 1 each day
+    # Daily reset: order numbers start from 1 each day, scoped per restaurant
     today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    reset_query = {"created_at": {"$gte": f"{today_str}T00:00:00"}}
+    if current_user.restaurant_id:
+        reset_query["restaurant_id"] = current_user.restaurant_id
     last_today = await db.orders.find_one(
-        {"created_at": {"$gte": f"{today_str}T00:00:00"}},
+        reset_query,
         sort=[("order_number", -1)]
     )
     if last_today:
         last_num = last_today.get("order_number", 0)
-        order_number = (int(last_num) + 1) if last_num else 1
+        try:
+            order_number = int(last_num) + 1
+        except (ValueError, TypeError):
+            order_number = 1
     else:
         order_number = 1
 
@@ -284,13 +290,18 @@ async def cancel_order(order_id: str, cancel_data: CancelOrderRequest, current_u
 
 @router.get("/orders/pending", response_model=List[Order])
 async def get_pending_orders(current_user: User = Depends(get_current_user)):
-    orders = await db.orders.find({"status": "pending"}, {"_id": 0}).sort("created_at", -1).to_list(100)
+    query = {"status": "pending"}
+    if current_user.restaurant_id:
+        query["restaurant_id"] = current_user.restaurant_id
+    orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(100)
     return [Order(**o) for o in orders]
 
 
 @router.get("/orders", response_model=List[Order])
 async def get_orders(current_user: User = Depends(get_current_user), from_date: str = None, to_date: str = None, today_only: bool = False):
     query = {}
+    if current_user.restaurant_id:
+        query["restaurant_id"] = current_user.restaurant_id
 
     if today_only:
         now = datetime.now(timezone.utc)
@@ -301,7 +312,7 @@ async def get_orders(current_user: User = Depends(get_current_user), from_date: 
         biz_end = biz_start + timedelta(days=1)
         query["created_at"] = {"$gte": biz_start.isoformat(), "$lt": biz_end.isoformat()}
     elif from_date and to_date:
-        query["created_at"] = {"$gte": from_date, "$lte": to_date}
+        query["created_at"] = {"$gte": f"{from_date}T00:00:00", "$lte": f"{to_date}T23:59:59"}
 
     orders = await db.orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(10000)
     return [Order(**o) for o in orders]

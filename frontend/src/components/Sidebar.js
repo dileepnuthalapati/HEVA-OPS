@@ -36,6 +36,7 @@ const posStaffMenu = [
   { path: '/pos', icon: ShoppingCart, label: 'POS' },
   { path: '/kds', icon: ChefHat, label: 'Kitchen (KDS)' },
   { path: '/orders', icon: FileText, label: 'Orders' },
+  { path: '/cash-drawer', icon: Wallet, label: 'Cash Drawer' },
 ];
 
 const Sidebar = ({ title = 'HevaPOS', subtitle = '' }) => {

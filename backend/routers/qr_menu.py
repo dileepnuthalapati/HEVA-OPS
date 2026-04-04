@@ -113,24 +113,13 @@ async def get_guest_menu(request: Request, restaurant_id: str, table_hash: str):
 
     # Get categories for this restaurant
     categories = await db.categories.find(
-        {"$or": [
-            {"restaurant_id": restaurant_id},
-            {"restaurant_id": None},
-            {"restaurant_id": {"$exists": False}}
-        ]},
+        {"restaurant_id": restaurant_id},
         {"_id": 0}
     ).to_list(100)
 
     # Get in-stock products for this restaurant
     products = await db.products.find(
-        {"$and": [
-            {"in_stock": True},
-            {"$or": [
-                {"restaurant_id": restaurant_id},
-                {"restaurant_id": None},
-                {"restaurant_id": {"$exists": False}}
-            ]}
-        ]},
+        {"restaurant_id": restaurant_id, "in_stock": True},
         {"_id": 0}
     ).to_list(1000)
 

@@ -71,7 +71,7 @@ const VoidReasonModal = ({ open, onClose, onConfirm, userRole, orderNumber }) =>
               Void Order {orderNumber ? `#${orderNumber}` : ''}
             </DialogTitle>
             <DialogDescription className="text-red-100 text-sm mt-1">
-              Select a reason. This action is permanent and will be logged.
+              This action is permanent.
             </DialogDescription>
           </DialogHeader>
         </div>
@@ -79,7 +79,6 @@ const VoidReasonModal = ({ open, onClose, onConfirm, userRole, orderNumber }) =>
         <div className="p-5 space-y-4">
           {/* Quick-tap reason buttons */}
           <div>
-            <p className="text-sm font-medium text-muted-foreground mb-2">Why is this order being voided?</p>
             <div className="grid grid-cols-2 gap-2">
               {VOID_CATEGORIES.map((cat) => {
                 const Icon = cat.icon;
@@ -125,10 +124,11 @@ const VoidReasonModal = ({ open, onClose, onConfirm, userRole, orderNumber }) =>
               <Input
                 data-testid="manager-pin-input"
                 type="password"
-                placeholder="Enter manager password"
+                placeholder="Enter Manager PIN"
                 value={managerPin}
                 onChange={(e) => { setManagerPin(e.target.value); setPinError(''); }}
                 className="bg-white"
+                inputMode="numeric"
               />
               {pinError && (
                 <p className="text-xs text-red-600 mt-1" data-testid="pin-error">{pinError}</p>

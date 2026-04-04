@@ -31,7 +31,7 @@ async def generate_report(report_req: ReportRequest, current_user: User = Depend
         currency_map = {"GBP": "£", "USD": "$", "EUR": "€", "INR": "₹"}
         cs = currency_map.get((rest or {}).get("currency", "GBP"), "$")
 
-    total_sales = sum(o.get("total_amount", 0) for o in orders)
+    total_sales = sum(o.get("total_amount", 0) or o.get("total", 0) for o in orders)
     total_orders = len(orders)
     avg_order = total_sales / total_orders if total_orders > 0 else 0
 
@@ -40,7 +40,7 @@ async def generate_report(report_req: ReportRequest, current_user: User = Depend
     card_total = 0
     for o in orders:
         pm = o.get("payment_method", "cash")
-        amt = o.get("total_amount", 0)
+        amt = o.get("total_amount", 0) or o.get("total", 0)
         if pm == "card":
             card_total += amt
         elif pm == "split":
@@ -91,7 +91,7 @@ async def generate_report(report_req: ReportRequest, current_user: User = Depend
                 str(o.get("order_number", "N/A")).zfill(3),
                 o.get("created_at", "")[:10],
                 str(len(o.get("items", []))),
-                f"{cs}{o.get('total_amount', 0):.2f}",
+                f"{cs}{(o.get('total_amount', 0) or o.get('total', 0)):.2f}",
                 o.get("payment_method", "N/A").upper()
             ])
         order_table = ReportLabTable(order_data, colWidths=[60, 80, 60, 80, 80])
@@ -121,7 +121,8 @@ async def get_report_stats(start_date: str, end_date: str, current_user: User = 
 
     orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
 
-    total_sales = sum(order.get("total_amount", 0) for order in orders)
+    # Handle legacy orders that may use 'total' instead of 'total_amount'
+    total_sales = sum(o.get("total_amount", 0) or o.get("total", 0) for o in orders)
     total_orders = len(orders)
     avg_order_value = total_sales / total_orders if total_orders > 0 else 0
 
@@ -129,7 +130,7 @@ async def get_report_stats(start_date: str, end_date: str, current_user: User = 
     card_total = 0
     for o in orders:
         pm = o.get("payment_method", "cash")
-        amt = o.get("total_amount", 0)
+        amt = o.get("total_amount", 0) or o.get("total", 0)
         if pm == "card":
             card_total += amt
         elif pm == "split":
@@ -173,7 +174,7 @@ async def get_today_stats(current_user: User = Depends(require_admin)):
 
     orders = await db.orders.find(query, {"_id": 0}).to_list(1000)
 
-    total_sales = sum(o.get("total_amount", 0) for o in orders)
+    total_sales = sum(o.get("total_amount", 0) or o.get("total", 0) for o in orders)
     total_orders = len(orders)
     avg_order_value = total_sales / total_orders if total_orders > 0 else 0
 
@@ -181,7 +182,7 @@ async def get_today_stats(current_user: User = Depends(require_admin)):
     card_total = 0
     for o in orders:
         pm = o.get("payment_method", "cash")
-        amt = o.get("total_amount", 0)
+        amt = o.get("total_amount", 0) or o.get("total", 0)
         if pm == "card":
             card_total += amt
         elif pm == "split":
@@ -208,7 +209,7 @@ async def get_today_stats(current_user: User = Depends(require_admin)):
         try:
             ts = o.get("created_at", "")
             hour = int(ts[11:13]) if len(ts) > 13 else 0
-            hourly[hour] = hourly.get(hour, 0) + o.get("total_amount", 0)
+            hourly[hour] = hourly.get(hour, 0) + (o.get("total_amount", 0) or o.get("total", 0))
         except (ValueError, IndexError):
             pass
     hourly_data = [{"hour": h, "label": f"{h:02d}:00", "revenue": round(hourly.get(h, 0), 2)} for h in range(24)]
