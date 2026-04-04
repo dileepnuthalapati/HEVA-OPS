@@ -47,6 +47,9 @@ class RefundRequest(BaseModel):
 @router.post("/payments/connect/onboard")
 async def create_connect_account(req: OnboardRequest, current_user: User = Depends(require_admin)):
     """Restaurant Admin clicks 'Connect with Stripe' — creates Standard account + onboarding link."""
+    if not STRIPE_API_KEY or STRIPE_API_KEY == "sk_test_emergent":
+        raise HTTPException(status_code=400, detail="Stripe API key is not configured. Please contact your platform administrator.")
+
     restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0})
     if not restaurant:
         raise HTTPException(status_code=404, detail="Restaurant not found")

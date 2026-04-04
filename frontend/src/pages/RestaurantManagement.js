@@ -74,37 +74,45 @@ const RestaurantManagement = () => {
 
     try {
       if (editingRestaurant) {
-        // Update existing restaurant
+        // Update existing restaurant - structure payload to match backend RestaurantCreate model
         await restaurantAPI.update(editingRestaurant.id, {
-          name: formData.name,
-          address_line1: formData.address_line1,
-          address_line2: formData.address_line2,
-          city: formData.city,
-          postcode: formData.postcode,
-          phone: formData.phone,
-          email: formData.email,
-          website: formData.website,
-          vat_number: formData.vat_number,
-          receipt_footer: formData.receipt_footer,
-          subscription_price: parseFloat(formData.subscription_price),
+          owner_email: formData.email,
+          subscription_plan: editingRestaurant.subscription_plan || 'standard_monthly',
+          price: parseFloat(formData.subscription_price) || 19.99,
           currency: formData.currency,
+          business_info: {
+            name: formData.name,
+            address_line1: formData.address_line1,
+            address_line2: formData.address_line2,
+            city: formData.city,
+            postcode: formData.postcode,
+            phone: formData.phone,
+            email: formData.email,
+            website: formData.website,
+            vat_number: formData.vat_number,
+            receipt_footer: formData.receipt_footer,
+          },
         });
         toast.success('Restaurant updated successfully!');
       } else {
-        // Create restaurant first
+        // Create restaurant first - structure payload to match backend RestaurantCreate model
         const restaurant = await restaurantAPI.create({
-          name: formData.name,
-          address_line1: formData.address_line1,
-          address_line2: formData.address_line2,
-          city: formData.city,
-          postcode: formData.postcode,
-          phone: formData.phone,
-          email: formData.email,
-          website: formData.website,
-          vat_number: formData.vat_number,
-          receipt_footer: formData.receipt_footer,
-          subscription_price: parseFloat(formData.subscription_price),
+          owner_email: formData.email,
+          subscription_plan: 'standard_monthly',
+          price: parseFloat(formData.subscription_price) || 19.99,
           currency: formData.currency,
+          business_info: {
+            name: formData.name,
+            address_line1: formData.address_line1,
+            address_line2: formData.address_line2,
+            city: formData.city,
+            postcode: formData.postcode,
+            phone: formData.phone,
+            email: formData.email,
+            website: formData.website,
+            vat_number: formData.vat_number,
+            receipt_footer: formData.receipt_footer,
+          },
         });
         
         // Create admin user for the restaurant if provided
