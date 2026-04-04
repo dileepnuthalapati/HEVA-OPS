@@ -275,7 +275,7 @@ const TableManagement = () => {
   return (
     <div className="flex flex-col md:flex-row min-h-screen">
       <Sidebar />
-      <div className="flex-1 min-w-0 p-4 md:p-8">
+      <div className="flex-1 min-w-0 p-4 md:p-8 overflow-y-auto">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="flex items-center justify-between mb-8">
@@ -660,8 +660,8 @@ const TableManagement = () => {
                                   fgColor="#1c1917"
                                 />
                               </div>
-                              <p className="text-xs text-muted-foreground mb-3 break-all font-mono">
-                                {getQRUrl(table)}
+                              <p className="text-[10px] text-muted-foreground/60 mb-3 truncate max-w-[180px] mx-auto" title={getQRUrl(table)}>
+                                Table {table.number}
                               </p>
                               <div className="flex gap-2 justify-center">
                                 <Button size="sm" variant="outline" onClick={() => downloadQR(table)} data-testid={`download-qr-${table.id}`}>

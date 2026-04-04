@@ -13,6 +13,7 @@ const GS = 0x1D;
 
 const CMD = {
   INIT: [ESC, 0x40],
+  CODEPAGE_858: [ESC, 0x74, 19],  // PC858 (£, €, common EU chars)
   ALIGN_LEFT: [ESC, 0x61, 0x00],
   ALIGN_CENTER: [ESC, 0x61, 0x01],
   BOLD_ON: [ESC, 0x45, 0x01],
@@ -37,11 +38,42 @@ function getCurrencySymbol(currency) {
 }
 
 /**
- * Convert a string to UTF-8 encoded bytes
+ * Convert a string to CP858-compatible bytes for thermal printers.
+ * CP858 is single-byte encoding that supports £, €, and common chars.
+ * UTF-8 multi-byte sequences cause garbled/zigzag characters on most printers.
  */
 function textToBytes(text) {
-  const encoder = new TextEncoder();
-  return Array.from(encoder.encode(text));
+  const bytes = [];
+  for (let i = 0; i < text.length; i++) {
+    const code = text.charCodeAt(i);
+    if (code < 128) {
+      bytes.push(code);
+    } else {
+      // Map Unicode to CP858 byte values
+      const CP858_MAP = {
+        0x00A3: 0x9C, // £
+        0x20AC: 0xD5, // € (CP858)
+        0x00E9: 0x82, // é
+        0x00E8: 0x8A, // è
+        0x00F1: 0xA4, // ñ
+        0x00FC: 0x81, // ü
+        0x00E4: 0x84, // ä
+        0x00F6: 0x94, // ö
+        0x00DF: 0xE1, // ß
+        0x00C9: 0x90, // É
+        0x00E0: 0x85, // à
+        0x00E2: 0x83, // â
+        0x00A9: 0xA8, // ©
+        0x00AE: 0xA9, // ®
+        0x00B0: 0xF8, // °
+        0x00B7: 0xFA, // ·
+        0x2022: 0x07, // • (bell char as bullet)
+        0x20B9: 0x3F, // ₹ (no CP858 equiv, use ?)
+      };
+      bytes.push(CP858_MAP[code] || 0x3F); // ? for unmapped chars
+    }
+  }
+  return bytes;
 }
 
 /**
@@ -82,6 +114,7 @@ function bytesToBase64(bytes) {
 export function generateKitchenReceipt(order, businessInfo = {}, tableInfo = null) {
   const bytes = buildCommands(
     CMD.INIT,
+    CMD.CODEPAGE_858,
     // Header: centered, bold, double size
     CMD.ALIGN_CENTER,
     CMD.BOLD_ON,
@@ -168,6 +201,7 @@ export function generateCustomerReceipt(order, businessInfo = {}, tableInfo = nu
 
   const headerBytes = buildCommands(
     CMD.INIT,
+    CMD.CODEPAGE_858,
     // Restaurant name: centered, bold, big
     CMD.ALIGN_CENTER,
     CMD.BOLD_ON,
@@ -176,8 +210,8 @@ export function generateCustomerReceipt(order, businessInfo = {}, tableInfo = nu
     CMD.NORMAL,
     CMD.BOLD_OFF,
     // Address
-    ...(businessInfo.address_line1 ? [textToBytes(`${businessInfo.address_line1}\n`)] : []),
-    ...((businessInfo.city && businessInfo.postcode) ? [textToBytes(`${businessInfo.city} ${businessInfo.postcode}\n`)] : []),
+    ...(businessInfo.address_line1 ? [`${businessInfo.address_line1}\n`] : []),
+    ...((businessInfo.city && businessInfo.postcode) ? [`${businessInfo.city} ${businessInfo.postcode}\n`] : []),
     ...(businessInfo.phone ? [textToBytes(`Tel: ${businessInfo.phone}\n`)] : []),
     ...(businessInfo.vat_number ? [textToBytes(`VAT: ${businessInfo.vat_number}\n`)] : []),
     '\n',
@@ -244,6 +278,7 @@ export function generateTestReceipt(printer) {
 
   const bytes = buildCommands(
     CMD.INIT,
+    CMD.CODEPAGE_858,
     CMD.ALIGN_CENTER,
     CMD.BOLD_ON,
     CMD.DOUBLE_HW,

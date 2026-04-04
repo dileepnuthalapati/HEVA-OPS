@@ -76,6 +76,7 @@ const POSScreen = () => {
   
   // Debounce for preventing double clicks
   const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
   // Completed orders for today (visible in pending orders panel)
   const [completedOrders, setCompletedOrders] = useState([]);
@@ -536,7 +537,8 @@ const POSScreen = () => {
   };
 
   const placeOrder = async () => {
-    if (cart.length === 0) return;
+    if (cart.length === 0 || isPlacingOrder) return;
+    setIsPlacingOrder(true);
 
     const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
     const localId = uuidv4(); // Local UUID — no backend dependency
@@ -627,6 +629,8 @@ const POSScreen = () => {
       } catch (dbErr) {
         toast.error('Failed to save order');
       }
+    } finally {
+      setIsPlacingOrder(false);
     }
   };
 
@@ -777,7 +781,7 @@ const POSScreen = () => {
   }
 
   return (
-    <div className="flex h-screen pos-screen relative">
+    <div className="flex h-screen pos-screen relative overflow-hidden">
       {/* QR Order Flash Overlay */}
       {flashActive && (
         <div
@@ -961,48 +965,43 @@ const POSScreen = () => {
                   const orderTable = order.table_id ? tables.find(t => t.id === order.table_id) : null;
                   return (
                   <Card key={order.id} data-testid={`pending-order-${order.id}`}>
-                    <CardContent className="p-6">
-                      <div className="flex justify-between items-start mb-4">
-                        <div>
-                          <div className="text-lg font-bold flex items-center gap-2">
+                    <CardContent className="p-4">
+                      <div className="flex justify-between items-start mb-3">
+                        <div className="flex items-center gap-2">
+                          <div className="text-lg font-bold">
                             Order #{String(order.order_number).padStart(3, '0')}
-                            {orderTable && (
-                              <span className="text-sm bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
-                                Table {orderTable.number}
-                              </span>
-                            )}
                           </div>
-                          <div className="text-sm text-muted-foreground">
-                            {new Date(order.created_at).toLocaleString()}
-                          </div>
+                          {orderTable && (
+                            <span className="text-sm bg-blue-100 text-blue-700 px-2 py-0.5 rounded">
+                              Table {orderTable.number}
+                            </span>
+                          )}
+                          <button
+                            data-testid={`print-order-${order.id}`}
+                            onClick={() => printOrderReceipt(order.id, order.order_number)}
+                            disabled={isPrinting}
+                            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                            title="Print receipt"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </button>
                         </div>
-                        <div className="text-right">
-                          <div className="text-2xl font-bold font-mono text-emerald-600">
-                            {getCurrencySymbol(currency)}{order.total_amount.toFixed(2)}
-                          </div>
+                        <div className="text-xl font-bold font-mono text-emerald-600">
+                          {getCurrencySymbol(currency)}{order.total_amount.toFixed(2)}
                         </div>
                       </div>
-                      <div className="space-y-2 mb-4">
+                      <div className="text-xs text-muted-foreground mb-2">
+                        {new Date(order.created_at).toLocaleString()}
+                      </div>
+                      <div className="space-y-1 mb-3">
                         {order.items.map((item, idx) => (
                           <div key={idx} className="flex justify-between text-sm">
-                            <span>
-                              {item.product_name} x {item.quantity}
-                            </span>
+                            <span>{item.product_name} x {item.quantity}</span>
                             <span className="font-mono">{getCurrencySymbol(currency)}{item.total.toFixed(2)}</span>
                           </div>
                         ))}
                       </div>
-                      <div className="grid grid-cols-4 gap-2">
-                        <Button
-                          size="sm"
-                          data-testid={`print-order-${order.id}`}
-                          onClick={() => printOrderReceipt(order.id, order.order_number)}
-                          disabled={isPrinting}
-                          className="h-10 bg-blue-500 hover:bg-blue-600 text-white"
-                        >
-                          <Printer className="w-4 h-4 mr-1" />
-                          Print
-                        </Button>
+                      <div className="grid grid-cols-3 gap-2">
                         <Button
                           size="sm"
                           data-testid={`edit-order-${order.id}`}
@@ -1341,10 +1340,10 @@ const POSScreen = () => {
                 className="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold h-12"
                 data-testid="place-order-button"
                 onClick={() => { editingOrder ? updateOrder() : placeOrder(); setMobileCartOpen(false); }}
-                disabled={cart.length === 0}
+                disabled={cart.length === 0 || isPlacingOrder}
               >
                 <Printer className="w-5 h-5 mr-2" />
-                {editingOrder ? `Update Order #${editingOrder.order_number}` : 'Place Order (Send to Kitchen)'}
+                {isPlacingOrder ? 'Sending...' : editingOrder ? `Update Order #${editingOrder.order_number}` : 'Place Order (Send to Kitchen)'}
               </Button>
             </div>
           </>

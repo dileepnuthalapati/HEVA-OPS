@@ -1,19 +1,14 @@
 # HevaPOS Test Credentials
 
-## Platform Owner
-- Username: platform_owner
-- Password: admin123
+## Users
+- Platform Owner: `platform_owner` / `admin123`
+- Restaurant Admin: `restaurant_admin` / `admin123`
+- Staff User: `user` / `user123`
 
-## Restaurant Admin
-- Username: restaurant_admin
-- Password: admin123
+## QR Guest Menu (Public - No Auth)
+- URL: /menu/{restaurant_id}/{table_hash}
+- Example: /menu/rest_demo_1/{hash}
 
-## Staff User
-- Username: user
-- Password: user123
-
-## QR Guest Menu (No Auth Required)
-- URL: /menu/rest_demo_1/KrGTedTy (Table 1)
-- URL: /menu/rest_demo_1/14-as7MV (Table 2)
-- URL: /menu/rest_demo_1/wG0lM1YA (Table 3)
-- URL: /menu/rest_demo_1/Oeoef94_ (Table 99)
+## Stripe
+- Test key in backend/.env: STRIPE_API_KEY=sk_test_emergent
+- Webhook secret: not configured (accepts raw payloads in dev)

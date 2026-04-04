@@ -136,6 +136,27 @@ export default function KitchenDisplay() {
     return new Date(a.created_at) - new Date(b.created_at);
   });
 
+  // Keyboard shortcuts: 1-9 bumps ticket at that position
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      const num = parseInt(e.key);
+      if (num >= 1 && num <= 9) {
+        const activeOrders = sortedOrders.filter(o => o.kds_status !== 'ready');
+        const target = activeOrders[num - 1];
+        if (target) {
+          bumpOrder(target.id, target.kds_status);
+          toast.success(`Bumped #${target.order_number}`, { duration: 1500 });
+        }
+      }
+      // R = refresh
+      if (e.key === 'r' || e.key === 'R') {
+        fetchOrders();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [sortedOrders, fetchOrders]);
+
   const activeCount = orders.filter(o => o.kds_status !== 'ready').length;
   const readyCount = orders.filter(o => o.kds_status === 'ready').length;
 
@@ -195,9 +216,11 @@ export default function KitchenDisplay() {
             <p className="text-sm">No orders in the kitchen queue</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
-            {sortedOrders.map((order) => {
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-3 md:gap-4">
+            {sortedOrders.map((order, idx) => {
               const status = KDS_STATUS[order.kds_status] || KDS_STATUS.new;
+              const isActive = order.kds_status !== 'ready';
+              const posLabel = isActive ? idx - sortedOrders.filter((o, i) => i < idx && o.kds_status === 'ready').length + 1 : null;
               const overdue = isOverdue(order.created_at);
               const timer = formatTimer(order.created_at);
               const isQR = order.source === 'qr';
@@ -217,6 +240,11 @@ export default function KitchenDisplay() {
                   {/* Ticket Header */}
                   <div className={`flex items-center justify-between px-4 py-2 ${status.color}`}>
                     <div className="flex items-center gap-2">
+                      {posLabel && posLabel <= 9 && (
+                        <span className="bg-black/30 text-white rounded w-6 h-6 flex items-center justify-center text-xs font-black" title={`Press ${posLabel} to bump`}>
+                          {posLabel}
+                        </span>
+                      )}
                       <span className={`text-sm font-black ${status.text}`}>
                         #{String(order.order_number).padStart(3, '0')}
                       </span>
@@ -323,6 +351,15 @@ export default function KitchenDisplay() {
             })}
           </div>
         )}
+      </div>
+
+      {/* Keyboard shortcut hint bar for 1080p monitors */}
+      <div className="fixed bottom-0 left-0 right-0 bg-slate-900/90 backdrop-blur border-t border-slate-700 px-4 py-2 flex items-center justify-between text-xs text-slate-500">
+        <div className="flex items-center gap-4">
+          <span><kbd className="bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded text-[10px] font-mono">1-9</kbd> Bump ticket</span>
+          <span><kbd className="bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded text-[10px] font-mono">R</kbd> Refresh</span>
+        </div>
+        <div className="font-mono">{activeCount} active / {readyCount} ready</div>
       </div>
     </div>
   );

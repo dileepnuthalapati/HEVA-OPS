@@ -22,10 +22,15 @@ export default function GuestMenu() {
   const [guestNotes, setGuestNotes] = useState('');
   const [orderPlaced, setOrderPlaced] = useState(null);
   const [placing, setPlacing] = useState(false);
+  const [payEnabled, setPayEnabled] = useState(false);
   const categoryRef = useRef(null);
 
   useEffect(() => {
     fetchMenu();
+    // Check if restaurant accepts online payments
+    axios.get(`${API_URL}/api/payments/connect/status/${restaurantId}`)
+      .then(r => setPayEnabled(r.data.pay_enabled))
+      .catch(() => {});
   }, [restaurantId, tableHash]);
 
   const fetchMenu = async () => {
@@ -130,6 +135,20 @@ export default function GuestMenu() {
 
   // Order confirmation screen
   if (orderPlaced) {
+    const handlePayBill = async () => {
+      try {
+        const res = await axios.post(`${API_URL}/api/payments/create-checkout-session`, {
+          order_id: orderPlaced.order_id,
+          origin_url: window.location.origin,
+        });
+        if (res.data.url) {
+          window.location.href = res.data.url;
+        }
+      } catch (err) {
+        alert(err.response?.data?.detail || 'Payment failed. Please ask your server.');
+      }
+    };
+
     return (
       <motion.div
         initial={{ opacity: 0 }}
@@ -182,6 +201,19 @@ export default function GuestMenu() {
         >
           Order More
         </motion.button>
+        {payEnabled && (
+          <motion.button
+            data-testid="pay-bill-button"
+            className="mt-4 bg-emerald-600 text-white px-8 py-3 rounded-full font-semibold text-base flex items-center gap-2 mx-auto"
+            whileTap={{ scale: 0.95 }}
+            onClick={handlePayBill}
+            initial={{ y: 20, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ delay: 0.8 }}
+          >
+            Pay Bill &middot; {sym}{orderPlaced.total?.toFixed(2) || '0.00'}
+          </motion.button>
+        )}
       </motion.div>
     );
   }

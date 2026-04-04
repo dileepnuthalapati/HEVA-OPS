@@ -45,7 +45,8 @@ api_router = APIRouter(prefix="/api")
 from routers import auth, platform, restaurants, menu, orders, reports, receipts
 from routers import cash_drawer, printers, tables, reservations
 from routers import subscriptions, notifications, staff, health, email
-from routers import qr_menu, kds, audit
+from routers import qr_menu, kds, audit, payments
+from routers import docs as feature_docs
 
 # Include all routers into the api_router
 api_router.include_router(auth.router)
@@ -67,6 +68,8 @@ api_router.include_router(email.router)
 api_router.include_router(qr_menu.router)
 api_router.include_router(kds.router)
 api_router.include_router(audit.router)
+api_router.include_router(payments.router)
+api_router.include_router(feature_docs.router)
 
 # Include the main api_router in the app
 fastapi_app.include_router(api_router)

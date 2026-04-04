@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
 import { BarChart3, TrendingUp, ShoppingBag, Coins, Calendar, ArrowLeft, Banknote, CreditCard, Download, FileText } from 'lucide-react';
-import jsPDF from 'jspdf';
 
 const getCurrencySymbol = (currency) => {
   const symbols = { 'GBP': '£', 'USD': '$', 'EUR': '€', 'INR': '₹' };
@@ -71,49 +70,61 @@ const Reports = () => {
     loadStats(startDate, endDate);
   };
 
-  const downloadPDF = () => {
+  const downloadPDF = async () => {
     if (!stats) return;
     try {
-      const doc = new jsPDF();
-      const cs = getCurrencySymbol(currency);
-      
-      doc.setFontSize(20);
-      doc.text('Sales Report', 105, 20, { align: 'center' });
-      doc.setFontSize(10);
-      doc.text(`Period: ${startDate} to ${endDate}`, 105, 30, { align: 'center' });
-      doc.text(`Generated: ${new Date().toLocaleString()}`, 105, 36, { align: 'center' });
-      
-      // Summary
-      doc.setFontSize(14);
-      doc.text('Summary', 14, 50);
-      doc.setFontSize(11);
-      const summaryY = 60;
-      doc.text(`Total Sales: ${cs}${stats.total_sales?.toFixed(2) || '0.00'}`, 14, summaryY);
-      doc.text(`Total Orders: ${stats.total_orders || 0}`, 14, summaryY + 8);
-      doc.text(`Average Order: ${cs}${stats.avg_order_value?.toFixed(2) || '0.00'}`, 14, summaryY + 16);
-      doc.text(`Cash Total: ${cs}${stats.cash_total?.toFixed(2) || '0.00'}`, 14, summaryY + 24);
-      doc.text(`Card Total: ${cs}${stats.card_total?.toFixed(2) || '0.00'}`, 14, summaryY + 32);
-      
-      // Product breakdown
-      if (stats.top_products?.length > 0) {
-        doc.setFontSize(14);
-        doc.text('Top Products', 14, summaryY + 50);
-        doc.setFontSize(10);
-        let y = summaryY + 60;
-        stats.top_products.forEach((p, i) => {
-          if (y > 270) { doc.addPage(); y = 20; }
-          doc.text(`${i + 1}. ${p.name} — Qty: ${p.quantity}, Revenue: ${cs}${p.revenue?.toFixed(2)}`, 14, y);
-          y += 8;
-        });
-      }
-      
-      // Open PDF in a new tab so user can view, save, or share
-      const pdfDataUri = doc.output('dataurlstring');
-      window.open(pdfDataUri, '_blank');
-      
-      toast.success('Report opened in new tab');
+      toast.loading('Generating PDF...', { id: 'pdf' });
+      const apiUrl = process.env.REACT_APP_BACKEND_URL;
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${apiUrl}/api/reports/generate`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          start_date: startDate,
+          end_date: endDate,
+          report_type: 'sales',
+        }),
+      });
+      if (!response.ok) throw new Error('PDF generation failed');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `sales_report_${startDate}_${endDate}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('PDF downloaded', { id: 'pdf' });
     } catch (error) {
-      toast.error('Failed to generate PDF');
+      toast.error('Failed to generate PDF', { id: 'pdf' });
+    }
+  };
+
+  const downloadFeatureGuide = async () => {
+    try {
+      toast.loading('Generating feature guide...', { id: 'guide' });
+      const apiUrl = process.env.REACT_APP_BACKEND_URL;
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${apiUrl}/api/docs/feature-guide`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error('Failed');
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'HevaPOS_Feature_Guide.pdf';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success('Feature guide downloaded', { id: 'guide' });
+    } catch {
+      toast.error('Failed to generate feature guide', { id: 'guide' });
     }
   };
 
@@ -134,9 +145,14 @@ const Reports = () => {
               </div>
               <p className="text-sm text-muted-foreground ml-11">Analyze your business performance</p>
             </div>
-            <Button onClick={downloadPDF} disabled={!stats} variant="outline" data-testid="download-pdf-btn">
-              <Download className="w-4 h-4 mr-2" /> Download PDF
-            </Button>
+            <div className="flex gap-2">
+              <Button onClick={downloadPDF} disabled={!stats} variant="outline" data-testid="download-pdf-btn">
+                <Download className="w-4 h-4 mr-2" /> Sales PDF
+              </Button>
+              <Button onClick={downloadFeatureGuide} variant="outline" data-testid="download-guide-btn">
+                <FileText className="w-4 h-4 mr-2" /> Feature Guide
+              </Button>
+            </div>
           </div>
 
           {/* Quick Range Buttons */}
