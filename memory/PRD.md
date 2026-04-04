@@ -1,90 +1,77 @@
 # HevaPOS - Product Requirements Document
 
 ## Overview
-Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB), mobile-first frontend (React + Capacitor Android APK). Three roles: Platform Owner, Restaurant Admin, Staff.
+Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB), mobile-first frontend (React + Capacitor APK). Three roles: Platform Owner, Restaurant Admin, Staff. Revenue model: **0.3% commission on QR orders via Stripe Connect**.
 
 ## Architecture
 ```
 /app/
 ├── backend/
-│   ├── server.py           # FastAPI + Socket.IO + Sentry + Rate Limiting
-│   ├── socket_manager.py   # Socket.IO server
-│   ├── database.py, indexes.py, rate_limiter.py, dependencies.py, models.py
+│   ├── server.py, socket_manager.py, database.py, indexes.py, rate_limiter.py
 │   └── routers/
 │       ├── auth.py, platform.py, restaurants.py, menu.py
-│       ├── orders.py        # Void modal + Manager PIN + WebSocket cancel
-│       ├── reports.py       # Local-time filtering, real PDF streaming
-│       ├── payments.py      # Stripe Pay-at-Table (Checkout Sessions + Webhook)
-│       ├── docs.py          # Feature Guide PDF generator
+│       ├── orders.py        # Void modal + Manager PIN + WebSocket
+│       ├── reports.py       # Local-time filtering, PDF streaming
+│       ├── payments.py      # Stripe Connect: hybrid fee (0.3% QR / 0% POS)
+│       ├── docs.py          # Feature Guide PDF
 │       ├── receipts.py, printers.py, cash_drawer.py
-│       ├── tables.py, reservations.py
-│       ├── subscriptions.py, notifications.py, staff.py, health.py, email.py
-│       ├── qr_menu.py, kds.py, audit.py
+│       ├── tables.py, reservations.py, qr_menu.py, kds.py, audit.py
+│       └── subscriptions.py, staff.py, notifications.py, email.py, health.py
 └── frontend/
     ├── src/
     │   ├── components/
-    │   │   ├── VoidReasonModal.js  # Quick-tap reasons + Manager PIN gate
-    │   │   └── Sidebar.js          # Consolidated Menu item
+    │   │   ├── VoidReasonModal.js, Sidebar.js, OfflineIndicator.js
     │   ├── pages/
-    │   │   ├── AdminDashboard.js   # + Kitchen Efficiency widget
-    │   │   ├── POSScreen.js        # Debounced + 3 buttons + overflow fix
-    │   │   ├── KitchenDisplay.js   # Keyboard shortcuts + 1080p + position labels
-    │   │   ├── MenuManagement.js   # Categories sidebar + Products grid
-    │   │   ├── GuestMenu.js        # + Pay Bill via Stripe
-    │   │   ├── AuditLog.js         # Enriched void badges + manager override
-    │   │   ├── Reports.js          # Real PDF download + Feature Guide button
-    │   │   ├── TableManagement.js  # Hidden raw QR hashes
-    │   │   ├── OrderHistory.js     # VoidReasonModal
-    │   ├── services/
-    │   │   ├── api.js              # Fixed cancel payload
-    │   │   ├── receiptGenerator.js # CP858 encoding for thermal printers
-    │   │   ├── socket.js, db.js, printer.js
-    │   └── context/AuthContext.js
+    │   │   ├── POSScreen.js, KitchenDisplay.js, MenuManagement.js
+    │   │   ├── AdminDashboard.js, PlatformDashboard.js (+ Stripe Connect stats)
+    │   │   ├── GuestMenu.js (+ conditional Pay Bill), PaymentSuccess.js
+    │   │   ├── RestaurantSettings.js (+ Stripe Connect tab)
+    │   │   ├── AuditLog.js, Reports.js, OrderHistory.js, TableManagement.js
+    │   ├── services/ (api.js, socket.js, receiptGenerator.js, printer.js, db.js)
 ```
 
-## Completed Features (All Phases)
+## Stripe Connect Architecture (Phase 5)
+- **Model**: Stripe Standard Connect
+- **Fee**: QR orders = 0.3% (math.ceil, rounded UP to nearest penny). POS orders = 0%
+- **Charges**: Direct Charges (restaurant pays Stripe processing)
+- **Metadata**: Every transaction includes `order_id` + `order_source` (qr/pos)
+- **Refund**: Platform fee retained on refund by default (Stripe standard)
+- **Safety**: Pay Bill hidden if restaurant hasn't connected Stripe
+- **Endpoints**:
+  - `POST /api/payments/connect/onboard` - Create Standard account + onboarding link
+  - `GET /api/payments/connect/status` - Check account status (admin)
+  - `GET /api/payments/connect/status/{restaurant_id}` - Public check
+  - `POST /api/payments/create-checkout-session` - QR checkout with hybrid fee
+  - `POST /api/payments/webhook` - checkout.session.completed + charge.refunded
+  - `POST /api/payments/refund` - Admin refund (fee retained)
+  - `GET /api/payments/platform/stats` - Super-admin commission dashboard
 
-### Phase 1: Core POS & Offline
-- Full POS with cart, discounts, notes, split payments
-- ESC/POS receipt generation in JS (offline capable, chunked)
-- CP858 encoding fix for thermal printers (£, €, etc.)
-- Offline order saving + IndexedDB sync
-- Button debouncing (prevents double orders)
-
-### Phase 2: QR Table Ordering + Pay-at-Table
-- Guest scan QR -> view menu -> order (public route, no login)
-- WebSocket push to POS + KDS
-- QR Kill Switch on admin dashboard
-- Stripe Pay-at-Table: Checkout Sessions + webhook + instant POS sync
-- Rate limiting on public QR endpoints
-
-### Phase 3: Real-time KDS
-- Full-screen dark-mode display (1080p optimized, 5-column grid)
-- Color-coded ticket lifecycle: NEW -> SEEN -> COOKING -> READY
-- Live wait timers, sound alerts, recall
-- Keyboard shortcuts: 1-9 bumps tickets, R refreshes
-- WebSocket-powered with safety polling fallback
-
-### Phase 4: Revenue Analytics & Audit Logs
-- Dashboard: Sales, Orders, Avg Order, Tables, Cash/Card split
-- Kitchen Efficiency widget (avg prep time from Acknowledged->Ready)
-- Hourly revenue chart, top products ranking
-- Immutable audit trail with void_category, void_note, manager_approved_by
-- VoidReasonModal: quick-tap reasons + Manager PIN for staff
-- Local-time date filtering (midnight-to-midnight, not UTC 2AM)
-- Real PDF report download from backend (reportlab, correct currency)
-
-### UX Improvements (Apr 2026)
-- Consolidated Menu Management (categories sidebar + products grid)
-- Pending Orders: 3 buttons (Edit, Cancel, Pay) + printer icon inline
-- POS overflow fix, Table Management responsive fix
-- Hidden raw QR hashes in admin (show only scannable QRs)
-- Feature Guide PDF for sales pitching
+## All Completed Features
+1. Core POS (cart, discounts, split payments, offline mode)
+2. ESC/POS Receipt Generation (CP858 encoding, chunking)
+3. QR Table Ordering (public guest menu, WebSocket push)
+4. Stripe Connect Pay-at-Table (hybrid 0.3% QR / 0% POS)
+5. Kitchen Display System (1080p, keyboard shortcuts 1-9, color-coded)
+6. Void/Audit System (quick-tap reasons, Manager PIN, immutable logs)
+7. Revenue Analytics Dashboard (+ Kitchen Efficiency widget)
+8. Menu Management (consolidated categories + products)
+9. Report PDF Export (server-generated reportlab)
+10. Feature Guide PDF for sales pitching
+11. Platform Owner commission dashboard (Total Volume, Earnings, Merchants)
+12. Button debouncing, overflow fixes, responsive improvements
 
 ## Upcoming (P1)
-- Print Void Receipt to Kitchen (optional paper trail)
-- Weekly Email Digest with benchmarks
+- Print Void Receipt to Kitchen
+- Weekly Email Digest
 
-## Future/Backlog (P2)
-- Deliverect / Middleware API Integration (UberEats, Deliveroo)
+## Backlog (P2)
+- Deliverect / Middleware API Integration
 - iOS App Build Prep
+
+## Production Checklist
+- [ ] Replace sk_test_emergent with real Stripe Platform key
+- [ ] Configure STRIPE_WEBHOOK_SECRET for signature verification
+- [ ] Set up Stripe webhook endpoint URL in Stripe Dashboard
+- [ ] Configure MongoDB Atlas connection string
+- [ ] Deploy backend to Railway
+- [ ] Build Android APK via Capacitor

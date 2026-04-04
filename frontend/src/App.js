@@ -36,6 +36,7 @@ import KitchenDisplay from './pages/KitchenDisplay';
 
 // Pages - Public (No Auth)
 import GuestMenu from './pages/GuestMenu';
+import PaymentSuccess from './pages/PaymentSuccess';
 
 // Styles
 import './App.css';
@@ -89,6 +90,7 @@ const AppRoutes = () => {
     <Routes>
       {/* Public routes — no auth required */}
       <Route path="/menu/:restaurantId/:tableHash" element={<GuestMenu />} />
+      <Route path="/payment-success" element={<PaymentSuccess />} />
       
       <Route path="/login" element={<Login />} />
       <Route

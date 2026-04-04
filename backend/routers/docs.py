@@ -95,14 +95,19 @@ async def generate_feature_guide(current_user: User = Depends(require_admin)):
 
     story.append(Spacer(1, 10))
 
-    # 4. Stripe Pay-at-Table
-    story.append(Paragraph("4. Stripe Pay-at-Table", h2_style))
+    # 4. Stripe Connect: Pay-at-Table & Platform Revenue
+    story.append(Paragraph("4. Stripe Connect: Pay-at-Table & Revenue Engine", h2_style))
     for line in [
-        "After ordering, guests can tap 'Pay Bill' to open Stripe Checkout",
-        "Secure PCI-compliant card payments without staff intervention",
-        "Webhook integration: order status updates to PAID automatically",
-        "Real-time sync: POS and table status update instantly via WebSocket",
-        "Support for multiple currencies (GBP, USD, EUR, INR)",
+        "Stripe Connect (Standard) — restaurants onboard their own Stripe accounts",
+        "Hybrid Commission: 0.3% fee on QR orders, 0% on POS orders",
+        "Math: on a 100 bill, platform earns 0.30 per QR transaction (rounded up to nearest penny)",
+        "Direct Charges model: restaurant pays Stripe processing fee",
+        "Guest taps 'Pay Bill' after ordering via QR — opens Stripe Checkout",
+        "Webhook listener verifies payment and marks order as PAID",
+        "WebSocket instant sync: table status turns Green on POS immediately",
+        "Refund handling: platform fee retained by default (service was rendered)",
+        "Auto-disabled: Pay Button hidden if restaurant hasn't connected Stripe",
+        "Platform Owner super-admin view: Total Volume, Earnings, Merchant Breakdown",
     ]:
         story.append(Paragraph(f"\u2022 {line}", bullet_style))
 

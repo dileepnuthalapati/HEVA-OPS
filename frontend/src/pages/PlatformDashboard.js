@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
 import { restaurantAPI } from '../services/api';
+import api from '../services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
-import { Building2, TrendingUp, DollarSign, Users, AlertTriangle, CheckCircle } from 'lucide-react';
+import { Building2, TrendingUp, DollarSign, Users, AlertTriangle, CheckCircle, CreditCard, QrCode, Banknote } from 'lucide-react';
 
 const PlatformDashboard = () => {
   const [stats, setStats] = useState({
@@ -16,6 +17,7 @@ const PlatformDashboard = () => {
   });
   const [restaurants, setRestaurants] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [paymentStats, setPaymentStats] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -23,8 +25,12 @@ const PlatformDashboard = () => {
 
   const loadData = async () => {
     try {
-      const data = await restaurantAPI.getAll();
+      const [data, pStats] = await Promise.all([
+        restaurantAPI.getAll(),
+        api.get('/payments/platform/stats').then(r => r.data).catch(() => null),
+      ]);
       setRestaurants(data);
+      if (pStats) setPaymentStats(pStats);
       
       // Calculate stats
       const active = data.filter(r => r.subscription_status === 'active').length;
@@ -131,6 +137,110 @@ const PlatformDashboard = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* Stripe Connect: Commission Dashboard */}
+          {paymentStats && (
+            <div className="mt-6 space-y-4" data-testid="stripe-connect-stats">
+              <h2 className="text-lg font-bold flex items-center gap-2">
+                <CreditCard className="w-5 h-5 text-indigo-600" /> Stripe Connect Revenue
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <Card className="border-indigo-200 bg-indigo-50/30">
+                  <CardContent className="pt-5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Banknote className="w-4 h-4 text-indigo-600" />
+                      <p className="text-xs font-medium text-indigo-700">Total Volume</p>
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-indigo-900" data-testid="total-volume">
+                      {paymentStats.total_volume.toFixed(2)}
+                    </div>
+                    <p className="text-xs text-indigo-600/70 mt-1">{paymentStats.total_transactions} transactions</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-emerald-200 bg-emerald-50/30">
+                  <CardContent className="pt-5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <TrendingUp className="w-4 h-4 text-emerald-600" />
+                      <p className="text-xs font-medium text-emerald-700">Platform Earnings (0.3%)</p>
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-emerald-900" data-testid="platform-earnings">
+                      {paymentStats.total_platform_fees.toFixed(2)}
+                    </div>
+                    <p className="text-xs text-emerald-600/70 mt-1">From {paymentStats.qr_transactions} QR payments</p>
+                  </CardContent>
+                </Card>
+
+                <Card className="border-purple-200 bg-purple-50/30">
+                  <CardContent className="pt-5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <QrCode className="w-4 h-4 text-purple-600" />
+                      <p className="text-xs font-medium text-purple-700">QR Volume (0.3% fee)</p>
+                    </div>
+                    <div className="text-2xl font-bold font-mono text-purple-900" data-testid="qr-volume">
+                      {paymentStats.qr_volume.toFixed(2)}
+                    </div>
+                    <p className="text-xs text-purple-600/70 mt-1">{paymentStats.qr_transactions} QR orders</p>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="pt-5">
+                    <div className="flex items-center gap-2 mb-1">
+                      <Building2 className="w-4 h-4 text-slate-600" />
+                      <p className="text-xs font-medium text-slate-700">Connected Merchants</p>
+                    </div>
+                    <div className="text-2xl font-bold font-mono" data-testid="connected-merchants">
+                      {paymentStats.connected_merchants}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">{paymentStats.pending_merchants} pending</p>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Per-restaurant breakdown table */}
+              {paymentStats.merchants.length > 0 && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-sm">Merchant Breakdown</CardTitle>
+                    <CardDescription>Per-restaurant Stripe Connect status and volume</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm" data-testid="merchant-table">
+                        <thead>
+                          <tr className="border-b text-left text-xs text-muted-foreground">
+                            <th className="py-2 pr-4 font-medium">Restaurant</th>
+                            <th className="py-2 pr-4 font-medium">Status</th>
+                            <th className="py-2 pr-4 font-medium text-right">Volume</th>
+                            <th className="py-2 pr-4 font-medium text-right">QR Volume</th>
+                            <th className="py-2 font-medium text-right">Your Fee</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {paymentStats.merchants.map((m, i) => (
+                            <tr key={i} className="border-b last:border-0">
+                              <td className="py-2 pr-4 font-medium">{m.name}</td>
+                              <td className="py-2 pr-4">
+                                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${
+                                  m.charges_enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-700'
+                                }`}>
+                                  {m.charges_enabled ? 'Active' : 'Pending'}
+                                </span>
+                              </td>
+                              <td className="py-2 pr-4 text-right font-mono">{m.total_volume.toFixed(2)}</td>
+                              <td className="py-2 pr-4 text-right font-mono">{m.qr_volume.toFixed(2)}</td>
+                              <td className="py-2 text-right font-mono text-emerald-600 font-semibold">{m.platform_fees.toFixed(2)}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          )}
 
           {/* Recent Restaurants */}
           <Card>

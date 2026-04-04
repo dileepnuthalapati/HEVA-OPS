@@ -9,10 +9,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff } from 'lucide-react';
+import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import api from '../services/api';
 
 const TABS = [
   { id: 'business', label: 'Business Info', icon: Store },
+  { id: 'stripe', label: 'Stripe Payments', icon: CreditCard },
   { id: 'staff', label: 'User Management', icon: Users },
   { id: 'password', label: 'Change Password', icon: Lock },
 ];
@@ -45,8 +47,13 @@ const RestaurantSettings = () => {
   const [pwdSaving, setPwdSaving] = useState(false);
   const [showPwdFields, setShowPwdFields] = useState({ current: false, new: false, confirm: false });
 
+  // Stripe Connect
+  const [stripeStatus, setStripeStatus] = useState(null);
+  const [stripeLoading, setStripeLoading] = useState(false);
+
   useEffect(() => { loadRestaurant(); }, []);
   useEffect(() => { if (activeTab === 'staff') loadStaff(); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'stripe') loadStripeStatus(); }, [activeTab]);
 
   const loadRestaurant = async () => {
     try {
@@ -69,6 +76,32 @@ const RestaurantSettings = () => {
   };
 
   const handleChange = (field, value) => setFormData({ ...formData, [field]: value });
+
+  // Stripe Connect
+  const loadStripeStatus = async () => {
+    setStripeLoading(true);
+    try {
+      const res = await api.get('/payments/connect/status');
+      setStripeStatus(res.data);
+    } catch { setStripeStatus({ connected: false, status: 'not_started' }); }
+    finally { setStripeLoading(false); }
+  };
+
+  const handleConnectStripe = async () => {
+    try {
+      setStripeLoading(true);
+      const currentUrl = window.location.href.split('?')[0];
+      const res = await api.post('/payments/connect/onboard', {
+        return_url: currentUrl + '?stripe=return',
+        refresh_url: currentUrl + '?stripe=refresh',
+      });
+      if (res.data.url) {
+        window.location.href = res.data.url;
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Failed to start Stripe onboarding');
+    } finally { setStripeLoading(false); }
+  };
 
   // Staff handlers
   const loadStaff = async () => {
@@ -299,6 +332,80 @@ const RestaurantSettings = () => {
                 </CardContent>
               </Card>
             </>
+          )}
+
+          {/* Stripe Connect Tab */}
+          {activeTab === 'stripe' && (
+            <Card data-testid="stripe-connect-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><CreditCard className="w-5 h-5" /> Stripe Payments</CardTitle>
+                <CardDescription>Connect your Stripe account to accept online payments from guests</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {stripeLoading ? (
+                  <div className="py-8 text-center text-muted-foreground">Loading...</div>
+                ) : stripeStatus?.connected ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+                      <CheckCircle className="w-8 h-8 text-emerald-600 shrink-0" />
+                      <div>
+                        <p className="font-bold text-emerald-900">Stripe Connected</p>
+                        <p className="text-sm text-emerald-700">Your account is active and accepting payments.</p>
+                        <p className="text-xs text-emerald-600/70 mt-1 font-mono">{stripeStatus.account_id}</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="p-3 bg-muted/40 rounded-lg">
+                        <p className="text-xs text-muted-foreground">Charges</p>
+                        <p className="font-bold text-sm">{stripeStatus.charges_enabled ? 'Enabled' : 'Disabled'}</p>
+                      </div>
+                      <div className="p-3 bg-muted/40 rounded-lg">
+                        <p className="text-xs text-muted-foreground">Payouts</p>
+                        <p className="font-bold text-sm">{stripeStatus.payouts_enabled ? 'Enabled' : 'Disabled'}</p>
+                      </div>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Guests who scan your QR codes will see a "Pay Bill" button. A 0.3% platform fee applies to each transaction.
+                    </p>
+                  </div>
+                ) : stripeStatus?.status === 'pending' || stripeStatus?.status === 'incomplete' ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-3 p-4 bg-amber-50 border border-amber-200 rounded-lg">
+                      <Clock className="w-8 h-8 text-amber-600 shrink-0" />
+                      <div>
+                        <p className="font-bold text-amber-900">Onboarding Incomplete</p>
+                        <p className="text-sm text-amber-700">You started connecting but haven't finished. Click below to resume.</p>
+                      </div>
+                    </div>
+                    <Button onClick={handleConnectStripe} data-testid="resume-stripe-btn" className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white">
+                      <ExternalLink className="w-4 h-4 mr-2" /> Resume Stripe Setup
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-6">
+                    <div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                      <AlertCircle className="w-8 h-8 text-slate-500 shrink-0" />
+                      <div>
+                        <p className="font-bold text-slate-800">Not Connected</p>
+                        <p className="text-sm text-slate-600">Connect your Stripe account to enable Pay-at-Table for your guests.</p>
+                      </div>
+                    </div>
+                    <div className="space-y-2 text-sm text-muted-foreground">
+                      <p className="font-medium text-foreground">How it works:</p>
+                      <ul className="space-y-1 ml-4 list-disc">
+                        <li>Guest scans the QR code on their table</li>
+                        <li>After ordering, they tap "Pay Bill" to pay with card</li>
+                        <li>Payment goes directly to your bank account</li>
+                        <li>A small 0.3% platform fee is applied per transaction</li>
+                      </ul>
+                    </div>
+                    <Button onClick={handleConnectStripe} data-testid="connect-stripe-btn" disabled={stripeLoading} className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white text-base font-semibold">
+                      <ExternalLink className="w-4 h-4 mr-2" /> Connect with Stripe
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
           )}
 
           {/* Staff Management Tab */}
