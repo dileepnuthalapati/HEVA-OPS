@@ -15,6 +15,7 @@ async def create_category(category_data: CategoryCreate, current_user: User = De
         "id": cat_id,
         "name": category_data.name,
         "description": category_data.description,
+        "restaurant_id": current_user.restaurant_id,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.categories.insert_one(cat_dict)
@@ -23,14 +24,9 @@ async def create_category(category_data: CategoryCreate, current_user: User = De
 
 @router.get("/categories", response_model=List[Category])
 async def get_categories(current_user: User = Depends(get_current_user)):
-    restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0}) if current_user.restaurant_id else None
     query = {}
-    if restaurant and restaurant.get("id"):
-        query["$or"] = [
-            {"restaurant_id": restaurant["id"]},
-            {"restaurant_id": None},
-            {"restaurant_id": {"$exists": False}}
-        ]
+    if current_user.restaurant_id:
+        query["restaurant_id"] = current_user.restaurant_id
     categories = await db.categories.find(query, {"_id": 0}).to_list(100)
     return [Category(**c) for c in categories]
 
@@ -71,6 +67,7 @@ async def create_product(product_data: ProductCreate, current_user: User = Depen
         "price": product_data.price,
         "in_stock": product_data.in_stock,
         "description": product_data.description,
+        "restaurant_id": current_user.restaurant_id,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.products.insert_one(prod_dict)
@@ -84,22 +81,12 @@ async def get_products(
     current_user: User = Depends(get_current_user)
 ):
     query = {}
+    if current_user.restaurant_id:
+        query["restaurant_id"] = current_user.restaurant_id
     if category_id:
         query["category_id"] = category_id
     if in_stock is not None:
         query["in_stock"] = in_stock
-
-    restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0}) if current_user.restaurant_id else None
-    if restaurant and restaurant.get("id"):
-        query_or = [
-            {"restaurant_id": restaurant["id"]},
-            {"restaurant_id": None},
-            {"restaurant_id": {"$exists": False}}
-        ]
-        if query:
-            query = {"$and": [query, {"$or": query_or}]}
-        else:
-            query = {"$or": query_or}
 
     products = await db.products.find(query, {"_id": 0}).to_list(1000)
     return [Product(**p) for p in products]

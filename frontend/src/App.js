@@ -125,7 +125,7 @@ const AppRoutes = () => {
       <Route path="/products" element={<ProtectedRoute restaurantAdminOnly><ProductManagement /></ProtectedRoute>} />
       <Route path="/menu-management" element={<ProtectedRoute restaurantAdminOnly><MenuManagement /></ProtectedRoute>} />
       <Route path="/reports" element={<ProtectedRoute restaurantAdminOnly><Reports /></ProtectedRoute>} />
-      <Route path="/cash-drawer" element={<ProtectedRoute restaurantAdminOnly><CashDrawer /></ProtectedRoute>} />
+      <Route path="/cash-drawer" element={<ProtectedRoute><CashDrawer /></ProtectedRoute>} />
       <Route path="/printers" element={<ProtectedRoute restaurantAdminOnly><PrinterSettings /></ProtectedRoute>} />
       <Route path="/audit" element={<ProtectedRoute restaurantAdminOnly><AuditLog /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute restaurantAdminOnly><RestaurantSettings /></ProtectedRoute>} />

@@ -83,6 +83,7 @@ class Order(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
     order_number: int = 0
+    restaurant_id: Optional[str] = None
     items: List[OrderItem] = []
     subtotal: float = 0.0
     discount_amount: Optional[float] = 0.0
@@ -97,6 +98,7 @@ class Order(BaseModel):
     created_by: str = ""
     cancel_reason: Optional[str] = None
     table_id: Optional[str] = None
+    source: Optional[str] = "pos"
     created_at: Optional[str] = None
     completed_at: Optional[str] = None
     cancelled_at: Optional[str] = None

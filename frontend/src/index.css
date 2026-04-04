@@ -111,6 +111,10 @@ body {
   overflow: hidden;
 }
 
+.pos-screen > div:first-child {
+  min-height: 0;
+}
+
 .pos-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));

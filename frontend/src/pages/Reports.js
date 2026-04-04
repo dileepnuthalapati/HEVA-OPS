@@ -149,9 +149,6 @@ const Reports = () => {
               <Button onClick={downloadPDF} disabled={!stats} variant="outline" data-testid="download-pdf-btn">
                 <Download className="w-4 h-4 mr-2" /> Sales PDF
               </Button>
-              <Button onClick={downloadFeatureGuide} variant="outline" data-testid="download-guide-btn">
-                <FileText className="w-4 h-4 mr-2" /> Feature Guide
-              </Button>
             </div>
           </div>
 

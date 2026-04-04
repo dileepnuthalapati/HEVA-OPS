@@ -827,7 +827,7 @@ const POSScreen = () => {
         </div>
       )}
       {/* Main Product Area */}
-      <div className="flex-1 flex flex-col min-w-0">
+      <div className="flex-1 flex flex-col min-w-0 min-h-0">
         {/* Top Bar */}
         <div className="bg-card border-b px-3 py-2 md:px-6 md:py-4 flex items-center justify-between gap-2 flex-shrink-0">
           <div className="flex items-center gap-2 md:gap-4 min-w-0">
@@ -955,7 +955,7 @@ const POSScreen = () => {
         </div>
 
         {/* Products Grid or Pending Orders */}
-        <div className="flex-1 overflow-y-auto p-3 md:p-6">
+        <div className="flex-1 overflow-y-auto p-3 md:p-6 min-h-0">
           {showPendingOrders ? (
             <div className="space-y-4">
               <h2 className="text-2xl font-bold mb-4">Pending Orders</h2>
@@ -1607,10 +1607,10 @@ const POSScreen = () => {
               <div className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
                   <button
-                    className={`h-20 flex flex-col items-center justify-center gap-2 rounded-lg border-2 transition-all ${
+                    className={`h-20 flex flex-col items-center justify-center gap-2 rounded-xl border-2 transition-all font-semibold ${
                       selectedPaymentMethod === 'cash'
-                        ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200 text-emerald-800'
-                        : 'border-muted bg-card hover:border-muted-foreground/30 text-muted-foreground'
+                        ? 'border-emerald-500 bg-emerald-100 ring-2 ring-emerald-300 text-emerald-800 scale-[1.02] shadow-md'
+                        : 'border-slate-300 bg-slate-50 hover:border-emerald-300 hover:bg-emerald-50 text-slate-600'
                     }`}
                     data-testid="payment-cash-button"
                     onClick={() => setSelectedPaymentMethod('cash')}
@@ -1619,10 +1619,10 @@ const POSScreen = () => {
                     <span className="text-base font-bold">Cash</span>
                   </button>
                   <button
-                    className={`h-20 flex flex-col items-center justify-center gap-2 rounded-lg border-2 transition-all ${
+                    className={`h-20 flex flex-col items-center justify-center gap-2 rounded-xl border-2 transition-all font-semibold ${
                       selectedPaymentMethod === 'card'
-                        ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200 text-blue-800'
-                        : 'border-muted bg-card hover:border-muted-foreground/30 text-muted-foreground'
+                        ? 'border-blue-500 bg-blue-100 ring-2 ring-blue-300 text-blue-800 scale-[1.02] shadow-md'
+                        : 'border-slate-300 bg-slate-50 hover:border-blue-300 hover:bg-blue-50 text-slate-600'
                     }`}
                     data-testid="payment-card-button"
                     onClick={() => setSelectedPaymentMethod('card')}
