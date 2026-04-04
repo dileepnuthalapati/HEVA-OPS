@@ -107,8 +107,8 @@ const RestaurantSettings = () => {
       }
     } catch (err) {
       const detail = err.response?.data?.detail || '';
-      if (detail.includes('Invalid API Key') || detail.includes('authentication') || detail.includes('sk_test_emergent')) {
-        toast.error('Stripe API key is not configured. Please contact your platform administrator to set up a valid Stripe key.');
+      if (detail.includes('not yet available') || detail.includes('being set up') || detail.includes('Invalid API Key') || detail.includes('authentication')) {
+        toast.error(detail || 'Stripe payments are not yet available. Please try again later.');
       } else {
         toast.error(detail || 'Failed to start Stripe onboarding');
       }
