@@ -16,7 +16,7 @@ const TABS = [
   { id: 'business', label: 'Business Info', icon: Store },
   { id: 'stripe', label: 'Stripe Payments', icon: CreditCard },
   { id: 'staff', label: 'User Management', icon: Users },
-  { id: 'password', label: 'Change Password', icon: Lock },
+  { id: 'security', label: 'Security', icon: KeyRound },
 ];
 
 const RestaurantSettings = () => {
@@ -51,9 +51,16 @@ const RestaurantSettings = () => {
   const [stripeStatus, setStripeStatus] = useState(null);
   const [stripeLoading, setStripeLoading] = useState(false);
 
+  // Manager PIN
+  const [hasManagerPin, setHasManagerPin] = useState(false);
+  const [pinForm, setPinForm] = useState({ password: '', pin: '', confirmPin: '' });
+  const [pinSaving, setPinSaving] = useState(false);
+  const [showPinFields, setShowPinFields] = useState({ password: false, pin: false, confirm: false });
+
   useEffect(() => { loadRestaurant(); }, []);
   useEffect(() => { if (activeTab === 'staff') loadStaff(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'stripe') loadStripeStatus(); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'security') loadManagerPinStatus(); }, [activeTab]);
 
   const loadRestaurant = async () => {
     try {
@@ -99,7 +106,12 @@ const RestaurantSettings = () => {
         window.location.href = res.data.url;
       }
     } catch (err) {
-      toast.error(err.response?.data?.detail || 'Failed to start Stripe onboarding');
+      const detail = err.response?.data?.detail || '';
+      if (detail.includes('not yet available') || detail.includes('being set up') || detail.includes('Invalid API Key') || detail.includes('authentication')) {
+        toast.error(detail || 'Stripe payments are not yet available. Please try again later.');
+      } else {
+        toast.error(detail || 'Failed to start Stripe onboarding');
+      }
     } finally { setStripeLoading(false); }
   };
 
@@ -178,6 +190,32 @@ const RestaurantSettings = () => {
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to change password');
     } finally { setPwdSaving(false); }
+  };
+
+  // Manager PIN handlers
+  const loadManagerPinStatus = async () => {
+    try {
+      const res = await api.get('/auth/has-manager-pin');
+      setHasManagerPin(res.data.has_pin);
+    } catch { setHasManagerPin(false); }
+  };
+
+  const handleSetManagerPin = async (e) => {
+    e.preventDefault();
+    if (pinForm.pin !== pinForm.confirmPin) return toast.error('PINs do not match');
+    if (pinForm.pin.length < 4) return toast.error('PIN must be at least 4 digits');
+    setPinSaving(true);
+    try {
+      await api.post('/auth/set-manager-pin', {
+        current_password: pinForm.password,
+        manager_pin: pinForm.pin,
+      });
+      toast.success(hasManagerPin ? 'Manager PIN updated' : 'Manager PIN set successfully');
+      setPinForm({ password: '', pin: '', confirmPin: '' });
+      setHasManagerPin(true);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to set Manager PIN');
+    } finally { setPinSaving(false); }
   };
 
   if (loading) {
@@ -466,48 +504,101 @@ const RestaurantSettings = () => {
             </Card>
           )}
 
-          {/* Change Password Tab */}
-          {activeTab === 'password' && (
-            <Card data-testid="change-password-card">
-              <CardHeader>
-                <CardTitle className="text-xl font-semibold">Change Your Password</CardTitle>
-                <CardDescription>Update your account password</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleChangeOwnPassword} className="space-y-5 max-w-md">
-                  <div>
-                    <Label htmlFor="current-pwd" className="text-sm font-semibold">Current Password</Label>
-                    <div className="relative">
-                      <Input id="current-pwd" data-testid="current-password-input" type={showPwdFields.current ? 'text' : 'password'} value={pwdForm.current} onChange={(e) => setPwdForm({ ...pwdForm, current: e.target.value })} placeholder="Enter current password" required className="h-12 pr-10" />
-                      <button type="button" onClick={() => setShowPwdFields({ ...showPwdFields, current: !showPwdFields.current })} className="absolute right-3 top-3.5 text-muted-foreground">
-                        {showPwdFields.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
+          {/* Security Tab */}
+          {activeTab === 'security' && (
+            <div className="space-y-6">
+              {/* Change Password Card */}
+              <Card data-testid="change-password-card">
+                <CardHeader>
+                  <CardTitle className="text-xl font-semibold flex items-center gap-2"><Lock className="w-5 h-5" /> Change Your Password</CardTitle>
+                  <CardDescription>Update your account password</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <form onSubmit={handleChangeOwnPassword} className="space-y-5 max-w-md">
+                    <div>
+                      <Label htmlFor="current-pwd" className="text-sm font-semibold">Current Password</Label>
+                      <div className="relative">
+                        <Input id="current-pwd" data-testid="current-password-input" type={showPwdFields.current ? 'text' : 'password'} value={pwdForm.current} onChange={(e) => setPwdForm({ ...pwdForm, current: e.target.value })} placeholder="Enter current password" required className="h-12 pr-10" />
+                        <button type="button" onClick={() => setShowPwdFields({ ...showPwdFields, current: !showPwdFields.current })} className="absolute right-3 top-3.5 text-muted-foreground">
+                          {showPwdFields.current ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="new-pwd" className="text-sm font-semibold">New Password</Label>
-                    <div className="relative">
-                      <Input id="new-pwd" data-testid="new-password-input" type={showPwdFields.new ? 'text' : 'password'} value={pwdForm.newPwd} onChange={(e) => setPwdForm({ ...pwdForm, newPwd: e.target.value })} placeholder="Enter new password (min 4 chars)" required className="h-12 pr-10" />
-                      <button type="button" onClick={() => setShowPwdFields({ ...showPwdFields, new: !showPwdFields.new })} className="absolute right-3 top-3.5 text-muted-foreground">
-                        {showPwdFields.new ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
+                    <div>
+                      <Label htmlFor="new-pwd" className="text-sm font-semibold">New Password</Label>
+                      <div className="relative">
+                        <Input id="new-pwd" data-testid="new-password-input" type={showPwdFields.new ? 'text' : 'password'} value={pwdForm.newPwd} onChange={(e) => setPwdForm({ ...pwdForm, newPwd: e.target.value })} placeholder="Enter new password (min 4 chars)" required className="h-12 pr-10" />
+                        <button type="button" onClick={() => setShowPwdFields({ ...showPwdFields, new: !showPwdFields.new })} className="absolute right-3 top-3.5 text-muted-foreground">
+                          {showPwdFields.new ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
-                  </div>
-                  <div>
-                    <Label htmlFor="confirm-pwd" className="text-sm font-semibold">Confirm New Password</Label>
-                    <div className="relative">
-                      <Input id="confirm-pwd" data-testid="confirm-password-input" type={showPwdFields.confirm ? 'text' : 'password'} value={pwdForm.confirm} onChange={(e) => setPwdForm({ ...pwdForm, confirm: e.target.value })} placeholder="Re-enter new password" required className="h-12 pr-10" />
-                      <button type="button" onClick={() => setShowPwdFields({ ...showPwdFields, confirm: !showPwdFields.confirm })} className="absolute right-3 top-3.5 text-muted-foreground">
-                        {showPwdFields.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
+                    <div>
+                      <Label htmlFor="confirm-pwd" className="text-sm font-semibold">Confirm New Password</Label>
+                      <div className="relative">
+                        <Input id="confirm-pwd" data-testid="confirm-password-input" type={showPwdFields.confirm ? 'text' : 'password'} value={pwdForm.confirm} onChange={(e) => setPwdForm({ ...pwdForm, confirm: e.target.value })} placeholder="Re-enter new password" required className="h-12 pr-10" />
+                        <button type="button" onClick={() => setShowPwdFields({ ...showPwdFields, confirm: !showPwdFields.confirm })} className="absolute right-3 top-3.5 text-muted-foreground">
+                          {showPwdFields.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
                     </div>
+                    <Button type="submit" data-testid="change-password-btn" disabled={pwdSaving} className="h-12 px-8">
+                      <Lock className="w-4 h-4 mr-2" /> {pwdSaving ? 'Changing...' : 'Change Password'}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+
+              {/* Manager PIN Card */}
+              <Card data-testid="manager-pin-card">
+                <CardHeader>
+                  <CardTitle className="text-xl font-semibold flex items-center gap-2"><KeyRound className="w-5 h-5" /> Manager PIN</CardTitle>
+                  <CardDescription>
+                    {hasManagerPin
+                      ? 'Your Manager PIN is set. Staff will need this PIN to authorize voids and cancellations.'
+                      : 'Set a dedicated PIN that staff must enter to authorize order voids and cancellations.'}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className={`mb-4 flex items-center gap-2 text-sm px-3 py-2 rounded-lg ${hasManagerPin ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' : 'bg-amber-50 text-amber-700 border border-amber-200'}`} data-testid="pin-status-badge">
+                    {hasManagerPin ? <CheckCircle className="w-4 h-4" /> : <AlertCircle className="w-4 h-4" />}
+                    {hasManagerPin ? 'PIN is active' : 'No PIN set — voids are unprotected'}
                   </div>
-                  <Button type="submit" data-testid="change-password-btn" disabled={pwdSaving} className="h-12 px-8">
-                    <Lock className="w-4 h-4 mr-2" /> {pwdSaving ? 'Changing...' : 'Change Password'}
-                  </Button>
-                </form>
-              </CardContent>
-            </Card>
+                  <form onSubmit={handleSetManagerPin} className="space-y-5 max-w-md">
+                    <div>
+                      <Label htmlFor="pin-password" className="text-sm font-semibold">Your Account Password</Label>
+                      <div className="relative">
+                        <Input id="pin-password" data-testid="pin-password-input" type={showPinFields.password ? 'text' : 'password'} value={pinForm.password} onChange={(e) => setPinForm({ ...pinForm, password: e.target.value })} placeholder="Verify your password first" required className="h-12 pr-10" />
+                        <button type="button" onClick={() => setShowPinFields({ ...showPinFields, password: !showPinFields.password })} className="absolute right-3 top-3.5 text-muted-foreground">
+                          {showPinFields.password ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="manager-pin" className="text-sm font-semibold">{hasManagerPin ? 'New Manager PIN' : 'Manager PIN'}</Label>
+                      <div className="relative">
+                        <Input id="manager-pin" data-testid="manager-pin-input" type={showPinFields.pin ? 'text' : 'password'} value={pinForm.pin} onChange={(e) => setPinForm({ ...pinForm, pin: e.target.value })} placeholder="Enter 4+ digit PIN" required className="h-12 pr-10" inputMode="numeric" />
+                        <button type="button" onClick={() => setShowPinFields({ ...showPinFields, pin: !showPinFields.pin })} className="absolute right-3 top-3.5 text-muted-foreground">
+                          {showPinFields.pin ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <Label htmlFor="confirm-pin" className="text-sm font-semibold">Confirm PIN</Label>
+                      <div className="relative">
+                        <Input id="confirm-pin" data-testid="confirm-pin-input" type={showPinFields.confirm ? 'text' : 'password'} value={pinForm.confirmPin} onChange={(e) => setPinForm({ ...pinForm, confirmPin: e.target.value })} placeholder="Re-enter PIN" required className="h-12 pr-10" inputMode="numeric" />
+                        <button type="button" onClick={() => setShowPinFields({ ...showPinFields, confirm: !showPinFields.confirm })} className="absolute right-3 top-3.5 text-muted-foreground">
+                          {showPinFields.confirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <Button type="submit" data-testid="set-pin-btn" disabled={pinSaving} className="h-12 px-8">
+                      <KeyRound className="w-4 h-4 mr-2" /> {pinSaving ? 'Saving...' : hasManagerPin ? 'Update PIN' : 'Set Manager PIN'}
+                    </Button>
+                  </form>
+                </CardContent>
+              </Card>
+            </div>
           )}
         </div>
       </div>

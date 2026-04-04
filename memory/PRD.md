@@ -25,8 +25,10 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
     │   │   ├── POSScreen.js, KitchenDisplay.js, MenuManagement.js
     │   │   ├── AdminDashboard.js, PlatformDashboard.js (+ Stripe Connect stats)
     │   │   ├── GuestMenu.js (+ conditional Pay Bill), PaymentSuccess.js
-    │   │   ├── RestaurantSettings.js (+ Stripe Connect tab)
+    │   │   ├── RestaurantSettings.js (+ Stripe Connect tab + Security/Manager PIN tab)
+    │   │   ├── RestaurantManagement.js (+ multi-currency create/edit)
     │   │   ├── AuditLog.js, Reports.js, OrderHistory.js, TableManagement.js
+    │   ├── context/AuthContext.js (+ offline login fallback)
     │   ├── services/ (api.js, socket.js, receiptGenerator.js, printer.js, db.js)
 ```
 
@@ -35,16 +37,7 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 - **Fee**: QR orders = 0.3% (math.ceil, rounded UP to nearest penny). POS orders = 0%
 - **Charges**: Direct Charges (restaurant pays Stripe processing)
 - **Metadata**: Every transaction includes `order_id` + `order_source` (qr/pos)
-- **Refund**: Platform fee retained on refund by default (Stripe standard)
-- **Safety**: Pay Bill hidden if restaurant hasn't connected Stripe
-- **Endpoints**:
-  - `POST /api/payments/connect/onboard` - Create Standard account + onboarding link
-  - `GET /api/payments/connect/status` - Check account status (admin)
-  - `GET /api/payments/connect/status/{restaurant_id}` - Public check
-  - `POST /api/payments/create-checkout-session` - QR checkout with hybrid fee
-  - `POST /api/payments/webhook` - checkout.session.completed + charge.refunded
-  - `POST /api/payments/refund` - Admin refund (fee retained)
-  - `GET /api/payments/platform/stats` - Super-admin commission dashboard
+- **Safety**: Pay Bill hidden if restaurant hasn't connected Stripe; placeholder key guard on onboarding
 
 ## All Completed Features
 1. Core POS (cart, discounts, split payments, offline mode)
@@ -59,6 +52,18 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 10. Feature Guide PDF for sales pitching
 11. Platform Owner commission dashboard (Total Volume, Earnings, Merchants)
 12. Button debouncing, overflow fixes, responsive improvements
+13. Staff Management UI (CRUD, password reset)
+14. Security tab with Manager PIN setup UI
+15. Offline authentication (cached credential fallback)
+16. Multi-currency restaurant creation fix (INR, USD, EUR, etc.)
+
+## Bug Fixes Completed (Apr 4, 2026)
+- PDF report download: Fixed auth token key (`token` -> `auth_token`)
+- Feature guide download: Same auth token fix
+- Manager PIN UI: Added Security tab in RestaurantSettings with PIN set/update form
+- Multi-currency crash: Fixed RestaurantManagement.js payload to match backend RestaurantCreate model
+- Stripe Connect error: Added placeholder key guard + helpful error message
+- Offline auth: Added credential caching in AuthContext for offline login fallback
 
 ## Upcoming (P1)
 - Print Void Receipt to Kitchen

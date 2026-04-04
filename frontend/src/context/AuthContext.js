@@ -79,16 +79,42 @@ export const AuthProvider = ({ children }) => {
       return { user: demoUser };
     }
     
-    // Normal login
-    const response = await authAPI.login(username, password);
-    const userData = {
-      username: response.username,
-      role: response.role,
-      restaurant_id: response.restaurant_id,
-    };
-    setUser(userData);
-    localStorage.setItem('user', JSON.stringify(userData));
-    return { user: userData, ...response };
+    // Try online login first
+    try {
+      const response = await authAPI.login(username, password);
+      const userData = {
+        username: response.username,
+        role: response.role,
+        restaurant_id: response.restaurant_id,
+      };
+      setUser(userData);
+      localStorage.setItem('user', JSON.stringify(userData));
+      // Cache credentials for offline login
+      try {
+        const hash = btoa(username + ':' + password);
+        localStorage.setItem('offline_cred', hash);
+        localStorage.setItem('offline_user', JSON.stringify(userData));
+      } catch {}
+      return { user: userData, ...response };
+    } catch (error) {
+      // If offline, try cached credentials
+      if (!navigator.onLine) {
+        try {
+          const cachedHash = localStorage.getItem('offline_cred');
+          const attemptHash = btoa(username + ':' + password);
+          if (cachedHash && cachedHash === attemptHash) {
+            const cachedUser = JSON.parse(localStorage.getItem('offline_user'));
+            if (cachedUser) {
+              setUser(cachedUser);
+              localStorage.setItem('user', JSON.stringify(cachedUser));
+              return { user: cachedUser, offline: true };
+            }
+          }
+        } catch {}
+        throw new Error('Offline login failed. Credentials do not match cached session.');
+      }
+      throw error;
+    }
   };
 
   const logout = () => {

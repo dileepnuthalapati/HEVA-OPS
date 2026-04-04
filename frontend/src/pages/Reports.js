@@ -75,7 +75,7 @@ const Reports = () => {
     try {
       toast.loading('Generating PDF...', { id: 'pdf' });
       const apiUrl = process.env.REACT_APP_BACKEND_URL;
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('auth_token');
       const response = await fetch(`${apiUrl}/api/reports/generate`, {
         method: 'POST',
         headers: {
@@ -108,7 +108,7 @@ const Reports = () => {
     try {
       toast.loading('Generating feature guide...', { id: 'guide' });
       const apiUrl = process.env.REACT_APP_BACKEND_URL;
-      const token = localStorage.getItem('token');
+      const token = localStorage.getItem('auth_token');
       const response = await fetch(`${apiUrl}/api/docs/feature-guide`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
