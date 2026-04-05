@@ -241,6 +241,12 @@ const Reports = () => {
                       <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400">Orders</span>
                     </div>
                     <div className="text-lg md:text-xl font-bold font-mono text-slate-900">{stats.total_orders}</div>
+                    {(stats.completed_orders !== undefined || stats.cancelled_orders !== undefined) && (
+                      <div className="flex gap-2 mt-1 text-[10px] font-semibold">
+                        <span className="text-emerald-600">{stats.completed_orders || 0} completed</span>
+                        {stats.cancelled_orders > 0 && <span className="text-red-500">{stats.cancelled_orders} cancelled</span>}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
                 <Card className="bg-white border-slate-200/60 shadow-sm" data-testid="stat-avg-order">

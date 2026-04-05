@@ -129,11 +129,11 @@ async def seed_database_endpoint(secret: str = None):
 
 @router.post("/migrate-fix")
 async def migrate_fix_endpoint(secret: str = None):
-    """Safe migration: fixes missing restaurant_id on categories/products without deleting anything."""
+    """Safe migration: fixes missing restaurant_id on categories/products/orders without deleting anything."""
     if secret != "hevapos2026":
         raise HTTPException(status_code=403, detail="Invalid secret")
 
-    results = {"categories_fixed": 0, "products_fixed": 0, "restaurants_checked": []}
+    results = {"categories_fixed": 0, "products_fixed": 0, "orders_fixed": 0, "restaurants_checked": []}
 
     # Get all restaurants
     restaurants = await db.restaurants.find({}, {"_id": 0, "id": 1, "business_info": 1}).to_list(1000)
@@ -143,29 +143,33 @@ async def migrate_fix_endpoint(secret: str = None):
         rname = rest.get("business_info", {}).get("name", rid)
         results["restaurants_checked"].append(rname)
 
+        orphan_filter = {"$or": [{"restaurant_id": None}, {"restaurant_id": {"$exists": False}}]}
+
         # Fix categories missing restaurant_id
-        cat_result = await db.categories.update_many(
-            {"$or": [{"restaurant_id": None}, {"restaurant_id": {"$exists": False}}]},
-            {"$set": {"restaurant_id": rid}}
-        )
+        cat_result = await db.categories.update_many(orphan_filter, {"$set": {"restaurant_id": rid}})
         results["categories_fixed"] += cat_result.modified_count
 
         # Fix products missing restaurant_id
-        prod_result = await db.products.update_many(
-            {"$or": [{"restaurant_id": None}, {"restaurant_id": {"$exists": False}}]},
-            {"$set": {"restaurant_id": rid}}
-        )
+        prod_result = await db.products.update_many(orphan_filter, {"$set": {"restaurant_id": rid}})
         results["products_fixed"] += prod_result.modified_count
 
-    # If there are categories with no restaurant and no restaurants exist, report them
+        # Fix orders missing restaurant_id
+        order_result = await db.orders.update_many(orphan_filter, {"$set": {"restaurant_id": rid}})
+        results["orders_fixed"] += order_result.modified_count
+
+    # Report remaining orphans
     orphan_cats = await db.categories.count_documents(
         {"$or": [{"restaurant_id": None}, {"restaurant_id": {"$exists": False}}]}
     )
     orphan_prods = await db.products.count_documents(
         {"$or": [{"restaurant_id": None}, {"restaurant_id": {"$exists": False}}]}
     )
+    orphan_orders = await db.orders.count_documents(
+        {"$or": [{"restaurant_id": None}, {"restaurant_id": {"$exists": False}}]}
+    )
     results["remaining_orphan_categories"] = orphan_cats
     results["remaining_orphan_products"] = orphan_prods
+    results["remaining_orphan_orders"] = orphan_orders
 
     return {
         "message": "Migration complete. No data was deleted.",

@@ -18,11 +18,13 @@ async def generate_report(report_req: ReportRequest, current_user: User = Depend
     start_str = f"{report_req.start_date[:10]}T00:00:00"
     end_str = f"{report_req.end_date[:10]}T23:59:59"
 
-    query = {"created_at": {"$gte": start_str, "$lte": end_str}, "status": "completed"}
+    query = {"created_at": {"$gte": start_str, "$lte": end_str}}
     if current_user.restaurant_id:
         query["restaurant_id"] = current_user.restaurant_id
 
-    orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
+    all_orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
+    completed_orders = [o for o in all_orders if o.get("status") == "completed"]
+    cancelled_orders = [o for o in all_orders if o.get("status") == "cancelled"]
 
     # Get currency symbol from restaurant settings
     cs = "$"
@@ -31,14 +33,16 @@ async def generate_report(report_req: ReportRequest, current_user: User = Depend
         currency_map = {"GBP": "£", "USD": "$", "EUR": "€", "INR": "₹"}
         cs = currency_map.get((rest or {}).get("currency", "GBP"), "$")
 
-    total_sales = sum(o.get("total_amount", 0) or o.get("total", 0) for o in orders)
-    total_orders = len(orders)
-    avg_order = total_sales / total_orders if total_orders > 0 else 0
+    total_sales = sum(o.get("total_amount", 0) or o.get("total", 0) for o in completed_orders)
+    total_orders = len(all_orders)
+    completed_count = len(completed_orders)
+    cancelled_count = len(cancelled_orders)
+    avg_order = total_sales / completed_count if completed_count > 0 else 0
 
-    # Cash vs Card breakdown
+    # Cash vs Card breakdown (completed orders only)
     cash_total = 0
     card_total = 0
-    for o in orders:
+    for o in completed_orders:
         pm = o.get("payment_method", "cash")
         amt = o.get("total_amount", 0) or o.get("total", 0)
         if pm == "card":
@@ -64,8 +68,10 @@ async def generate_report(report_req: ReportRequest, current_user: User = Depend
 
     summary_data = [
         ["Metric", "Value"],
-        ["Total Sales", f"{cs}{total_sales:.2f}"],
+        ["Total Sales (Completed)", f"{cs}{total_sales:.2f}"],
         ["Total Orders", str(total_orders)],
+        ["Completed Orders", str(completed_count)],
+        ["Cancelled Orders", str(cancelled_count)],
         ["Average Order Value", f"{cs}{avg_order:.2f}"],
         ["Cash Total", f"{cs}{cash_total:.2f}"],
         ["Card Total", f"{cs}{card_total:.2f}"],
@@ -83,18 +89,20 @@ async def generate_report(report_req: ReportRequest, current_user: User = Depend
     story.append(summary_table)
     story.append(Spacer(1, 20))
 
-    if orders:
+    if all_orders:
         story.append(Paragraph("Order Details", styles['Heading2']))
-        order_data = [["Order #", "Date", "Items", "Total", "Payment"]]
-        for o in orders[:50]:
+        order_data = [["Order #", "Date", "Status", "Items", "Total", "Payment"]]
+        for o in sorted(all_orders, key=lambda x: x.get("created_at", ""), reverse=True)[:100]:
+            status = o.get("status", "N/A").capitalize()
             order_data.append([
                 str(o.get("order_number", "N/A")).zfill(3),
                 o.get("created_at", "")[:10],
+                status,
                 str(len(o.get("items", []))),
                 f"{cs}{(o.get('total_amount', 0) or o.get('total', 0)):.2f}",
-                o.get("payment_method", "N/A").upper()
+                o.get("payment_method", "N/A").upper() if o.get("status") == "completed" else "-"
             ])
-        order_table = ReportLabTable(order_data, colWidths=[60, 80, 60, 80, 80])
+        order_table = ReportLabTable(order_data, colWidths=[55, 75, 70, 45, 70, 70])
         order_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#334155')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -115,20 +123,26 @@ async def get_report_stats(start_date: str, end_date: str, current_user: User = 
     start_str = f"{start_date[:10]}T00:00:00"
     end_str = f"{end_date[:10]}T23:59:59"
 
-    query = {"created_at": {"$gte": start_str, "$lte": end_str}, "status": "completed"}
+    query = {"created_at": {"$gte": start_str, "$lte": end_str}}
     if current_user.restaurant_id:
         query["restaurant_id"] = current_user.restaurant_id
 
-    orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
+    all_orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
 
-    # Handle legacy orders that may use 'total' instead of 'total_amount'
-    total_sales = sum(o.get("total_amount", 0) or o.get("total", 0) for o in orders)
-    total_orders = len(orders)
-    avg_order_value = total_sales / total_orders if total_orders > 0 else 0
+    # Separate completed vs cancelled for reporting
+    completed_orders = [o for o in all_orders if o.get("status") == "completed"]
+    cancelled_orders = [o for o in all_orders if o.get("status") == "cancelled"]
+
+    # Sales metrics from completed orders
+    total_sales = sum(o.get("total_amount", 0) or o.get("total", 0) for o in completed_orders)
+    total_orders = len(all_orders)
+    completed_count = len(completed_orders)
+    cancelled_count = len(cancelled_orders)
+    avg_order_value = total_sales / completed_count if completed_count > 0 else 0
 
     cash_total = 0
     card_total = 0
-    for o in orders:
+    for o in completed_orders:
         pm = o.get("payment_method", "cash")
         amt = o.get("total_amount", 0) or o.get("total", 0)
         if pm == "card":
@@ -141,7 +155,7 @@ async def get_report_stats(start_date: str, end_date: str, current_user: User = 
             cash_total += amt
 
     product_sales = {}
-    for order in orders:
+    for order in completed_orders:
         for item in order.get("items", []):
             if item.get("product_name") and item["product_name"] not in product_sales:
                 product_sales[item["product_name"]] = {"quantity": 0, "revenue": 0}
@@ -154,6 +168,8 @@ async def get_report_stats(start_date: str, end_date: str, current_user: User = 
     return {
         "total_sales": round(total_sales, 2),
         "total_orders": total_orders,
+        "completed_orders": completed_count,
+        "cancelled_orders": cancelled_count,
         "avg_order_value": round(avg_order_value, 2),
         "cash_total": round(cash_total, 2),
         "card_total": round(card_total, 2),
