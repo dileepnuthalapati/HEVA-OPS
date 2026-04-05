@@ -33,13 +33,19 @@ async def get_status_checks():
 
 
 @router.post("/seed-database")
-async def seed_database_endpoint(secret: str = None):
+async def seed_database_endpoint(secret: str = None, force: bool = False):
     if secret != "hevapos2026":
         raise HTTPException(status_code=403, detail="Invalid secret. Use ?secret=hevapos2026")
 
+    if force:
+        await db.users.delete_many({})
+        await db.categories.delete_many({})
+        await db.products.delete_many({})
+        await db.restaurants.delete_many({})
+
     existing_users = await db.users.count_documents({})
     if existing_users > 0:
-        return {"message": f"Database already seeded with {existing_users} users. Skipping.", "seeded": False}
+        return {"message": f"Database already seeded with {existing_users} users. Skipping. Add &force=true to reseed.", "seeded": False}
 
     platform_owner = {
         "id": "platform_owner_1",
@@ -93,25 +99,25 @@ async def seed_database_endpoint(secret: str = None):
     await db.users.insert_one(staff_user)
 
     categories = [
-        {"id": "cat_1", "name": "Pizzas", "description": "Delicious pizzas", "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "cat_2", "name": "Drinks", "description": "Beverages", "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "cat_3", "name": "Sides", "description": "Sides and starters", "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "cat_4", "name": "Desserts", "description": "Sweet treats", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "cat_1", "name": "Pizzas", "description": "Delicious pizzas", "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "cat_2", "name": "Drinks", "description": "Beverages", "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "cat_3", "name": "Sides", "description": "Sides and starters", "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "cat_4", "name": "Desserts", "description": "Sweet treats", "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
     ]
     await db.categories.insert_many(categories)
 
     products = [
-        {"id": "prod_1", "name": "Margherita", "category_id": "cat_1", "category_name": "Pizzas", "price": 9.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "prod_2", "name": "Pepperoni", "category_id": "cat_1", "category_name": "Pizzas", "price": 11.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "prod_3", "name": "Hawaiian", "category_id": "cat_1", "category_name": "Pizzas", "price": 12.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "prod_4", "name": "Veggie Supreme", "category_id": "cat_1", "category_name": "Pizzas", "price": 13.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "prod_5", "name": "Coca-Cola", "category_id": "cat_2", "category_name": "Drinks", "price": 2.50, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "prod_6", "name": "Sprite", "category_id": "cat_2", "category_name": "Drinks", "price": 2.50, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "prod_7", "name": "Water", "category_id": "cat_2", "category_name": "Drinks", "price": 1.50, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "prod_8", "name": "Garlic Bread", "category_id": "cat_3", "category_name": "Sides", "price": 4.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "prod_9", "name": "Chicken Wings", "category_id": "cat_3", "category_name": "Sides", "price": 6.99, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "prod_10", "name": "Chocolate Brownie", "category_id": "cat_4", "category_name": "Desserts", "price": 4.50, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
-        {"id": "prod_11", "name": "Ice Cream", "category_id": "cat_4", "category_name": "Desserts", "price": 3.50, "in_stock": True, "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_1", "name": "Margherita", "category_id": "cat_1", "category_name": "Pizzas", "price": 9.99, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_2", "name": "Pepperoni", "category_id": "cat_1", "category_name": "Pizzas", "price": 11.99, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_3", "name": "Hawaiian", "category_id": "cat_1", "category_name": "Pizzas", "price": 12.99, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_4", "name": "Veggie Supreme", "category_id": "cat_1", "category_name": "Pizzas", "price": 13.99, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_5", "name": "Coca-Cola", "category_id": "cat_2", "category_name": "Drinks", "price": 2.50, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_6", "name": "Sprite", "category_id": "cat_2", "category_name": "Drinks", "price": 2.50, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_7", "name": "Water", "category_id": "cat_2", "category_name": "Drinks", "price": 1.50, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_8", "name": "Garlic Bread", "category_id": "cat_3", "category_name": "Sides", "price": 4.99, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_9", "name": "Chicken Wings", "category_id": "cat_3", "category_name": "Sides", "price": 6.99, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_10", "name": "Chocolate Brownie", "category_id": "cat_4", "category_name": "Desserts", "price": 4.50, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
+        {"id": "prod_11", "name": "Ice Cream", "category_id": "cat_4", "category_name": "Desserts", "price": 3.50, "in_stock": True, "restaurant_id": "rest_demo_1", "created_at": datetime.now(timezone.utc).isoformat()},
     ]
     await db.products.insert_many(products)
 

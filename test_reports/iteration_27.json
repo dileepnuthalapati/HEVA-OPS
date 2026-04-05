@@ -1,0 +1,78 @@
+{
+  "summary": "Iteration 27 testing complete. All 4 user-reported bugs verified FIXED: (1) Categories showing in POS with Pizzas/Drinks/Sides/Desserts and 11 products, (2) Reports page loads data (£1547.75 sales, 39 orders) with working Download PDF and View PDF buttons, (3) QR URLs use REACT_APP_BACKEND_URL instead of localhost, (4) Printer Settings has no duplicate Discover/Add buttons. Backend: 15/15 tests passed. Frontend: All UI tests passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Console warning: Chart width/height -1 - recharts container sizing issue (non-blocking, visual only)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration27_bug_fixes.py",
+    "/app/test_reports/pytest/pytest_results_iteration27.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Bug #1 Fix: Categories now include restaurant_id field in API response, filtering works correctly",
+    "Bug #2 Fix: Reports stats endpoint returns all required fields (total_sales, total_orders, avg_order_value, cash_total, card_total), PDF generation returns valid PDF with correct headers",
+    "Bug #3 Fix: TableManagement.js getQRUrl() now uses process.env.REACT_APP_BACKEND_URL instead of window.location.origin",
+    "Bug #4 Fix: PrinterSettings.js empty state no longer shows duplicate Discover/Add buttons"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration27_bug_fixes.py"
+  ],
+  "success_rate": {
+    "backend": "100% (15/15 passed)",
+    "frontend": "100% (all UI tests passed)"
+  },
+  "test_credentials": {
+    "platform_owner": {"username": "platform_owner", "password": "admin123"},
+    "restaurant_admin": {"username": "restaurant_admin", "password": "admin123", "restaurant_id": "rest_demo_1"},
+    "staff_user": {"username": "user", "password": "user123"}
+  },
+  "seed_data_creation": "Used existing seed data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 27 verified all 4 bug fixes: (1) POS categories visible with restaurant_id filtering, (2) Reports data loading with PDF download working, (3) QR URLs use REACT_APP_BACKEND_URL, (4) Printer page no duplicate buttons. All backend tests pass. All UI tests pass.",
+  "test_results": {
+    "bug_1_categories_in_pos": {
+      "status": "FIXED",
+      "evidence": "POS screen shows All, Pizzas, Drinks, Sides, Desserts categories with 11 products",
+      "api_test": "GET /api/categories returns categories with restaurant_id field"
+    },
+    "bug_2_reports_and_pdf": {
+      "status": "FIXED",
+      "evidence": "Reports page shows £1547.75 sales, 39 orders, £39.69 avg order, £631.79 cash, £915.96 card",
+      "api_test": "GET /api/reports/stats returns all fields, POST /api/reports/generate returns valid PDF (4289+ bytes)"
+    },
+    "bug_3_qr_url_localhost": {
+      "status": "FIXED",
+      "evidence": "QR dialog shows 4 tables with QR codes, code uses REACT_APP_BACKEND_URL",
+      "code_review": "TableManagement.js line 210: const baseUrl = process.env.REACT_APP_BACKEND_URL || window.location.origin"
+    },
+    "bug_4_printer_duplicate_buttons": {
+      "status": "FIXED",
+      "evidence": "Printer Settings shows exactly 1 Discover Printers button and 1 Add Printer button",
+      "code_review": "PrinterSettings.js empty state section removed duplicate buttons"
+    }
+  },
+  "features_verified": {
+    "categories_api": "VERIFIED - Returns categories with restaurant_id",
+    "products_api": "VERIFIED - Returns products for restaurant",
+    "reports_stats_api": "VERIFIED - Returns all required stats fields",
+    "reports_today_api": "VERIFIED - Returns today's stats",
+    "pdf_generation": "VERIFIED - Returns valid PDF with correct headers",
+    "date_filters": "VERIFIED - Today, 7 Days, 30 Days, 90 Days all work",
+    "qr_tables_hashes": "VERIFIED - Returns table QR data",
+    "qr_menu_public": "VERIFIED - Public menu accessible",
+    "printers_api": "VERIFIED - Returns printer list"
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "note": "All APIs are real. No mocked endpoints."
+  }
+}

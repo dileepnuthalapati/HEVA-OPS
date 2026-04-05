@@ -92,23 +92,33 @@ const Reports = () => {
           report_type: 'sales',
         }),
       });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      if (!response.ok) throw new Error(`Server returned ${response.status}`);
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('pdf')) {
+        throw new Error('Server did not return a PDF file');
+      }
       const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
+      if (!blob || blob.size === 0) throw new Error('Empty PDF received');
+      const filename = `sales_report_${startDate}_${endDate}.pdf`;
+
+      // Create blob URL and trigger download
+      const blobUrl = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
       const link = document.createElement('a');
-      link.href = url;
-      link.setAttribute('download', `sales_report_${startDate}_${endDate}.pdf`);
+      link.href = blobUrl;
+      link.download = filename;
       link.style.display = 'none';
+      link.target = '_blank';
       document.body.appendChild(link);
       link.click();
+
       setTimeout(() => {
         document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }, 200);
+        window.URL.revokeObjectURL(blobUrl);
+      }, 1000);
       toast.success('PDF downloaded!', { id: 'pdf' });
     } catch (error) {
       console.error('PDF download error:', error);
-      toast.error('Failed to generate PDF: ' + error.message, { id: 'pdf' });
+      toast.error('PDF download failed: ' + error.message, { id: 'pdf' });
     }
   };
 
@@ -130,14 +140,43 @@ const Reports = () => {
               </div>
               <p className="text-xs text-slate-400 ml-12 font-medium">Analyze your business performance</p>
             </div>
-            <button
-              onClick={downloadPDF}
-              disabled={!stats || loading}
-              className="h-10 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold text-slate-700 btn-haptic flex items-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-              data-testid="download-pdf-btn"
-            >
-              <Download className="w-4 h-4" /> Download PDF
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={downloadPDF}
+                disabled={!stats || loading}
+                className="h-10 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold text-slate-700 btn-haptic flex items-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                data-testid="download-pdf-btn"
+              >
+                <Download className="w-4 h-4" /> Download PDF
+              </button>
+              <button
+                onClick={async () => {
+                  if (!stats) return;
+                  try {
+                    toast.loading('Opening PDF...', { id: 'pdf-view' });
+                    const apiUrl = process.env.REACT_APP_BACKEND_URL;
+                    const token = localStorage.getItem('auth_token');
+                    const res = await fetch(`${apiUrl}/api/reports/generate`, {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                      body: JSON.stringify({ start_date: startDate, end_date: endDate, report_type: 'sales' }),
+                    });
+                    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+                    const blob = await res.blob();
+                    const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
+                    window.open(url, '_blank');
+                    toast.success('PDF opened in new tab', { id: 'pdf-view' });
+                  } catch (e) {
+                    toast.error('Failed: ' + e.message, { id: 'pdf-view' });
+                  }
+                }}
+                disabled={!stats || loading}
+                className="h-10 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold text-slate-700 btn-haptic flex items-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                data-testid="view-pdf-btn"
+              >
+                <FileText className="w-4 h-4" /> View PDF
+              </button>
+            </div>
           </div>
 
           {/* Range Buttons */}

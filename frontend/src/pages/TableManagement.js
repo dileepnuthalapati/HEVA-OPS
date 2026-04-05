@@ -204,10 +204,12 @@ const TableManagement = () => {
   };
 
   const getQRUrl = (table) => {
-    // QR must point to FRONTEND origin (not API_URL) so scanning opens the guest menu
-    const origin = typeof window !== 'undefined' ? window.location.origin : API_URL;
+    // Use REACT_APP_BACKEND_URL as the public base for QR codes.
+    // This works in both preview (same origin) and production (Railway/web deployment).
+    // window.location.origin would return capacitor://localhost in the APK — not scannable.
+    const baseUrl = process.env.REACT_APP_BACKEND_URL || window.location.origin;
     const rest = tables[0]?.restaurant_id || 'unknown';
-    return `${origin}/menu/${rest}/${table.qr_hash}`;
+    return `${baseUrl}/menu/${rest}/${table.qr_hash}`;
   };
 
   const downloadQR = (table) => {
