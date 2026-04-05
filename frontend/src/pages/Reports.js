@@ -9,8 +9,8 @@ import { toast } from 'sonner';
 import { BarChart3, TrendingUp, ShoppingBag, Coins, Calendar, ArrowLeft, Banknote, CreditCard, Download, FileText } from 'lucide-react';
 
 const getCurrencySymbol = (currency) => {
-  const symbols = { 'GBP': '£', 'USD': '$', 'EUR': '€', 'INR': '₹' };
-  return symbols[currency] || currency || '£';
+  const symbols = { 'GBP': '\u00a3', 'USD': '$', 'EUR': '\u20ac', 'INR': '\u20b9' };
+  return symbols[currency] || currency || '\u00a3';
 };
 
 const RANGES = [
@@ -25,20 +25,22 @@ const Reports = () => {
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currency, setCurrency] = useState('GBP');
-  const [activeRange, setActiveRange] = useState('Today');
-  const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
-  const [endDate, setEndDate] = useState(new Date().toISOString().split('T')[0]);
+  const [activeRange, setActiveRange] = useState('30 Days');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
 
   useEffect(() => {
     loadCurrency();
-    handleRangeSelect('Today', 0);
+    // Default to 30 days so there's always data to show
+    handleRangeSelect('30 Days', 30);
+    // eslint-disable-next-line
   }, []);
 
   const loadCurrency = async () => {
     try {
       const restaurant = await restaurantAPI.getMy();
       if (restaurant?.currency) setCurrency(restaurant.currency);
-    } catch (e) {}
+    } catch {}
   };
 
   const handleRangeSelect = (label, days) => {
@@ -58,14 +60,16 @@ const Reports = () => {
     try {
       const data = await reportAPI.getStats(from, to);
       setStats(data);
-    } catch (error) {
+    } catch {
       toast.error('Failed to load reports');
+      setStats(null);
     } finally {
       setLoading(false);
     }
   };
 
   const handleCustomDateSearch = () => {
+    if (!startDate || !endDate) return toast.error('Select both dates');
     setActiveRange('');
     loadStats(startDate, endDate);
   };
@@ -88,182 +92,179 @@ const Reports = () => {
           report_type: 'sales',
         }),
       });
-      if (!response.ok) throw new Error('PDF generation failed');
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `sales_report_${startDate}_${endDate}.pdf`;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-      toast.success('PDF downloaded', { id: 'pdf' });
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', `sales_report_${startDate}_${endDate}.pdf`);
+      link.style.display = 'none';
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 200);
+      toast.success('PDF downloaded!', { id: 'pdf' });
     } catch (error) {
-      toast.error('Failed to generate PDF', { id: 'pdf' });
-    }
-  };
-
-  const downloadFeatureGuide = async () => {
-    try {
-      toast.loading('Generating feature guide...', { id: 'guide' });
-      const apiUrl = process.env.REACT_APP_BACKEND_URL;
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${apiUrl}/api/docs/feature-guide`, {
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!response.ok) throw new Error('Failed');
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'HevaPOS_Feature_Guide.pdf';
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      window.URL.revokeObjectURL(url);
-      toast.success('Feature guide downloaded', { id: 'guide' });
-    } catch {
-      toast.error('Failed to generate feature guide', { id: 'guide' });
+      console.error('PDF download error:', error);
+      toast.error('Failed to generate PDF: ' + error.message, { id: 'pdf' });
     }
   };
 
   const cs = getCurrencySymbol(currency);
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen">
+    <div className="flex flex-col md:flex-row min-h-screen bg-slate-50/50">
       <Sidebar />
-      <div className="flex-1 min-w-0 p-4 md:p-8">
+      <div className="flex-1 min-w-0 p-4 md:p-8 pt-16 md:pt-8">
         <div className="max-w-5xl mx-auto">
+          {/* Header */}
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
             <div>
               <div className="flex items-center gap-3 mb-1">
-                <Button variant="ghost" size="sm" onClick={() => navigate(-1)} data-testid="reports-back-btn" className="h-8 w-8 p-0">
-                  <ArrowLeft className="w-4 h-4" />
-                </Button>
-                <h1 className="text-2xl md:text-4xl font-bold tracking-tight" data-testid="reports-heading">Sales Reports</h1>
+                <button onClick={() => navigate(-1)} className="h-9 w-9 flex items-center justify-center rounded-xl border border-slate-200 hover:bg-slate-100 transition-colors" data-testid="reports-back-btn">
+                  <ArrowLeft className="w-4 h-4 text-slate-600" />
+                </button>
+                <h1 className="font-heading text-2xl md:text-3xl font-bold tracking-tight text-slate-900" data-testid="reports-heading">Sales Reports</h1>
               </div>
-              <p className="text-sm text-muted-foreground ml-11">Analyze your business performance</p>
+              <p className="text-xs text-slate-400 ml-12 font-medium">Analyze your business performance</p>
             </div>
-            <div className="flex gap-2">
-              <Button onClick={downloadPDF} disabled={!stats} variant="outline" data-testid="download-pdf-btn">
-                <Download className="w-4 h-4 mr-2" /> Sales PDF
-              </Button>
-            </div>
+            <button
+              onClick={downloadPDF}
+              disabled={!stats || loading}
+              className="h-10 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold text-slate-700 btn-haptic flex items-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+              data-testid="download-pdf-btn"
+            >
+              <Download className="w-4 h-4" /> Download PDF
+            </button>
           </div>
 
-          {/* Quick Range Buttons */}
-          <div className="flex flex-wrap gap-2 mb-4" data-testid="range-buttons">
+          {/* Range Buttons */}
+          <div className="flex flex-wrap gap-1.5 mb-4" data-testid="range-buttons">
             {RANGES.map(({ label, days }) => (
-              <Button
+              <button
                 key={label}
-                variant={activeRange === label ? 'default' : 'outline'}
-                size="sm"
                 onClick={() => handleRangeSelect(label, days)}
+                className={`h-8 px-4 rounded-full text-xs font-semibold btn-haptic transition-all ${
+                  activeRange === label
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+                }`}
                 data-testid={`range-${label.toLowerCase().replace(' ', '-')}`}
               >
                 {label}
-              </Button>
+              </button>
             ))}
           </div>
 
           {/* Custom Date Range */}
-          <div className="flex flex-wrap items-end gap-3 mb-6">
+          <div className="flex flex-wrap items-end gap-2 mb-6">
             <div>
-              <label className="text-xs font-medium text-muted-foreground">From</label>
-              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} data-testid="start-date" className="w-40" />
+              <label className="text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400 mb-1 block">From</label>
+              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} data-testid="start-date" className="w-40 h-9 rounded-xl text-sm" />
             </div>
             <div>
-              <label className="text-xs font-medium text-muted-foreground">To</label>
-              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} data-testid="end-date" className="w-40" />
+              <label className="text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400 mb-1 block">To</label>
+              <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} data-testid="end-date" className="w-40 h-9 rounded-xl text-sm" />
             </div>
-            <Button onClick={handleCustomDateSearch} variant="outline" size="sm" data-testid="custom-date-btn">
-              <Calendar className="w-4 h-4 mr-1" /> Apply
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => navigate(`/orders?from=${startDate}&to=${endDate}`)} data-testid="view-orders-btn">
-              <FileText className="w-4 h-4 mr-1" /> View Orders
-            </Button>
+            <button onClick={handleCustomDateSearch} className="h-9 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-600 btn-haptic transition-all flex items-center gap-1.5" data-testid="custom-date-btn">
+              <Calendar className="w-3.5 h-3.5" /> Apply
+            </button>
+            <button onClick={() => navigate(`/orders?from=${startDate}&to=${endDate}`)} className="h-9 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-xs font-semibold text-slate-600 btn-haptic transition-all flex items-center gap-1.5" data-testid="view-orders-btn">
+              <FileText className="w-3.5 h-3.5" /> View Orders
+            </button>
           </div>
 
           {loading ? (
-            <div className="text-center py-12 text-muted-foreground">Loading reports...</div>
+            <div className="text-center py-16 text-slate-400 text-sm font-medium">Loading reports...</div>
           ) : stats ? (
             <>
               {/* Stats Cards */}
-              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-8">
-                <Card data-testid="stat-total-sales">
+              <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
+                <Card className="bg-white border-slate-200/60 shadow-sm" data-testid="stat-total-sales">
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <Coins className="w-4 h-4 text-emerald-500" />
-                      <span className="text-xs text-muted-foreground">Total Sales</span>
+                      <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
+                        <Coins className="w-3.5 h-3.5 text-emerald-600" />
+                      </div>
+                      <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400">Sales</span>
                     </div>
-                    <div className="text-xl md:text-2xl font-bold">{cs}{stats.total_sales?.toFixed(2)}</div>
+                    <div className="text-lg md:text-xl font-bold font-mono text-slate-900">{cs}{stats.total_sales?.toFixed(2)}</div>
                   </CardContent>
                 </Card>
-                <Card data-testid="stat-total-orders">
+                <Card className="bg-white border-slate-200/60 shadow-sm" data-testid="stat-total-orders">
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <ShoppingBag className="w-4 h-4 text-blue-500" />
-                      <span className="text-xs text-muted-foreground">Orders</span>
+                      <div className="w-7 h-7 rounded-lg bg-indigo-50 flex items-center justify-center">
+                        <ShoppingBag className="w-3.5 h-3.5 text-indigo-600" />
+                      </div>
+                      <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400">Orders</span>
                     </div>
-                    <div className="text-xl md:text-2xl font-bold">{stats.total_orders}</div>
+                    <div className="text-lg md:text-xl font-bold font-mono text-slate-900">{stats.total_orders}</div>
                   </CardContent>
                 </Card>
-                <Card data-testid="stat-avg-order">
+                <Card className="bg-white border-slate-200/60 shadow-sm" data-testid="stat-avg-order">
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <TrendingUp className="w-4 h-4 text-purple-500" />
-                      <span className="text-xs text-muted-foreground">Avg Order</span>
+                      <div className="w-7 h-7 rounded-lg bg-violet-50 flex items-center justify-center">
+                        <TrendingUp className="w-3.5 h-3.5 text-violet-600" />
+                      </div>
+                      <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400">Avg Order</span>
                     </div>
-                    <div className="text-xl md:text-2xl font-bold">{cs}{stats.avg_order_value?.toFixed(2)}</div>
+                    <div className="text-lg md:text-xl font-bold font-mono text-slate-900">{cs}{stats.avg_order_value?.toFixed(2)}</div>
                   </CardContent>
                 </Card>
-                <Card data-testid="stat-cash-total">
+                <Card className="bg-white border-slate-200/60 shadow-sm" data-testid="stat-cash-total">
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <Banknote className="w-4 h-4 text-green-500" />
-                      <span className="text-xs text-muted-foreground">Cash</span>
+                      <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center">
+                        <Banknote className="w-3.5 h-3.5 text-emerald-600" />
+                      </div>
+                      <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400">Cash</span>
                     </div>
-                    <div className="text-xl md:text-2xl font-bold">{cs}{stats.cash_total?.toFixed(2)}</div>
+                    <div className="text-lg md:text-xl font-bold font-mono text-slate-900">{cs}{stats.cash_total?.toFixed(2)}</div>
                   </CardContent>
                 </Card>
-                <Card data-testid="stat-card-total">
+                <Card className="bg-white border-slate-200/60 shadow-sm" data-testid="stat-card-total">
                   <CardContent className="p-4">
                     <div className="flex items-center gap-2 mb-2">
-                      <CreditCard className="w-4 h-4 text-orange-500" />
-                      <span className="text-xs text-muted-foreground">Card</span>
+                      <div className="w-7 h-7 rounded-lg bg-blue-50 flex items-center justify-center">
+                        <CreditCard className="w-3.5 h-3.5 text-blue-600" />
+                      </div>
+                      <span className="text-[11px] font-bold tracking-wider uppercase text-slate-400">Card</span>
                     </div>
-                    <div className="text-xl md:text-2xl font-bold">{cs}{stats.card_total?.toFixed(2)}</div>
+                    <div className="text-lg md:text-xl font-bold font-mono text-slate-900">{cs}{stats.card_total?.toFixed(2)}</div>
                   </CardContent>
                 </Card>
               </div>
 
               {/* Top Products */}
               {stats.top_products?.length > 0 && (
-                <Card data-testid="top-products-card">
-                  <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                      <BarChart3 className="w-5 h-5" /> Top Products
+                <Card className="bg-white border-slate-200/60 shadow-sm" data-testid="top-products-card">
+                  <CardHeader className="pb-2">
+                    <CardTitle className="flex items-center gap-2 text-sm font-bold text-slate-900">
+                      <BarChart3 className="w-4 h-4 text-indigo-600" /> Top Products
                     </CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="overflow-x-auto">
                       <table className="w-full text-sm">
                         <thead>
-                          <tr className="border-b">
-                            <th className="py-2 text-left font-semibold">#</th>
-                            <th className="py-2 text-left font-semibold">Product</th>
-                            <th className="py-2 text-right font-semibold">Qty Sold</th>
-                            <th className="py-2 text-right font-semibold">Revenue</th>
+                          <tr className="border-b border-slate-100">
+                            <th className="py-2.5 text-left text-[11px] font-bold tracking-wider uppercase text-slate-400">#</th>
+                            <th className="py-2.5 text-left text-[11px] font-bold tracking-wider uppercase text-slate-400">Product</th>
+                            <th className="py-2.5 text-right text-[11px] font-bold tracking-wider uppercase text-slate-400">Qty</th>
+                            <th className="py-2.5 text-right text-[11px] font-bold tracking-wider uppercase text-slate-400">Revenue</th>
                           </tr>
                         </thead>
                         <tbody>
                           {stats.top_products.map((product, index) => (
-                            <tr key={index} className="border-b last:border-0">
-                              <td className="py-2 text-muted-foreground">{index + 1}</td>
-                              <td className="py-2 font-medium">{product.name}</td>
-                              <td className="py-2 text-right">{product.quantity}</td>
-                              <td className="py-2 text-right font-medium">{cs}{product.revenue?.toFixed(2)}</td>
+                            <tr key={index} className="border-b border-slate-50 last:border-0">
+                              <td className="py-2.5 text-slate-400 font-medium">{index + 1}</td>
+                              <td className="py-2.5 font-semibold text-slate-800">{product.name}</td>
+                              <td className="py-2.5 text-right font-mono text-slate-600">{product.quantity}</td>
+                              <td className="py-2.5 text-right font-mono font-bold text-emerald-600">{cs}{product.revenue?.toFixed(2)}</td>
                             </tr>
                           ))}
                         </tbody>
@@ -274,7 +275,11 @@ const Reports = () => {
               )}
             </>
           ) : (
-            <Card><CardContent className="py-12 text-center text-muted-foreground">No data for the selected period.</CardContent></Card>
+            <Card className="bg-white border-slate-200/60">
+              <CardContent className="py-16 text-center text-slate-400 text-sm">
+                No data for the selected period. Try selecting a wider date range.
+              </CardContent>
+            </Card>
           )}
         </div>
       </div>
