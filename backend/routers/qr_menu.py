@@ -95,7 +95,7 @@ async def generate_all_hashes(current_user: User = Depends(require_admin)):
 @router.get("/{restaurant_id}/{table_hash}")
 @limiter.limit("30/minute")
 async def get_guest_menu(request: Request, restaurant_id: str, table_hash: str):
-    """Public: Get restaurant menu and table info for QR ordering."""
+    """Public: Get restaurant menu, table info, and active tab for QR ordering."""
     restaurant = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0})
     if not restaurant:
         raise HTTPException(status_code=404, detail="Restaurant not found")
@@ -126,6 +126,37 @@ async def get_guest_menu(request: Request, restaurant_id: str, table_hash: str):
     business_info = restaurant.get("business_info", {})
     currency = restaurant.get("currency", "GBP")
 
+    # Find active tab for this table (open QR orders not yet paid/completed/cancelled)
+    active_tab = None
+    active_orders = await db.orders.find(
+        {
+            "restaurant_id": restaurant_id,
+            "table_id": table["id"],
+            "source": "qr",
+            "status": {"$in": ["pending", "preparing", "ready"]},
+        },
+        {"_id": 0}
+    ).sort("created_at", 1).to_list(50)
+
+    if active_orders:
+        all_items = []
+        total_amount = 0
+        order_ids = []
+        for o in active_orders:
+            order_ids.append(o["id"])
+            for item in o.get("items", []):
+                all_items.append(item)
+            total_amount += o.get("total_amount", 0) or o.get("subtotal", 0)
+        active_tab = {
+            "order_ids": order_ids,
+            "items": all_items,
+            "total_amount": round(total_amount, 2),
+            "order_count": len(active_orders),
+            "first_order_number": active_orders[0].get("order_number"),
+            "latest_order_number": active_orders[-1].get("order_number"),
+            "table_name": table.get("name", f"Table {table['number']}"),
+        }
+
     return {
         "restaurant": {
             "id": restaurant_id,
@@ -141,6 +172,7 @@ async def get_guest_menu(request: Request, restaurant_id: str, table_hash: str):
         },
         "categories": categories,
         "products": products,
+        "active_tab": active_tab,
     }
 
 
