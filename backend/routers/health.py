@@ -33,13 +33,19 @@ async def get_status_checks():
 
 
 @router.post("/seed-database")
-async def seed_database_endpoint(secret: str = None):
+async def seed_database_endpoint(secret: str = None, force: bool = False):
     if secret != "hevapos2026":
         raise HTTPException(status_code=403, detail="Invalid secret. Use ?secret=hevapos2026")
 
+    if force:
+        await db.users.delete_many({})
+        await db.categories.delete_many({})
+        await db.products.delete_many({})
+        await db.restaurants.delete_many({})
+
     existing_users = await db.users.count_documents({})
     if existing_users > 0:
-        return {"message": f"Database already seeded with {existing_users} users. Skipping.", "seeded": False}
+        return {"message": f"Database already seeded with {existing_users} users. Skipping. Add &force=true to reseed.", "seeded": False}
 
     platform_owner = {
         "id": "platform_owner_1",
