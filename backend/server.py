@@ -1,5 +1,6 @@
 from fastapi import FastAPI, APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, FileResponse, HTMLResponse
+from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
 from pathlib import Path
@@ -73,6 +74,13 @@ api_router.include_router(feature_docs.router)
 
 # Include the main api_router in the app
 fastapi_app.include_router(api_router)
+
+# Serve standalone QR menu page for customers scanning QR codes
+# This works on Railway without needing React/Node.js
+@fastapi_app.get("/menu/{restaurant_id}/{table_hash}")
+async def serve_qr_menu_page(restaurant_id: str, table_hash: str):
+    template_path = ROOT_DIR / "templates" / "qr_menu.html"
+    return FileResponse(str(template_path), media_type="text/html")
 
 # CORS middleware
 fastapi_app.add_middleware(
