@@ -133,7 +133,7 @@ const Sidebar = () => {
       <CommandSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
 
       {/* Desktop Sidebar */}
-      <aside className="sidebar hidden md:flex" data-testid="desktop-sidebar">
+      <aside className="sidebar-wrapper hidden md:flex flex-col" data-testid="desktop-sidebar">
         <SidebarContent user={user} onLogout={handleLogout} onOpenSearch={() => setSearchOpen(true)} />
       </aside>
 

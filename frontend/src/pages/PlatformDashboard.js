@@ -63,7 +63,7 @@ const PlatformDashboard = () => {
 
   if (loading) {
     return (
-      <div className="flex flex-col md:flex-row min-h-screen">
+      <div className="flex flex-col md:flex-row min-h-screen bg-slate-50/50">
         <Sidebar />
         <div className="flex-1 p-8">
           <div className="text-center py-12">Loading platform data...</div>
@@ -73,9 +73,9 @@ const PlatformDashboard = () => {
   }
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen">
+    <div className="flex flex-col md:flex-row min-h-screen bg-slate-50/50">
       <Sidebar />
-      <div className="flex-1 min-w-0 p-4 md:p-8">
+      <div className="flex-1 min-w-0 p-4 md:p-8 pt-16 md:pt-8">
         <div className="max-w-7xl mx-auto">
           {/* Header */}
           <div className="mb-8">
