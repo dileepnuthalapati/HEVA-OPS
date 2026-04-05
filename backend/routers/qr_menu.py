@@ -222,6 +222,8 @@ async def place_guest_order(request: Request, restaurant_id: str, table_hash: st
         "status": "pending",
         "created_by": f"QR Guest{(' - ' + order_data.guest_name) if order_data.guest_name else ''}",
         "table_id": table["id"],
+        "table_name": table.get("name", f"Table {table['number']}"),
+        "table_number": table["number"],
         "restaurant_id": restaurant_id,
         "source": "qr",
         "guest_name": order_data.guest_name,
