@@ -40,6 +40,8 @@ export default function KitchenDisplay() {
   const [loading, setLoading] = useState(true);
   const [soundEnabled, setSoundEnabled] = useState(true);
   const [now, setNow] = useState(Date.now());
+  const [showShareModal, setShowShareModal] = useState(false);
+  const [kdsUrl, setKdsUrl] = useState('');
   const prevOrderIds = useRef(new Set());
 
   // Tick the timers every second
@@ -159,6 +161,18 @@ export default function KitchenDisplay() {
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [sortedOrders, fetchOrders]);
 
+  const generateKdsUrl = async () => {
+    try {
+      const res = await api.post('/kds/generate-token');
+      const baseUrl = process.env.REACT_APP_BACKEND_URL;
+      const url = `${baseUrl}/kds-monitor/${user.restaurant_id}`;
+      setKdsUrl(url);
+      setShowShareModal(true);
+    } catch (err) {
+      toast.error('Failed to generate KDS URL');
+    }
+  };
+
   const activeCount = orders.filter(o => o.kds_status !== 'ready').length;
   const readyCount = orders.filter(o => o.kds_status === 'ready').length;
 
@@ -215,6 +229,16 @@ export default function KitchenDisplay() {
             data-testid="kds-refresh"
           >
             <RotateCcw className="w-4 h-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={generateKdsUrl}
+            className="text-slate-300 hover:text-white"
+            data-testid="kds-share-monitor"
+            title="Share to Smart Monitor"
+          >
+            <Monitor className="w-4 h-4" />
           </Button>
         </div>
       </div>
@@ -377,6 +401,40 @@ export default function KitchenDisplay() {
         </div>
         <div className="font-mono">{activeCount} active / {readyCount} ready</div>
       </div>
+
+      {/* Share to Monitor Modal */}
+      {showShareModal && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={() => setShowShareModal(false)}>
+          <div className="bg-slate-800 border border-slate-600 rounded-2xl p-6 max-w-lg w-full" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center gap-3 mb-4">
+              <Monitor className="w-6 h-6 text-orange-400" />
+              <h2 className="text-lg font-bold text-white">Share to Smart Monitor</h2>
+            </div>
+            <p className="text-sm text-slate-400 mb-4">
+              Open this URL on your kitchen smart monitor's browser. It will ask for the Manager PIN on first access, then show the live KDS.
+            </p>
+            <div className="bg-slate-900 border border-slate-600 rounded-xl p-3 mb-4 flex items-center gap-2">
+              <code className="text-emerald-400 text-sm flex-1 break-all">{kdsUrl}</code>
+              <button
+                onClick={() => { navigator.clipboard.writeText(kdsUrl); toast.success('URL copied!'); }}
+                className="bg-slate-700 hover:bg-slate-600 text-white px-3 py-1.5 rounded-lg text-xs font-bold shrink-0 transition-colors"
+              >
+                Copy
+              </button>
+            </div>
+            <div className="text-xs text-slate-500 space-y-1">
+              <p>Keyboard shortcuts: <kbd className="bg-slate-700 text-slate-300 px-1 rounded text-[10px]">1-9</kbd> Bump ticket, <kbd className="bg-slate-700 text-slate-300 px-1 rounded text-[10px]">R</kbd> Refresh, <kbd className="bg-slate-700 text-slate-300 px-1 rounded text-[10px]">S</kbd> Sound toggle</p>
+              <p>The monitor will auto-refresh every 3 seconds with new orders.</p>
+            </div>
+            <button
+              onClick={() => setShowShareModal(false)}
+              className="mt-4 w-full bg-slate-700 hover:bg-slate-600 text-white py-2.5 rounded-xl font-semibold text-sm transition-colors"
+            >
+              Done
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

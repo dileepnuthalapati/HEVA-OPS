@@ -197,3 +197,156 @@ async def get_kds_stats(current_user: User = Depends(get_current_user)):
         "avg_prep_time_seconds": round(avg_prep_seconds),
         "avg_prep_time_display": f"{int(avg_prep_seconds // 60)}:{int(avg_prep_seconds % 60):02d}" if avg_prep_seconds > 0 else "--:--",
     }
+
+
+# ── Public KDS Monitor Endpoints (no auth, token-based) ────────────────
+
+import secrets
+
+@router.post("/generate-token")
+async def generate_kds_token(current_user: User = Depends(get_current_user)):
+    """Generate a unique KDS monitor token for this restaurant."""
+    if not current_user.restaurant_id:
+        raise HTTPException(status_code=403, detail="No restaurant assigned")
+
+    token = secrets.token_urlsafe(24)
+    await db.restaurants.update_one(
+        {"id": current_user.restaurant_id},
+        {"$set": {"kds_token": token}}
+    )
+    return {"kds_token": token, "restaurant_id": current_user.restaurant_id}
+
+
+@router.post("/verify-pin")
+async def verify_kds_pin(restaurant_id: str, pin: str):
+    """Verify the manager PIN to unlock the KDS monitor."""
+    rest = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0, "kds_token": 1})
+    if not rest or not rest.get("kds_token"):
+        raise HTTPException(status_code=404, detail="KDS not configured. Open KDS from the app first and tap the monitor icon to generate the URL.")
+
+    # Verify PIN against any user with manager_pin_hash in this restaurant
+    from dependencies import verify_password
+    users = await db.users.find(
+        {"restaurant_id": restaurant_id, "manager_pin_hash": {"$exists": True, "$ne": None}},
+        {"_id": 0, "username": 1, "manager_pin_hash": 1, "password_hash": 1}
+    ).to_list(50)
+
+    for user in users:
+        pin_hash = user.get("manager_pin_hash")
+        if pin_hash and verify_password(pin, pin_hash):
+            return {"kds_token": rest["kds_token"], "verified": True}
+        # Also try password as PIN fallback
+        pw_hash = user.get("password_hash")
+        if pw_hash and verify_password(pin, pw_hash):
+            return {"kds_token": rest["kds_token"], "verified": True}
+
+    raise HTTPException(status_code=401, detail="Invalid PIN")
+
+    return {"kds_token": rest["kds_token"], "verified": True}
+
+
+@router.get("/public/orders/{restaurant_id}/{kds_token}")
+async def get_public_kds_orders(restaurant_id: str, kds_token: str):
+    """Public KDS endpoint — token-authenticated, no user login needed."""
+    rest = await db.restaurants.find_one(
+        {"id": restaurant_id, "kds_token": kds_token},
+        {"_id": 0, "id": 1, "business_info": 1}
+    )
+    if not rest:
+        raise HTTPException(status_code=403, detail="Invalid KDS token")
+
+    now = datetime.now(timezone.utc)
+    if now.hour < 2:
+        biz_start = (now - timedelta(days=1)).replace(hour=2, minute=0, second=0, microsecond=0)
+    else:
+        biz_start = now.replace(hour=2, minute=0, second=0, microsecond=0)
+
+    orders = await db.orders.find(
+        {
+            "restaurant_id": restaurant_id,
+            "status": "pending",
+            "created_at": {"$gte": biz_start.isoformat()},
+        },
+        {"_id": 0}
+    ).sort("created_at", 1).to_list(200)
+
+    for o in orders:
+        if "kds_status" not in o:
+            o["kds_status"] = "new"
+
+    return {"orders": orders, "restaurant_name": rest.get("business_info", {}).get("name", "")}
+
+
+@router.put("/public/orders/{restaurant_id}/{kds_token}/{order_id}/{action}")
+async def public_kds_bump(restaurant_id: str, kds_token: str, order_id: str, action: str):
+    """Public KDS bump — token-authenticated."""
+    rest = await db.restaurants.find_one(
+        {"id": restaurant_id, "kds_token": kds_token},
+        {"_id": 0, "id": 1}
+    )
+    if not rest:
+        raise HTTPException(status_code=403, detail="Invalid KDS token")
+
+    action_map = {
+        "acknowledge": ("acknowledged", "acknowledged_at"),
+        "preparing": ("preparing", "preparing_at"),
+        "ready": ("ready", "ready_at"),
+        "recall": ("preparing", "recalled_at"),
+    }
+    if action not in action_map:
+        raise HTTPException(status_code=400, detail=f"Invalid action: {action}")
+
+    new_status, time_field = action_map[action]
+    await _update_kds_status(order_id, new_status, time_field, username="kds_monitor", restaurant_id_ctx=restaurant_id)
+    return {"ok": True, "new_status": new_status}
+
+
+@router.get("/public/stats/{restaurant_id}/{kds_token}")
+async def get_public_kds_stats(restaurant_id: str, kds_token: str):
+    """Public KDS stats — token-authenticated."""
+    rest = await db.restaurants.find_one(
+        {"id": restaurant_id, "kds_token": kds_token},
+        {"_id": 0, "id": 1}
+    )
+    if not rest:
+        raise HTTPException(status_code=403, detail="Invalid KDS token")
+
+    now = datetime.now(timezone.utc)
+    if now.hour < 2:
+        biz_start = (now - timedelta(days=1)).replace(hour=2, minute=0, second=0, microsecond=0)
+    else:
+        biz_start = now.replace(hour=2, minute=0, second=0, microsecond=0)
+
+    pipeline = [
+        {"$match": {"restaurant_id": restaurant_id, "status": "pending", "created_at": {"$gte": biz_start.isoformat()}}},
+        {"$group": {"_id": {"$ifNull": ["$kds_status", "new"]}, "count": {"$sum": 1}}}
+    ]
+    status_counts = {}
+    async for doc in db.orders.aggregate(pipeline):
+        status_counts[doc["_id"]] = doc["count"]
+
+    ready_orders = await db.orders.find(
+        {"restaurant_id": restaurant_id, "ready_at": {"$exists": True, "$ne": None}, "acknowledged_at": {"$exists": True, "$ne": None}, "created_at": {"$gte": biz_start.isoformat()}},
+        {"_id": 0, "acknowledged_at": 1, "ready_at": 1}
+    ).to_list(500)
+
+    avg_prep_seconds = 0
+    if ready_orders:
+        total_secs = 0
+        count = 0
+        for o in ready_orders:
+            try:
+                ack = datetime.fromisoformat(o["acknowledged_at"])
+                rdy = datetime.fromisoformat(o["ready_at"])
+                total_secs += (rdy - ack).total_seconds()
+                count += 1
+            except (ValueError, TypeError):
+                pass
+        if count > 0:
+            avg_prep_seconds = total_secs / count
+
+    return {
+        "queue_depth": sum(status_counts.values()),
+        "status_counts": status_counts,
+        "avg_prep_time_display": f"{int(avg_prep_seconds // 60)}:{int(avg_prep_seconds % 60):02d}" if avg_prep_seconds > 0 else "--:--",
+    }

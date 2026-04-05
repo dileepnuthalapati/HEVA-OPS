@@ -1,0 +1,396 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kitchen Display</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, monospace; background: #0f172a; color: #fff; overflow-x: hidden; }
+        /* PIN Screen */
+        .pin-screen { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100vh; background: #0f172a; }
+        .pin-screen h1 { font-size: 28px; margin-bottom: 8px; color: #fb923c; }
+        .pin-screen p { color: #94a3b8; margin-bottom: 32px; font-size: 14px; }
+        .pin-dots { display: flex; gap: 16px; margin-bottom: 32px; }
+        .pin-dot { width: 20px; height: 20px; border-radius: 50%; border: 2px solid #475569; background: transparent; transition: all 0.15s; }
+        .pin-dot.filled { background: #fb923c; border-color: #fb923c; }
+        .pin-pad { display: grid; grid-template-columns: repeat(3, 80px); gap: 12px; }
+        .pin-key { width: 80px; height: 64px; border-radius: 12px; border: 1px solid #334155; background: #1e293b; color: #e2e8f0; font-size: 24px; font-weight: 700; cursor: pointer; transition: all 0.1s; display: flex; align-items: center; justify-content: center; }
+        .pin-key:active { background: #fb923c; color: #0f172a; transform: scale(0.95); }
+        .pin-key.wide { grid-column: span 2; width: auto; font-size: 16px; }
+        .pin-error { color: #ef4444; margin-top: 16px; font-size: 14px; min-height: 20px; }
+        /* KDS Screen */
+        .kds-screen { display: none; min-height: 100vh; }
+        .kds-screen.active { display: block; }
+        .top-bar { position: sticky; top: 0; z-index: 50; background: rgba(15,23,42,0.95); backdrop-filter: blur(8px); border-bottom: 1px solid #334155; padding: 10px 16px; display: flex; align-items: center; justify-content: space-between; }
+        .top-bar .left { display: flex; align-items: center; gap: 12px; }
+        .top-bar h1 { font-size: 18px; font-weight: 700; }
+        .badge { padding: 2px 10px; border-radius: 20px; font-size: 12px; font-weight: 700; font-family: monospace; }
+        .badge-active { background: rgba(239,68,68,0.2); color: #f87171; }
+        .badge-ready { background: rgba(16,185,129,0.2); color: #34d399; }
+        .avg-prep { color: #94a3b8; font-size: 13px; display: flex; align-items: center; gap: 6px; }
+        .avg-prep strong { color: #fff; font-family: monospace; }
+        .btn-icon { background: none; border: none; color: #94a3b8; cursor: pointer; padding: 8px; border-radius: 8px; transition: all 0.15s; }
+        .btn-icon:hover { background: #1e293b; color: #fff; }
+        .btn-icon.sound-on { background: rgba(251,146,60,0.2); color: #fb923c; }
+        /* Grid */
+        .grid { padding: 12px; display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+        @media (min-width: 1920px) { .grid { grid-template-columns: repeat(5, 1fr); } }
+        @media (min-width: 1280px) and (max-width: 1919px) { .grid { grid-template-columns: repeat(4, 1fr); } }
+        /* Ticket */
+        .ticket { border-radius: 16px; overflow: hidden; border: 1px solid #334155; background: #1e293b; transition: all 0.2s; }
+        .ticket.status-new { border-color: rgba(239,68,68,0.5); animation: pulse 2s infinite; }
+        .ticket.status-ready { background: #064e3b; border-color: #047857; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.85; } }
+        .ticket-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; font-size: 13px; font-weight: 800; }
+        .ticket-header .order-num { display: flex; align-items: center; gap: 6px; }
+        .ticket-header .pos-key { background: rgba(0,0,0,0.3); color: #fff; border-radius: 4px; width: 22px; height: 22px; display: flex; align-items: center; justify-content: center; font-size: 11px; }
+        .ticket-header .source-badge { background: rgba(255,255,255,0.2); padding: 1px 6px; border-radius: 4px; font-size: 10px; }
+        .header-new { background: #ef4444; color: #fff; }
+        .header-acknowledged { background: #f59e0b; color: #78350f; }
+        .header-preparing { background: #eab308; color: #713f12; }
+        .header-ready { background: #10b981; color: #fff; }
+        .ticket-meta { display: flex; align-items: center; justify-content: space-between; padding: 8px 14px; border-bottom: 1px solid #334155; font-size: 13px; }
+        .table-badge { background: #334155; color: #e2e8f0; padding: 2px 8px; border-radius: 6px; font-size: 11px; font-weight: 600; }
+        .timer { font-family: monospace; font-weight: 700; display: flex; align-items: center; gap: 4px; }
+        .timer.overdue { color: #f87171; }
+        .ticket-items { padding: 10px 14px; max-height: 200px; overflow-y: auto; }
+        .item-row { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 6px; }
+        .item-qty { background: #334155; color: #fff; border-radius: 6px; min-width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 700; flex-shrink: 0; }
+        .item-name { font-size: 14px; font-weight: 600; }
+        .item-note { font-size: 11px; color: #fbbf24; margin-top: 2px; }
+        .ticket-action { padding: 8px 10px; }
+        .action-btn { width: 100%; border: none; padding: 10px; border-radius: 12px; font-size: 13px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.1s; }
+        .action-btn:active { transform: scale(0.97); }
+        .btn-acknowledge { background: #f59e0b; color: #78350f; }
+        .btn-cooking { background: #eab308; color: #713f12; }
+        .btn-ready { background: #10b981; color: #fff; }
+        .btn-recall { background: #334155; color: #cbd5e1; font-size: 12px; padding: 8px; }
+        /* Empty State */
+        .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; color: #475569; }
+        .empty svg { width: 64px; height: 64px; margin-bottom: 16px; opacity: 0.3; }
+        .empty h2 { font-size: 20px; margin-bottom: 4px; }
+        /* Bottom Bar */
+        .bottom-bar { position: fixed; bottom: 0; left: 0; right: 0; background: rgba(15,23,42,0.9); backdrop-filter: blur(8px); border-top: 1px solid #334155; padding: 8px 16px; display: flex; align-items: center; justify-content: space-between; font-size: 11px; color: #64748b; }
+        kbd { background: #334155; color: #cbd5e1; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-family: monospace; }
+    </style>
+</head>
+<body>
+    <!-- PIN Screen -->
+    <div class="pin-screen" id="pinScreen">
+        <h1>Kitchen Display</h1>
+        <p>Enter Manager PIN to access</p>
+        <div class="pin-dots" id="pinDots">
+            <div class="pin-dot"></div>
+            <div class="pin-dot"></div>
+            <div class="pin-dot"></div>
+            <div class="pin-dot"></div>
+        </div>
+        <div class="pin-pad">
+            <button class="pin-key" onclick="pinInput('1')">1</button>
+            <button class="pin-key" onclick="pinInput('2')">2</button>
+            <button class="pin-key" onclick="pinInput('3')">3</button>
+            <button class="pin-key" onclick="pinInput('4')">4</button>
+            <button class="pin-key" onclick="pinInput('5')">5</button>
+            <button class="pin-key" onclick="pinInput('6')">6</button>
+            <button class="pin-key" onclick="pinInput('7')">7</button>
+            <button class="pin-key" onclick="pinInput('8')">8</button>
+            <button class="pin-key" onclick="pinInput('9')">9</button>
+            <button class="pin-key wide" onclick="pinClear()">Clear</button>
+            <button class="pin-key" onclick="pinInput('0')">0</button>
+        </div>
+        <div class="pin-error" id="pinError"></div>
+    </div>
+
+    <!-- KDS Screen -->
+    <div class="kds-screen" id="kdsScreen">
+        <div class="top-bar">
+            <div class="left">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#fb923c" stroke-width="2"><path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z"/><line x1="6" y1="17" x2="18" y2="17"/></svg>
+                <h1 id="restName">Kitchen Display</h1>
+                <span class="badge badge-active" id="activeCount">0 active</span>
+                <span class="badge badge-ready" id="readyCount">0 ready</span>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+                <div class="avg-prep" id="avgPrep"></div>
+                <button class="btn-icon sound-on" id="soundBtn" onclick="toggleSound()" title="Toggle sound">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+                </button>
+                <button class="btn-icon" onclick="fetchOrders()" title="Refresh (R)">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                </button>
+            </div>
+        </div>
+        <div class="grid" id="orderGrid"></div>
+        <div class="bottom-bar">
+            <div style="display:flex;gap:16px;">
+                <span><kbd>1-9</kbd> Bump ticket</span>
+                <span><kbd>R</kbd> Refresh</span>
+                <span><kbd>S</kbd> Toggle sound</span>
+            </div>
+            <div id="bottomStats" style="font-family:monospace;"></div>
+        </div>
+    </div>
+
+    <script>
+        const API = window.location.origin + '/api/kds';
+        const pathParts = window.location.pathname.split('/').filter(Boolean);
+        const restaurantId = pathParts[1];
+
+        let kdsToken = localStorage.getItem(`kds_token_${restaurantId}`) || '';
+        let pin = '';
+        let orders = [];
+        let soundEnabled = true;
+        let pollInterval = null;
+
+        // ── PIN Logic ──
+        function pinInput(digit) {
+            if (pin.length >= 4) return;
+            pin += digit;
+            updatePinDots();
+            if (pin.length === 4) verifyPin();
+        }
+
+        function pinClear() {
+            pin = '';
+            updatePinDots();
+            document.getElementById('pinError').textContent = '';
+        }
+
+        function updatePinDots() {
+            const dots = document.querySelectorAll('.pin-dot');
+            dots.forEach((d, i) => d.classList.toggle('filled', i < pin.length));
+        }
+
+        async function verifyPin() {
+            try {
+                const res = await fetch(`${API}/verify-pin?restaurant_id=${restaurantId}&pin=${pin}`, { method: 'POST' });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || 'Invalid PIN');
+                }
+                const data = await res.json();
+                kdsToken = data.kds_token;
+                localStorage.setItem(`kds_token_${restaurantId}`, kdsToken);
+                showKDS();
+            } catch (e) {
+                document.getElementById('pinError').textContent = e.message;
+                pin = '';
+                updatePinDots();
+                // Shake animation
+                const dots = document.querySelector('.pin-dots');
+                dots.style.animation = 'none';
+                dots.offsetHeight;
+                dots.style.animation = 'shake 0.4s ease';
+            }
+        }
+
+        // If token cached, skip PIN
+        if (kdsToken) {
+            showKDS();
+        }
+
+        // Also allow keyboard PIN entry
+        document.addEventListener('keydown', (e) => {
+            if (document.getElementById('pinScreen').style.display !== 'none' &&
+                !document.getElementById('kdsScreen').classList.contains('active')) {
+                if (e.key >= '0' && e.key <= '9') pinInput(e.key);
+                if (e.key === 'Backspace') { pin = pin.slice(0, -1); updatePinDots(); }
+                if (e.key === 'Escape') pinClear();
+            }
+        });
+
+        // ── KDS Logic ──
+        function showKDS() {
+            document.getElementById('pinScreen').style.display = 'none';
+            document.getElementById('kdsScreen').classList.add('active');
+            fetchOrders();
+            fetchStats();
+            // Poll every 3 seconds
+            pollInterval = setInterval(() => { fetchOrders(); fetchStats(); }, 3000);
+        }
+
+        function playBeep() {
+            if (!soundEnabled) return;
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                [0, 0.25, 0.5].forEach(delay => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.connect(gain); gain.connect(ctx.destination);
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(1000, ctx.currentTime + delay);
+                    gain.gain.setValueAtTime(0.7, ctx.currentTime + delay);
+                    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + delay + 0.15);
+                    osc.start(ctx.currentTime + delay);
+                    osc.stop(ctx.currentTime + delay + 0.2);
+                });
+                setTimeout(() => ctx.close(), 2000);
+            } catch (e) {}
+        }
+
+        let prevOrderIds = new Set();
+
+        async function fetchOrders() {
+            try {
+                const res = await fetch(`${API}/public/orders/${restaurantId}/${kdsToken}`);
+                if (res.status === 403) { localStorage.removeItem(`kds_token_${restaurantId}`); location.reload(); return; }
+                const data = await res.json();
+                const newOrders = data.orders || [];
+                document.getElementById('restName').textContent = data.restaurant_name || 'Kitchen Display';
+
+                // Detect new orders for beep
+                const newIds = new Set(newOrders.map(o => o.id));
+                const fresh = newOrders.filter(o => !prevOrderIds.has(o.id) && (o.kds_status === 'new' || !o.kds_status));
+                if (fresh.length > 0 && prevOrderIds.size > 0) playBeep();
+                prevOrderIds = newIds;
+
+                orders = newOrders;
+                renderOrders();
+            } catch (e) {
+                console.warn('Fetch failed:', e);
+            }
+        }
+
+        async function fetchStats() {
+            try {
+                const res = await fetch(`${API}/public/stats/${restaurantId}/${kdsToken}`);
+                const data = await res.json();
+                document.getElementById('avgPrep').innerHTML = `Avg prep: <strong>${data.avg_prep_time_display}</strong>`;
+            } catch (e) {}
+        }
+
+        function formatTimer(createdAt) {
+            if (!createdAt) return '--:--';
+            const diff = Math.floor((Date.now() - new Date(createdAt).getTime()) / 1000);
+            if (diff < 0) return '0:00';
+            return `${Math.floor(diff/60)}:${String(diff%60).padStart(2,'0')}`;
+        }
+
+        function isOverdue(createdAt) {
+            if (!createdAt) return false;
+            return (Date.now() - new Date(createdAt).getTime()) / 1000 > 900;
+        }
+
+        const statusOrder = { new: 0, acknowledged: 1, preparing: 2, ready: 3 };
+        const statusLabels = { new: 'NEW', acknowledged: 'SEEN', preparing: 'COOKING', ready: 'READY' };
+
+        function renderOrders() {
+            const sorted = [...orders].sort((a, b) => {
+                const sa = statusOrder[a.kds_status || 'new'] || 0;
+                const sb = statusOrder[b.kds_status || 'new'] || 0;
+                if (sa !== sb) return sa - sb;
+                return new Date(a.created_at) - new Date(b.created_at);
+            });
+
+            const active = sorted.filter(o => (o.kds_status || 'new') !== 'ready');
+            const ready = sorted.filter(o => o.kds_status === 'ready');
+
+            document.getElementById('activeCount').textContent = `${active.length} active`;
+            document.getElementById('readyCount').textContent = `${ready.length} ready`;
+            document.getElementById('bottomStats').textContent = `${active.length} active / ${ready.length} ready`;
+
+            const grid = document.getElementById('orderGrid');
+            if (sorted.length === 0) {
+                grid.innerHTML = `<div class="empty" style="grid-column:1/-1;">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M6 13.87A4 4 0 0 1 7.41 6a5.11 5.11 0 0 1 1.05-1.54 5 5 0 0 1 7.08 0A5.11 5.11 0 0 1 16.59 6 4 4 0 0 1 18 13.87V21H6Z"/><line x1="6" y1="17" x2="18" y2="17"/></svg>
+                    <h2>All Clear</h2><p style="font-size:14px;">No orders in the kitchen queue</p></div>`;
+                return;
+            }
+
+            let html = '';
+            let activeIdx = 0;
+            for (const order of sorted) {
+                const s = order.kds_status || 'new';
+                const isActive = s !== 'ready';
+                if (isActive) activeIdx++;
+                const posKey = isActive && activeIdx <= 9 ? activeIdx : null;
+                const overdue = isOverdue(order.created_at);
+                const timer = formatTimer(order.created_at);
+                const isQR = order.source === 'qr';
+
+                html += `<div class="ticket status-${s}">
+                    <div class="ticket-header header-${s}">
+                        <div class="order-num">
+                            ${posKey ? `<span class="pos-key">${posKey}</span>` : ''}
+                            <span>#${String(order.order_number || '?').padStart(3, '0')}</span>
+                            <span class="source-badge">${isQR ? 'QR' : 'POS'}</span>
+                        </div>
+                        <span>${statusLabels[s] || 'NEW'}</span>
+                    </div>
+                    <div class="ticket-meta">
+                        <div>
+                            ${order.table_name ? `<span class="table-badge">${order.table_name}</span>` : ''}
+                            ${order.guest_name ? `<span style="color:#94a3b8;font-size:12px;margin-left:6px;">${order.guest_name}</span>` : ''}
+                        </div>
+                        <div class="timer ${overdue ? 'overdue' : ''}">${overdue ? '&#128293;' : ''} ${timer}</div>
+                    </div>
+                    <div class="ticket-items">
+                        ${(order.items || []).map(item => `
+                            <div class="item-row">
+                                <span class="item-qty">${item.quantity}</span>
+                                <div>
+                                    <div class="item-name">${item.product_name || item.name || '?'}</div>
+                                    ${item.notes ? `<div class="item-note">${item.notes}</div>` : ''}
+                                </div>
+                            </div>
+                        `).join('')}
+                        ${order.guest_notes ? `<div style="margin-top:8px;padding-top:8px;border-top:1px solid #334155;font-size:11px;color:#fbbf24;">Note: ${order.guest_notes}</div>` : ''}
+                    </div>
+                    <div class="ticket-action">
+                        ${s === 'new' ? `<button class="action-btn btn-acknowledge" onclick="bumpOrder('${order.id}','acknowledge')">&#10003; Acknowledge</button>` : ''}
+                        ${s === 'acknowledged' ? `<button class="action-btn btn-cooking" onclick="bumpOrder('${order.id}','preparing')">&#128293; Start Cooking</button>` : ''}
+                        ${s === 'preparing' ? `<button class="action-btn btn-ready" onclick="bumpOrder('${order.id}','ready')">&#10003; Ready for Pickup</button>` : ''}
+                        ${s === 'ready' ? `<button class="action-btn btn-recall" onclick="bumpOrder('${order.id}','recall')">&#8634; Recall</button>` : ''}
+                    </div>
+                </div>`;
+            }
+            grid.innerHTML = html;
+        }
+
+        async function bumpOrder(orderId, action) {
+            try {
+                await fetch(`${API}/public/orders/${restaurantId}/${kdsToken}/${orderId}/${action}`, { method: 'PUT' });
+                fetchOrders();
+            } catch (e) {
+                console.error('Bump failed:', e);
+            }
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            const btn = document.getElementById('soundBtn');
+            btn.classList.toggle('sound-on', soundEnabled);
+            btn.title = soundEnabled ? 'Sound on' : 'Sound off';
+        }
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (!document.getElementById('kdsScreen').classList.contains('active')) return;
+            const num = parseInt(e.key);
+            if (num >= 1 && num <= 9) {
+                const active = [...orders].sort((a,b) => (statusOrder[a.kds_status||'new']||0) - (statusOrder[b.kds_status||'new']||0) || new Date(a.created_at) - new Date(b.created_at)).filter(o => (o.kds_status||'new') !== 'ready');
+                const target = active[num - 1];
+                if (target) {
+                    const actionMap = { new: 'acknowledge', acknowledged: 'preparing', preparing: 'ready' };
+                    const action = actionMap[target.kds_status || 'new'];
+                    if (action) bumpOrder(target.id, action);
+                }
+            }
+            if (e.key === 'r' || e.key === 'R') fetchOrders();
+            if (e.key === 's' || e.key === 'S') toggleSound();
+        });
+
+        // Update timers every second
+        setInterval(() => {
+            document.querySelectorAll('.timer').forEach(el => {
+                // Re-render to update timers
+            });
+            renderOrders();
+        }, 1000);
+    </script>
+    <style>
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-8px); } 75% { transform: translateX(8px); } }
+    </style>
+</body>
+</html>

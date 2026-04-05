@@ -82,6 +82,12 @@ async def serve_qr_menu_page(restaurant_id: str, table_hash: str):
     template_path = ROOT_DIR / "templates" / "qr_menu.html"
     return FileResponse(str(template_path), media_type="text/html")
 
+# Serve standalone KDS page for smart kitchen monitors
+@fastapi_app.get("/kds-monitor/{restaurant_id}")
+async def serve_kds_monitor_page(restaurant_id: str):
+    template_path = ROOT_DIR / "templates" / "kds_monitor.html"
+    return FileResponse(str(template_path), media_type="text/html")
+
 # CORS middleware
 fastapi_app.add_middleware(
     CORSMiddleware,
