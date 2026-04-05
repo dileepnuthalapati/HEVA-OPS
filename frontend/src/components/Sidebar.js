@@ -5,7 +5,8 @@ import { Sheet, SheetContent, SheetTrigger } from '../components/ui/sheet';
 import CommandSearch from './CommandSearch';
 import {
   LayoutDashboard, ShoppingCart, ChefHat, FileText, Settings, Table2,
-  BarChart3, Wallet, LogOut, Menu, Search, Users, Building2, Globe
+  BarChart3, Wallet, LogOut, Menu, Search, Users, Building2, Globe,
+  Printer, ClipboardList, UtensilsCrossed
 } from 'lucide-react';
 
 const platformMenu = [
@@ -22,10 +23,11 @@ const adminMenu = [
   { path: '/kds', icon: ChefHat, label: 'Kitchen (KDS)' },
   { path: '/orders', icon: FileText, label: 'Orders' },
   { path: '/reports', icon: BarChart3, label: 'Reports' },
-  { path: '/menu', icon: FileText, label: 'Menu' },
+  { path: '/menu-management', icon: UtensilsCrossed, label: 'Menu' },
   { path: '/tables', icon: Table2, label: 'Tables' },
   { path: '/cash-drawer', icon: Wallet, label: 'Cash Drawer' },
-  { path: '/staff', icon: Users, label: 'Staff' },
+  { path: '/printers', icon: Printer, label: 'Printers' },
+  { path: '/audit', icon: ClipboardList, label: 'Audit Log' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ];
 
