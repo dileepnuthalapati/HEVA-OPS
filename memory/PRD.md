@@ -10,7 +10,7 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 - **Buttons**: Rounded-2xl, haptic (scale-95 on press), shadow-lg on primary actions
 - **Layout**: Z-pattern POS (Pay button bottom-right), pill-shaped categories
 - **Effects**: Glassmorphism on login/modals, micro-animations, custom scrollbars
-- **Global Search**: Cmd+K command palette with keyboard navigation
+- **Sidebar**: Dark gradient (#0F172A to #1E293B), text color #E2E8F0 with !important override
 
 ## Architecture
 ```
@@ -18,7 +18,7 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 /app/frontend/src/ (pages, components, context, services)
 ```
 
-## All Completed Features (Verified by Testing Agent - Iteration 24)
+## All Completed Features (Verified by Testing Agent - Iteration 26)
 1. Core POS (cart, discounts, split payments, offline mode)
 2. ESC/POS Receipt Generation + Kitchen Ticket Printing
 3. QR Table Ordering (public guest menu, WebSocket push)
@@ -38,13 +38,18 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 17. Multi-tenancy security (strict restaurant_id scoping on all endpoints)
 18. Design System Overhaul (Phase 1-3: Modern Utility)
 19. Cmd+K Global Command Search
+20. Sidebar routing fix (all 11 admin links navigate correctly)
+21. Sidebar text visibility fix (Tailwind !important override for #E2E8F0)
 
-## Testing Status
-- Backend: 90% (27/30 passed, 3 skipped due to rate limiting)
-- Frontend: 100% (all UI tests passed)
+## Testing Status (Iteration 26 - April 5, 2026)
+- Backend: 95% (21/22 passed, 1 minor endpoint path issue in test file)
+- Frontend: 100% (all UI tests passed on both mobile 375px and desktop 1920px)
 - PDF Download: CONFIRMED WORKING
 - Multi-tenancy: CONFIRMED WORKING
 - All 3 user roles: CONFIRMED WORKING
+- All sidebar navigation: CONFIRMED (no blank pages)
+- Report filters (Today/7D/30D/90D): CONFIRMED WORKING
+- QR Menu: CONFIRMED WORKING (in browser; phone scanning requires production URL)
 
 ## Upcoming (P1)
 - Daily email summary for restaurant admins
@@ -53,8 +58,10 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 - Daily revenue widget on Admin Dashboard
 
 ## Backlog (P2)
+- Print Void Receipt to Kitchen
 - Deliverect / Middleware API Integration
 - iOS App Build Prep
+- Order number daily reset verification (bug #12)
 
 ## Production Checklist
 - [ ] Replace sk_test_emergent with real Stripe Platform key
@@ -62,3 +69,4 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 - [ ] Configure MongoDB Atlas connection string
 - [ ] Deploy backend to Railway
 - [ ] Build Android APK via Capacitor
+- [ ] QR codes will work once deployed to production URL (currently point to preview URL)
