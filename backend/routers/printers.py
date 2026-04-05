@@ -255,7 +255,7 @@ async def discover_printers(scan: ScanRequest, current_user: User = Depends(get_
     found = []
 
     loop = asyncio.get_event_loop()
-    with concurrent.futures.ThreadPoolExecutor(max_workers=50) as pool:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=128) as pool:
         tasks = []
         for port in ports:
             for i in range(1, 255):
