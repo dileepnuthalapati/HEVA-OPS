@@ -34,35 +34,35 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 13. Multi-currency restaurant creation with auto-seeded categories
 14. Cash Drawer (staff + admin access, restaurant-scoped)
 15. Table management with QR hash generation
-16. Order Sequencing daily reset (restaurant-scoped)
+16. Order Sequencing daily reset (restaurant-scoped, atomic counter)
 17. Multi-tenancy security (strict restaurant_id scoping on all endpoints)
 18. Design System Overhaul (Phase 1-3: Modern Utility)
 19. Cmd+K Global Command Search
 20. Sidebar routing fix (all 11 admin links navigate correctly)
 21. Sidebar text visibility fix (Tailwind !important override for #E2E8F0)
+22. Standalone QR Menu HTML (served by FastAPI, works without React frontend)
+23. Standalone KDS Monitor HTML (PIN-protected, keyboard shortcuts)
+24. PDF download via window.open (works on Capacitor WebView)
 
-## Bug Fixes (April 5, 2026 - Iteration 27)
-- Category model now includes restaurant_id in API response
-- New restaurant creation seeds 4 default categories with unique IDs (secrets.token_hex)
-- QR URLs use REACT_APP_BACKEND_URL (works on Capacitor APK, not just browser)
-- Reports page: Added "View PDF" button (opens in new tab) alongside Download PDF
-- PDF download improved with proper content-type validation and blob handling
-- Printer Settings: Removed duplicate Discover/Add buttons from empty state
+## Bug Fixes (April 5, 2026 - Order Number Fix)
+- **Root cause**: QR orders used separate non-scoped numbering; POS orders used string comparison with race conditions
+- **Fix**: Atomic counter via `order_counters` MongoDB collection using `find_one_and_update` + `$inc`
+- Both POS and QR orders now share the same sequential counter per restaurant per day
+- Fixed 2 legacy orders with string "001" order numbers converted to integer 1
+- Seeded counter for existing orders to prevent duplicates on the fix date
 
-## Testing Status (Iteration 27 - April 5, 2026)
-- Backend: 100% (15/15 passed)
-- Frontend: 100% (all UI tests passed)
-- All 4 user-reported bugs: VERIFIED FIXED
+## Testing Status
+- Order number fix: Verified via curl (orders #4, #5 created sequentially)
+- User live testing: PENDING
 
 ## Upcoming (P1)
 - Quick POS PIN Login for staff shift changes
 - Daily email summary for restaurant admins
 - Automated trial expiry email sequences (7d, 3d, 1d)
-- Daily revenue widget on Admin Dashboard
 
 ## Backlog (P2)
+- Daily revenue widget on Admin Dashboard
 - Print Void Receipt to Kitchen
-- Order number daily reset verification
 - Split monolithic server.py into modular routers
 - Deliverect / Middleware API Integration
 - iOS App Build Prep
