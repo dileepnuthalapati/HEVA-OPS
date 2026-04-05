@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Menu</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f8fafc; color: #1e293b; }
+        .header { background: linear-gradient(135deg, #1e293b 0%, #334155 100%); color: white; padding: 24px 16px; text-align: center; }
+        .header h1 { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+        .header p { font-size: 14px; opacity: 0.8; }
+        .loading { text-align: center; padding: 60px 20px; }
+        .loading .spinner { width: 40px; height: 40px; border: 3px solid #e2e8f0; border-top: 3px solid #4f46e5; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 16px; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .error { text-align: center; padding: 60px 20px; color: #dc2626; }
+        .error h2 { font-size: 18px; margin-bottom: 8px; }
+        .categories { display: flex; gap: 8px; padding: 16px; overflow-x: auto; background: white; border-bottom: 1px solid #e2e8f0; }
+        .categories::-webkit-scrollbar { display: none; }
+        .cat-btn { padding: 8px 18px; border-radius: 20px; border: 1.5px solid #e2e8f0; background: white; font-size: 14px; font-weight: 600; cursor: pointer; white-space: nowrap; transition: all 0.2s; }
+        .cat-btn.active { background: #1e293b; color: white; border-color: #1e293b; }
+        .products { padding: 16px; display: grid; grid-template-columns: 1fr; gap: 12px; }
+        .product-card { background: white; border-radius: 12px; padding: 16px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.08); border: 1px solid #f1f5f9; }
+        .product-info h3 { font-size: 16px; font-weight: 600; margin-bottom: 4px; }
+        .product-info p { font-size: 13px; color: #64748b; }
+        .product-price { font-size: 18px; font-weight: 700; color: #059669; white-space: nowrap; }
+        .cart-bar { position: fixed; bottom: 0; left: 0; right: 0; background: #1e293b; color: white; padding: 16px; display: flex; justify-content: space-between; align-items: center; display: none; }
+        .cart-bar.show { display: flex; }
+        .cart-bar .total { font-size: 18px; font-weight: 700; }
+        .cart-bar button { background: #059669; color: white; border: none; padding: 12px 24px; border-radius: 10px; font-size: 15px; font-weight: 600; cursor: pointer; }
+        .add-btn { background: #f1f5f9; border: none; width: 36px; height: 36px; border-radius: 50%; font-size: 20px; font-weight: 700; color: #1e293b; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all 0.15s; }
+        .add-btn:active { transform: scale(0.9); background: #059669; color: white; }
+        .qty-control { display: flex; align-items: center; gap: 10px; }
+        .qty-control button { width: 32px; height: 32px; border-radius: 50%; border: 1.5px solid #e2e8f0; background: white; font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .qty-control span { font-size: 16px; font-weight: 700; min-width: 20px; text-align: center; }
+        .out-of-stock { opacity: 0.5; }
+        .out-of-stock .add-btn { display: none; }
+        .badge-oos { font-size: 11px; color: #dc2626; font-weight: 600; }
+        .empty { text-align: center; padding: 40px; color: #94a3b8; }
+        .order-sent { text-align: center; padding: 60px 20px; }
+        .order-sent h2 { color: #059669; font-size: 22px; margin-bottom: 8px; }
+        .order-sent p { color: #64748b; }
+        .checkmark { font-size: 48px; margin-bottom: 16px; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="loading">
+            <div class="spinner"></div>
+            <p>Loading menu...</p>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin + '/api/qr';
+        const pathParts = window.location.pathname.split('/').filter(Boolean);
+        const restaurantId = pathParts[1];
+        const tableHash = pathParts[2];
+
+        let menuData = null;
+        let cart = {};
+        let activeCategory = 'all';
+
+        async function loadMenu() {
+            try {
+                const res = await fetch(`${API_BASE}/${restaurantId}/${tableHash}`);
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || 'Menu not found');
+                }
+                menuData = await res.json();
+                renderMenu();
+            } catch (e) {
+                document.getElementById('app').innerHTML = `
+                    <div class="error">
+                        <h2>Could not load menu</h2>
+                        <p>${e.message}</p>
+                    </div>`;
+            }
+        }
+
+        function renderMenu() {
+            const categories = [...new Set(menuData.products.map(p => p.category_name || 'Other'))];
+            const currency = menuData.restaurant?.currency || 'GBP';
+            const symbol = currency === 'GBP' ? '\u00a3' : currency === 'EUR' ? '\u20ac' : currency === 'USD' ? '$' : currency + ' ';
+            const restName = menuData.restaurant?.business_info?.name || 'Restaurant';
+            const tableName = menuData.table?.name || '';
+
+            const filtered = activeCategory === 'all'
+                ? menuData.products
+                : menuData.products.filter(p => (p.category_name || 'Other') === activeCategory);
+
+            document.getElementById('app').innerHTML = `
+                <div class="header">
+                    <h1>${restName}</h1>
+                    <p>${tableName ? 'Table: ' + tableName : 'Digital Menu'}</p>
+                </div>
+                <div class="categories">
+                    <button class="cat-btn ${activeCategory === 'all' ? 'active' : ''}" onclick="setCategory('all')">All</button>
+                    ${categories.map(c => `<button class="cat-btn ${activeCategory === c ? 'active' : ''}" onclick="setCategory('${c}')">${c}</button>`).join('')}
+                </div>
+                <div class="products">
+                    ${filtered.length === 0 ? '<div class="empty">No items in this category</div>' :
+                      filtered.map(p => {
+                        const qty = cart[p.id] || 0;
+                        const oos = !p.in_stock;
+                        return `<div class="product-card ${oos ? 'out-of-stock' : ''}">
+                            <div class="product-info">
+                                <h3>${p.name}</h3>
+                                <p>${p.category_name || ''}${oos ? ' <span class="badge-oos">Out of stock</span>' : ''}</p>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:12px;">
+                                <span class="product-price">${symbol}${p.price.toFixed(2)}</span>
+                                ${oos ? '' : qty === 0
+                                    ? `<button class="add-btn" onclick="addToCart('${p.id}')">+</button>`
+                                    : `<div class="qty-control">
+                                        <button onclick="removeFromCart('${p.id}')">-</button>
+                                        <span>${qty}</span>
+                                        <button onclick="addToCart('${p.id}')">+</button>
+                                       </div>`}
+                            </div>
+                        </div>`;
+                    }).join('')}
+                </div>
+                <div class="cart-bar ${Object.keys(cart).length > 0 ? 'show' : ''}" style="padding-bottom: max(16px, env(safe-area-inset-bottom));">
+                    <div>
+                        <div style="font-size:13px;opacity:0.7;">${Object.values(cart).reduce((a,b) => a+b, 0)} items</div>
+                        <div class="total">${symbol}${getTotal(symbol).toFixed(2)}</div>
+                    </div>
+                    <button onclick="placeOrder()">Place Order</button>
+                </div>`;
+        }
+
+        function setCategory(cat) { activeCategory = cat; renderMenu(); }
+        function addToCart(id) { cart[id] = (cart[id] || 0) + 1; renderMenu(); }
+        function removeFromCart(id) { cart[id] = (cart[id] || 0) - 1; if (cart[id] <= 0) delete cart[id]; renderMenu(); }
+        function getTotal() {
+            return Object.entries(cart).reduce((sum, [id, qty]) => {
+                const p = menuData.products.find(x => x.id === id);
+                return sum + (p ? p.price * qty : 0);
+            }, 0);
+        }
+
+        async function placeOrder() {
+            const items = Object.entries(cart).map(([id, qty]) => {
+                const p = menuData.products.find(x => x.id === id);
+                return { product_id: id, name: p.name, quantity: qty, price: p.price };
+            });
+            try {
+                const res = await fetch(`${API_BASE}/${restaurantId}/${tableHash}/order`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ items })
+                });
+                if (!res.ok) throw new Error('Order failed');
+                cart = {};
+                document.getElementById('app').innerHTML = `
+                    <div class="header">
+                        <h1>${menuData.restaurant?.business_info?.name || 'Restaurant'}</h1>
+                    </div>
+                    <div class="order-sent">
+                        <div class="checkmark">&#10003;</div>
+                        <h2>Order Sent!</h2>
+                        <p>Your order has been sent to the kitchen.</p>
+                        <p style="margin-top:16px;"><a href="${window.location.href}" style="color:#4f46e5;font-weight:600;">Order more</a></p>
+                    </div>`;
+            } catch (e) {
+                alert('Failed to place order: ' + e.message);
+            }
+        }
+
+        loadMenu();
+    </script>
+</body>
+</html>
