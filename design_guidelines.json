@@ -1,124 +1,145 @@
 {
-  "theme": "light",
-  "archetype": "1 (Organic & Earthy)",
-  "domain": "Restaurant/POS Mobile Web App",
-  "colors": {
-    "background": "bg-stone-50",
-    "surface": "bg-white",
-    "primary": "bg-orange-600",
-    "primary_hover": "bg-orange-700",
-    "primary_text": "text-white",
-    "secondary": "bg-stone-900",
-    "secondary_text": "text-stone-50",
-    "text_main": "text-stone-900",
-    "text_muted": "text-stone-500",
-    "border": "border-stone-200"
+  "project_name": "HevaPOS",
+  "domain": "Restaurant Point of Sale & SaaS Admin System",
+  "theme": "hybrid",
+  "archetypes": {
+    "pos_terminal": {
+      "type": "4 (Swiss & High-Contrast)",
+      "vibe": "High-contrast Light Mode, tactile, haptic, Apple-like whitespace, ultra-legible."
+    },
+    "admin_dashboard": {
+      "type": "4 (Swiss & High-Contrast)",
+      "vibe": "Slate & Indigo color palette, Professional SaaS (Stripe/Linear), dense but clean data."
+    }
   },
   "typography": {
-    "headings": "Cabinet Grotesk, sans-serif",
-    "body": "Manrope, sans-serif",
+    "fonts": {
+      "headings": "Satoshi, -apple-system, sans-serif",
+      "body": "Manrope, -apple-system, sans-serif",
+      "monospace": "JetBrains Mono, monospace"
+    },
     "hierarchy": {
-      "h1": "text-3xl sm:text-4xl tracking-tight font-black",
-      "h2": "text-2xl sm:text-3xl tracking-tight font-bold",
-      "h3": "text-xl sm:text-2xl tracking-tight font-semibold",
-      "body": "text-base leading-relaxed",
-      "small": "text-sm text-stone-500",
-      "overline": "text-xs font-bold uppercase tracking-[0.2em]"
+      "h1": "text-4xl sm:text-5xl font-bold tracking-tight",
+      "h2": "text-2xl sm:text-3xl font-semibold tracking-tight",
+      "h3": "text-xl font-medium tracking-tight",
+      "prices": "font-mono text-2xl sm:text-3xl font-bold tracking-tight",
+      "order_numbers": "font-mono text-lg font-bold tracking-widest uppercase",
+      "body": "text-base font-medium leading-relaxed",
+      "labels": "text-xs font-bold tracking-[0.15em] uppercase text-muted-foreground"
+    },
+    "rules": [
+      "No Inter for headings. Use Satoshi for that modern Stripe/Linear feel.",
+      "Prices and Order Numbers MUST use JetBrains Mono (already in index.css).",
+      "Use tracking-tight for all headings above 24px."
+    ]
+  },
+  "color_palette": {
+    "pos_light_mode": {
+      "background": "#FFFFFF",
+      "surface": "#F8FAFC",
+      "border": "#E2E8F0",
+      "text_primary": "#0F172A",
+      "text_secondary": "#64748B"
+    },
+    "admin_slate_indigo": {
+      "background": "#0F172A",
+      "surface": "#1E293B",
+      "border": "#334155",
+      "primary": "#4F46E5",
+      "primary_hover": "#4338CA",
+      "text_primary": "#F8FAFC",
+      "text_secondary": "#94A3B8"
+    },
+    "semantic_actions": {
+      "actionable_blue": "#2563EB",
+      "success_green": "#10B981",
+      "warning_amber": "#F59E0B",
+      "critical_red": "#EF4444"
+    },
+    "rules": [
+      "Avoid pure black. Use Slate-900 (#0F172A) for high-contrast dark elements.",
+      "POS terminal must remain bright, high-contrast Light Mode to prevent staff fatigue.",
+      "Admin uses a dark Slate/Indigo aesthetic to separate context from the POS.",
+      "Pay button and main CTAs use the semantic colors (Success Green for Pay)."
+    ]
+  },
+  "layout_and_spacing": {
+    "spacing_scale": "Generous Apple-like whitespace. Use p-6, p-8 for containers, gap-4 to gap-6 for grids.",
+    "pos_terminal": {
+      "strategy": "Z-Pattern Layout",
+      "structure": "Categories Top/Left -> Product Grid Center -> Cart Sidebar Right -> Pay Button Bottom Right.",
+      "pay_button_placement": "Always fixed at the absolute bottom-right corner of the viewport/cart area. Make it massive."
+    },
+    "admin_dashboard": {
+      "strategy": "Control Room Grid",
+      "structure": "Sidebar left (260px). Main content right. Dense bento-style grids for metrics (grid-cols-4)."
+    },
+    "rules": [
+      "No default Shadcn generic cards for the POS item grid. Build custom haptic rectangular items.",
+      "Grid children must be direct children. Override default stretch with align-items: start where necessary."
+    ]
+  },
+  "surfaces_and_components": {
+    "buttons_haptic": {
+      "style": "Modern rounded-lg or rounded-xl, sharp borders, no muddy shadows.",
+      "interaction": "Haptic-ready: MUST use 'active:scale-95 transition-transform duration-75' on all POS action buttons.",
+      "dynamic_state": "Payment buttons (Cash/Card) must visually highlight ONLY when the cart has > 0 items."
+    },
+    "glassmorphism": {
+      "usage": "Overlays, Modals, Command+K Search, Top sticky navs.",
+      "light_mode_classes": "bg-white/70 backdrop-blur-2xl border border-white/40 shadow-[0_8px_32px_rgba(0,0,0,0.12)]",
+      "dark_mode_classes": "bg-slate-900/60 backdrop-blur-2xl border border-slate-700/50 shadow-xl"
+    },
+    "micro_interactions": {
+      "place_order": "Button must have an 'animate-pulse' ring or visual highlight when an order is ready to be placed.",
+      "feedback": "Use Sonner for toast notifications on success/error."
+    },
+    "icons": {
+      "library": "lucide-react",
+      "style": "Use robust, stroke-width 2 icons. Avoid thin, illegible icons on POS."
     }
   },
-  "layout": {
-    "spacing_scale": "p-4, p-6, p-8 (generous padding inside cards)",
-    "container": "max-w-md mx-auto w-full min-h-screen bg-stone-50 shadow-2xl relative overflow-x-hidden",
-    "grid_strategy": "Mobile-first vertical stack. Dense list for products.",
-    "alignment": "Left-aligned content, optical alignment for buttons."
-  },
-  "components": {
-    "header": {
-      "style": "sticky top-0 z-40 backdrop-blur-xl bg-white/70 border-b border-white/20 px-6 py-4 flex justify-between items-center",
-      "instructions": "Restaurant Name on left, Table Number pill on right (e.g., bg-stone-100 text-stone-900 px-3 py-1 rounded-full text-xs font-bold)."
+  "media": {
+    "image_urls": {
+      "login_background": {
+        "url": "https://images.unsplash.com/photo-1671197346374-9d03a2a33a92?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzh8MHwxfHNlYXJjaHwxfHxtb2Rlcm4lMjBjbGVhbiUyMHJlc3RhdXJhbnQlMjBpbnRlcmlvciUyMGJsdXIlMjBiYWNrZ3JvdW5kfGVufDB8fHx8MTc3NTM0NjkxMnww&ixlib=rb-4.1.0&q=85",
+        "description": "Blurred modern restaurant interior. Use as a full-bleed background for the Login Page with a dark/slate overlay.",
+        "category": "backgrounds"
+      },
+      "company_logo": {
+        "url": "https://images.unsplash.com/photo-1763303775599-08d20753a9ec?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1Nzh8MHwxfHNlYXJjaHwxfHxtaW5pbWFsaXN0JTIwZ2VvbWV0cmljJTIwbG9nbyUyMHdoaXRlJTIwYmFja2dyb3VuZHxlbnwwfHx8fDE3NzUzNDY5MTJ8MA&ixlib=rb-4.1.0&q=85",
+        "description": "Minimalist geometric abstract shape for the HevaPOS brand logo.",
+        "category": "logos"
+      },
+      "pos_items": [
+        {
+          "url": "https://images.unsplash.com/photo-1774921677519-e2aeb343e9b9?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwxfHxkZWxpY2lvdXMlMjBnb3VybWV0JTIwcmVzdGF1cmFudCUyMGZvb2QlMjBwbGF0ZWR8ZW58MHx8fHwxNzc1MzQ2ODk2fDA&ixlib=rb-4.1.0&q=85",
+          "name": "Wagyu Burger",
+          "category": "products"
+        },
+        {
+          "url": "https://images.unsplash.com/photo-1761314015063-67eeda12a590?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHwzfHxkZWxpY2lvdXMlMjBnb3VybWV0JTIwcmVzdGF1cmFudCUyMGZvb2QlMjBwbGF0ZWR8ZW58MHx8fHwxNzc1MzQ2ODk2fDA&ixlib=rb-4.1.0&q=85",
+          "name": "Crispy Fish Tacos",
+          "category": "products"
+        },
+        {
+          "url": "https://images.unsplash.com/photo-1763376360111-3597e5877517?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDk1NzZ8MHwxfHNlYXJjaHw0fHxkZWxpY2lvdXMlMjBnb3VybWV0JTIwcmVzdGF1cmFudCUyMGZvb2QlMjBwbGF0ZWR8ZW58MHx8fHwxNzc1MzQ2ODk2fDA&ixlib=rb-4.1.0&q=85",
+          "name": "Chef's Tasting Plate",
+          "category": "products"
+        }
+      ]
     },
-    "hero": {
-      "style": "h-56 relative w-full",
-      "instructions": "Use restaurant interior image. Apply bg-gradient-to-t from-stone-50 via-stone-50/40 to-transparent overlay. Add the Restaurant Logo or bold Title floating at the bottom left of the hero."
-    },
-    "category_tabs": {
-      "style": "sticky top-[72px] z-30 bg-stone-50/90 backdrop-blur-md py-3 px-4 flex gap-3 overflow-x-auto no-scrollbar",
-      "active": "bg-stone-900 text-white rounded-full px-5 py-2 text-sm font-semibold shadow-md whitespace-nowrap",
-      "inactive": "bg-white text-stone-600 rounded-full px-5 py-2 text-sm font-medium border border-stone-200 whitespace-nowrap"
-    },
-    "product_card": {
-      "style": "flex gap-4 p-4 mb-4 mx-4 bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.04)] border border-stone-100",
-      "image": "w-28 h-28 rounded-2xl object-cover shrink-0",
-      "content": "flex flex-col justify-between flex-1",
-      "actions": "flex justify-between items-end mt-2"
-    },
-    "add_button": {
-      "style": "bg-stone-100 text-stone-900 hover:bg-orange-600 hover:text-white rounded-full w-8 h-8 flex items-center justify-center transition-colors",
-      "quantity_control": "flex items-center gap-3 bg-stone-100 rounded-full p-1"
-    },
-    "floating_cart": {
-      "style": "fixed bottom-6 left-1/2 -translate-x-1/2 w-[calc(100%-2rem)] max-w-[calc(28rem-2rem)] z-50 bg-stone-900/95 backdrop-blur-xl text-white p-4 px-6 rounded-full shadow-2xl flex justify-between items-center cursor-pointer",
-      "instructions": "Must float gracefully. Left side shows '3 items | $45.00'. Right side shows 'View Order' with right arrow."
-    },
-    "cart_sheet": {
-      "style": "bg-white rounded-t-[2rem]",
-      "instructions": "Use Shadcn Sheet. Overlay should be bg-black/40 backdrop-blur-sm. Sheet content should list items, subtotal, tax, and a massive primary 'Place Order' button fixed at the bottom."
-    },
-    "order_confirmation": {
-      "style": "fixed inset-0 z-50 bg-stone-900 text-white flex flex-col items-center justify-center p-6 text-center",
-      "instructions": "Show the 3D cloche image. Massive H1 'Order Sent to Kitchen'. Subtext 'Your food is being prepared.' Add an audio element or note to play a beep sound (simulating POS)."
-    }
-  },
-  "motion": {
-    "hover": "whileHover={{ scale: 1.02 }} on interactive cards",
-    "tap": "whileTap={{ scale: 0.95 }} on all buttons",
-    "list_entrance": "Staggered fade-up (y: 20, opacity: 0) for menu items",
-    "cart_bounce": "When item added, trigger small scale bounce on floating cart"
-  },
-  "icons": {
-    "library": "@phosphor-icons/react",
-    "style": "weight=\"duotone\" for primary UI elements, weight=\"bold\" for small controls (+/-)"
-  },
-  "accessibility": {
-    "contrast": "Ensure stone-500 is readable against stone-50. Buttons must have explicit focus states (focus:ring-2 focus:ring-orange-500 focus:ring-offset-2).",
-    "testing": "All buttons MUST have data-testid attributes (e.g., data-testid='add-to-cart-button', data-testid='checkout-button', data-testid='category-tab')."
-  },
-  "image_urls": {
-    "hero_background": {
-      "url": "https://images.unsplash.com/photo-1768051297578-1ea70392c307?crop=entropy&cs=srgb&fm=jpg&ixid=M3w3NDQ2NDF8MHwxfHNlYXJjaHwxfHxyZXN0YXVyYW50JTIwaW50ZXJpb3IlMjBjYWZlJTIwd2FybSUyMGxpZ2h0aW5nfGVufDB8fHx8MTc3NTIyMzAwN3ww&ixlib=rb-4.1.0&q=85",
-      "description": "Elegant chandeliers in a warm restaurant interior. Use as hero background."
-    },
-    "food_main_1": {
-      "url": "https://images.pexels.com/photos/35290662/pexels-photo-35290662.png?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-      "description": "Gourmet octopus dish. Use for main course items."
-    },
-    "food_main_2": {
-      "url": "https://images.unsplash.com/photo-1651948512032-8b4d4b37fe74?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MjJ8MHwxfHNlYXJjaHwxfHxnb3VybWV0JTIwZm9vZCUyMHBsYXRpbmclMjBjbG9zZSUyMHVwfGVufDB8fHx8MTc3NTIyMzAwN3ww&ixlib=rb-4.1.0&q=85",
-      "description": "Food being prepared. Use as alternate item."
-    },
-    "food_dessert": {
-      "url": "https://images.pexels.com/photos/10875225/pexels-photo-10875225.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
-      "description": "Sophisticated mousse dessert. Use for dessert items."
-    },
-    "drink_cocktail": {
-      "url": "https://images.unsplash.com/photo-1588443193746-46ba57e36e40?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA1MTN8MHwxfHNlYXJjaHwzfHxjcmFmdCUyMGNvY2t0YWlsJTIwZHJpbmslMjBzdW5zZXR8ZW58MHx8fHwxNzc1MjIzMDA3fDA&ixlib=rb-4.1.0&q=85",
-      "description": "Craft cocktail drink. Use for beverage items."
-    },
-    "order_confirmation_3d": {
-      "url": "https://static.prod-images.emergentagent.com/jobs/2b672dd2-6031-4dbc-beee-28f993a94294/images/da8c7d5e636d088b4e27aee1b3a1f301c253a10f24c261905720097e040211f8.png",
-      "description": "3D golden cloche glowing. Use ONLY in the Order Confirmation screen."
-    }
+    "rules": [
+      "Images must be responsive and constrained. POS item images should have aspect-square with object-cover.",
+      "Never use generic placeholder services. Only use the URLs provided above."
+    ]
   },
   "instructions_to_main_agent": [
-    "1. This is a mobile web app. Center the main container using 'max-w-md mx-auto relative min-h-screen bg-stone-50 overflow-x-hidden' to simulate an iOS app layout.",
-    "2. DO NOT USE STANDARD SHADCN CARDS. Use pure HTML/Tailwind for the product list to match the 'product_card' style.",
-    "3. Use 'Cabinet Grotesk' for all headings and 'Manrope' for body. Install these from Google Fonts or local assets if necessary.",
-    "4. For interactivity, wrap list items and buttons in framer-motion's <motion.div> or <motion.button> for the tap/hover interactions.",
-    "5. Use Phosphor icons (yarn add @phosphor-icons/react).",
-    "6. Build a Shadcn Sheet for the cart summary. It should slide up from bottom. Ensure the overlay is a backdrop-blur.",
-    "7. Mock the Place Order functionality to trigger the 'Order Confirmation' screen (using state). Render the 'order_confirmation_3d' image in the center.",
-    "8. Implement horizontal scrolling for the Category Tabs and hide the scrollbar ('no-scrollbar' utility).",
-    "9. MUST add 'data-testid' to every interactive element (e.g., data-testid='place-order-button').",
-    "10. For quantity controls, show a pill with [-] [1] [+] after an item is added to cart, replacing the initial '+' button."
+    "Strictly apply data-testid attributes (kebab-case, role-based) to ALL interactive buttons, links, and forms.",
+    "Do NOT rely entirely on Shadcn default styling for the POS grid; build custom, haptic-feeling elements that scale down for active states.",
+    "Implement the Z-Pattern on the POS UI: Categories top-left, Items middle, Cart Sidebar right, with a MASSIVE Pay button at the very bottom-right of the cart sidebar.",
+    "Implement a Global Command+K Search Modal using the defined Glassmorphism classes.",
+    "Ensure prices inside the cart and item grid use JetBrains Mono (already linked in index.css) for tabular clarity.",
+    "Replace existing POS styles in App.css and index.css with cleaner, utility-class driven Tailwind implementations following these guidelines."
   ]
 }

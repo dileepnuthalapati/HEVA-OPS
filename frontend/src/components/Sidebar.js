@@ -1,34 +1,31 @@
 import React, { useState } from 'react';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Button } from './ui/button';
-import { Sheet, SheetContent, SheetTrigger, SheetTitle } from './ui/sheet';
-import { 
-  LayoutDashboard, Package, FolderTree, ShoppingCart, FileText, LogOut, 
-  Wallet, Settings, Users, Printer, BarChart3, Globe, Building2, Menu, CreditCard,
-  ChefHat, Shield
+import { Sheet, SheetContent, SheetTrigger } from '../components/ui/sheet';
+import CommandSearch from './CommandSearch';
+import {
+  LayoutDashboard, ShoppingCart, ChefHat, FileText, Settings, Table2,
+  BarChart3, Wallet, LogOut, Menu, Search, Users, Building2, Globe
 } from 'lucide-react';
 
-const platformOwnerMenu = [
+const platformMenu = [
   { path: '/platform/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { path: '/restaurants', icon: Building2, label: 'Restaurants' },
-  { path: '/platform/subscriptions', icon: CreditCard, label: 'Subscriptions' },
-  { path: '/platform/categories', icon: Globe, label: 'Global Categories' },
   { path: '/platform/reports', icon: BarChart3, label: 'Platform Reports' },
-  { path: '/platform/settings', icon: Settings, label: 'Platform Settings' },
+  { path: '/platform/categories', icon: Globe, label: 'Categories' },
+  { path: '/platform/settings', icon: Settings, label: 'Settings' },
 ];
 
-const restaurantAdminMenu = [
+const adminMenu = [
+  { path: '/pos', icon: ShoppingCart, label: 'POS Terminal' },
   { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/tables', icon: Users, label: 'Tables' },
-  { path: '/menu-management', icon: Package, label: 'Menu' },
-  { path: '/pos', icon: ShoppingCart, label: 'POS' },
   { path: '/kds', icon: ChefHat, label: 'Kitchen (KDS)' },
   { path: '/orders', icon: FileText, label: 'Orders' },
   { path: '/reports', icon: BarChart3, label: 'Reports' },
-  { path: '/audit', icon: Shield, label: 'Audit Log' },
+  { path: '/menu', icon: FileText, label: 'Menu' },
+  { path: '/tables', icon: Table2, label: 'Tables' },
   { path: '/cash-drawer', icon: Wallet, label: 'Cash Drawer' },
-  { path: '/printers', icon: Printer, label: 'Printers' },
+  { path: '/staff', icon: Users, label: 'Staff' },
   { path: '/settings', icon: Settings, label: 'Settings' },
 ];
 
@@ -39,130 +36,132 @@ const posStaffMenu = [
   { path: '/cash-drawer', icon: Wallet, label: 'Cash Drawer' },
 ];
 
-const Sidebar = ({ title = 'HevaPOS', subtitle = '' }) => {
-  const location = useLocation();
-  const navigate = useNavigate();
-  const { user, logout, isPlatformOwner, isRestaurantAdmin } = useAuth();
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+function SidebarContent({ user, onLogout, onOpenSearch }) {
+  const menuItems = user?.role === 'platform_owner' ? platformMenu
+    : user?.role === 'admin' ? adminMenu
+    : posStaffMenu;
 
-  let menuItems = posStaffMenu;
-  let defaultSubtitle = 'POS Terminal';
-  
-  if (isPlatformOwner) {
-    menuItems = platformOwnerMenu;
-    defaultSubtitle = 'Platform Management';
-  } else if (isRestaurantAdmin) {
-    menuItems = restaurantAdminMenu;
-    defaultSubtitle = 'Restaurant Admin';
-  }
+  return (
+    <div className="flex flex-col h-full">
+      {/* Logo */}
+      <div className="mb-6" data-testid="sidebar-logo">
+        <h1 className="font-heading text-xl font-bold tracking-tight text-white">HevaPOS</h1>
+        <p className="text-[11px] tracking-[0.15em] uppercase text-slate-400 mt-0.5 font-medium">
+          {user?.role === 'platform_owner' ? 'Platform' : user?.role === 'admin' ? 'Restaurant' : 'Staff'}
+        </p>
+      </div>
+
+      {/* Search Trigger */}
+      <button
+        onClick={onOpenSearch}
+        className="flex items-center gap-2.5 w-full px-3 py-2.5 mb-4 rounded-xl bg-slate-800/50 hover:bg-slate-700/50 text-slate-400 text-sm transition-all border border-slate-700/50"
+        data-testid="sidebar-search-trigger"
+      >
+        <Search className="w-4 h-4" />
+        <span className="flex-1 text-left">Search...</span>
+        <kbd className="hidden sm:inline text-[10px] font-mono px-1.5 py-0.5 bg-slate-700 rounded text-slate-400 border border-slate-600">
+          Ctrl K
+        </kbd>
+      </button>
+
+      {/* Navigation */}
+      <nav className="flex-1 space-y-0.5 overflow-y-auto scrollbar-thin" data-testid="sidebar-nav">
+        {menuItems.map(item => {
+          const Icon = item.icon;
+          return (
+            <NavLink
+              key={item.path}
+              to={item.path}
+              className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+              data-testid={`nav-${item.label.toLowerCase().replace(/[\s()]/g, '-')}`}
+            >
+              <Icon className="w-[18px] h-[18px] flex-shrink-0" strokeWidth={2} />
+              <span>{item.label}</span>
+            </NavLink>
+          );
+        })}
+      </nav>
+
+      {/* User + Logout */}
+      <div className="mt-auto pt-4 border-t border-slate-700/50">
+        <div className="flex items-center gap-3 px-2 mb-3">
+          <div className="w-8 h-8 rounded-lg bg-indigo-600/30 flex items-center justify-center text-indigo-300 text-sm font-bold">
+            {(user?.username || 'U')[0].toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-white truncate" data-testid="sidebar-username">{user?.username}</p>
+            <p className="text-[11px] text-slate-400 capitalize">{user?.role?.replace('_', ' ')}</p>
+          </div>
+        </div>
+        <button
+          onClick={onLogout}
+          className="sidebar-link w-full text-red-400 hover:text-red-300 hover:bg-red-500/10"
+          data-testid="logout-button"
+        >
+          <LogOut className="w-[18px] h-[18px]" />
+          <span>Logout</span>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+const Sidebar = () => {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+  const [searchOpen, setSearchOpen] = useState(false);
 
   const handleLogout = () => {
-    setMobileMenuOpen(false);
     logout();
     navigate('/login');
   };
 
-  const handleNavClick = () => {
-    setMobileMenuOpen(false);
-  };
+  // Global Ctrl+K shortcut
+  React.useEffect(() => {
+    const handler = (e) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setSearchOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  }, []);
 
   return (
     <>
+      <CommandSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
+
       {/* Desktop Sidebar */}
-      <div className="sidebar hidden md:flex">
-        <div className="mb-6 flex-shrink-0">
-          <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-          <p className="text-sm text-muted-foreground mt-1 opacity-80">{subtitle || defaultSubtitle}</p>
-          {user && <p className="text-xs mt-2 opacity-60">Logged in as: {user.username}</p>}
-        </div>
-        <nav className="space-y-1 flex-1 overflow-y-auto">
-          {menuItems.map((item) => (
-            <Link
-              key={item.path}
-              to={item.path}
-              data-testid={`sidebar-link-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
-              className={`sidebar-link ${location.pathname === item.path ? 'active' : ''}`}
-            >
-              <item.icon className="w-5 h-5" />
-              <span>{item.label}</span>
-            </Link>
-          ))}
-        </nav>
-        <button
-          data-testid="logout-button"
-          className="flex items-center gap-3 w-full px-4 py-3 mt-3 rounded-lg text-sm font-medium text-red-300 hover:bg-red-500/20 hover:text-red-200 transition-colors border border-red-400/30 flex-shrink-0"
-          onClick={handleLogout}
-        >
-          <LogOut className="w-5 h-5" />
-          <span>Logout</span>
-        </button>
-      </div>
+      <aside className="sidebar hidden md:flex" data-testid="desktop-sidebar">
+        <SidebarContent user={user} onLogout={handleLogout} onOpenSearch={() => setSearchOpen(true)} />
+      </aside>
 
-      {/* Mobile Header + Sheet Menu */}
-      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-slate-900 text-white px-4 py-3 flex items-center justify-between">
-        <h1 className="text-lg font-bold">{title}</h1>
-        <div className="flex items-center gap-2">
-          <span className="text-sm opacity-70">{user?.username}</span>
-          <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
+      {/* Mobile Menu */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-50 glass" data-testid="mobile-header">
+        <div className="flex items-center justify-between px-4 py-3">
+          <Sheet>
             <SheetTrigger asChild>
-              <Button variant="ghost" size="sm" className="text-white p-1" data-testid="mobile-menu-button">
-                <Menu className="w-6 h-6" />
-              </Button>
+              <button className="p-2 -ml-2 rounded-lg hover:bg-slate-100 transition-colors" data-testid="mobile-menu-toggle">
+                <Menu className="w-5 h-5 text-slate-700" />
+              </button>
             </SheetTrigger>
-            <SheetContent 
-              side="right" 
-              className="w-[280px] bg-slate-900 text-white border-slate-700 p-0 flex flex-col"
-            >
-              <SheetTitle className="sr-only">Navigation Menu</SheetTitle>
-              
-              {/* Header inside sheet */}
-              <div className="p-4 pb-2 flex-shrink-0">
-                <h2 className="text-xl font-bold">{title}</h2>
-                <p className="text-sm opacity-70 mt-1">{subtitle || defaultSubtitle}</p>
-                {user && <p className="text-xs mt-1 opacity-50">Logged in as: {user.username}</p>}
-              </div>
-
-              {/* Scrollable nav links */}
-              <div className="flex-1 overflow-y-auto px-3 py-2">
-                <nav className="flex flex-col gap-1">
-                  {menuItems.map((item) => (
-                    <Link
-                      key={item.path}
-                      to={item.path}
-                      onClick={handleNavClick}
-                      data-testid={`mobile-sidebar-link-${item.label.toLowerCase().replace(/\s+/g, '-')}`}
-                      className={`flex items-center gap-3 px-3 py-3 rounded-lg text-base font-medium transition-colors ${
-                        location.pathname === item.path 
-                          ? 'bg-blue-600 text-white' 
-                          : 'text-white/90 hover:bg-white/10 active:bg-white/20'
-                      }`}
-                    >
-                      <item.icon className="w-5 h-5 shrink-0" />
-                      <span>{item.label}</span>
-                    </Link>
-                  ))}
-                </nav>
-              </div>
-
-              {/* Logout pinned at bottom */}
-              <div className="flex-shrink-0 p-4 border-t border-white/10">
-                <Button
-                  variant="outline"
-                  data-testid="mobile-logout-button"
-                  className="w-full justify-start bg-transparent border-white/20 text-white hover:bg-white/10"
-                  onClick={handleLogout}
-                >
-                  <LogOut className="w-5 h-5 mr-3" />
-                  Logout
-                </Button>
+            <SheetContent side="left" className="w-[280px] p-0 bg-gradient-to-b from-[#0F172A] to-[#1E293B] border-none">
+              <div className="p-5 h-full">
+                <SidebarContent user={user} onLogout={handleLogout} onOpenSearch={() => setSearchOpen(true)} />
               </div>
             </SheetContent>
           </Sheet>
+          <h1 className="font-heading text-base font-bold text-slate-900 tracking-tight">HevaPOS</h1>
+          <button
+            onClick={() => setSearchOpen(true)}
+            className="p-2 -mr-2 rounded-lg hover:bg-slate-100 transition-colors"
+            data-testid="mobile-search-button"
+          >
+            <Search className="w-5 h-5 text-slate-500" />
+          </button>
         </div>
       </div>
-
-      {/* Spacer for mobile header */}
-      <div className="md:hidden h-14 flex-shrink-0" />
     </>
   );
 };

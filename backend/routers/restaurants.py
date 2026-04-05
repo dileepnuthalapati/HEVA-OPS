@@ -26,6 +26,31 @@ async def create_restaurant(restaurant_data: RestaurantCreate, current_user: Use
         "trial_ends_at": trial_ends.isoformat()
     }
     await db.restaurants.insert_one(restaurant_dict)
+
+    # Auto-seed default categories for the new restaurant
+    platform_cats = await db.platform_categories.find({}, {"_id": 0}).to_list(100)
+    if platform_cats:
+        for pc in platform_cats:
+            cat_id = f"cat_{datetime.now(timezone.utc).timestamp()}_{pc.get('name', 'x')}"
+            await db.categories.insert_one({
+                "id": cat_id,
+                "name": pc.get("name", ""),
+                "description": pc.get("description", ""),
+                "restaurant_id": restaurant_id,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+    else:
+        defaults = ["Starters", "Mains", "Drinks", "Desserts"]
+        for name in defaults:
+            cat_id = f"cat_{datetime.now(timezone.utc).timestamp()}_{name}"
+            await db.categories.insert_one({
+                "id": cat_id,
+                "name": name,
+                "description": "",
+                "restaurant_id": restaurant_id,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            })
+
     return Restaurant(**restaurant_dict)
 
 

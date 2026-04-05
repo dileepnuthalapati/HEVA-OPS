@@ -3,10 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
-import { Label } from '../components/ui/label';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { toast } from 'sonner';
-import { Eye, EyeOff, WifiOff } from 'lucide-react';
+import { Eye, EyeOff, WifiOff, ArrowRight } from 'lucide-react';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -24,7 +22,6 @@ const Login = () => {
   useEffect(() => {
     window.addEventListener('online', checkOnline);
     window.addEventListener('offline', checkOnline);
-    // Poll every 2 seconds as backup for browsers that don't fire events reliably
     const interval = setInterval(checkOnline, 2000);
     return () => {
       window.removeEventListener('online', checkOnline);
@@ -35,7 +32,6 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // Double-check right before submitting
     if (!navigator.onLine) {
       setIsOnline(false);
       toast.error('You are offline. Check your internet connection.');
@@ -64,42 +60,98 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-900 to-slate-800 p-4">
-      <Card className="w-full max-w-md" data-testid="login-card">
-        <CardHeader className="text-center">
-          <CardTitle className="text-3xl font-bold">HevaPOS</CardTitle>
-          <CardDescription>Sign in to your account</CardDescription>
-        </CardHeader>
-        <CardContent>
+    <div className="min-h-screen flex items-center justify-center relative overflow-hidden" data-testid="login-page">
+      {/* Background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-indigo-950" />
+      <div className="absolute inset-0 opacity-[0.03]" style={{
+        backgroundImage: `radial-gradient(circle at 1px 1px, white 1px, transparent 0)`,
+        backgroundSize: '40px 40px'
+      }} />
+
+      {/* Login Card */}
+      <div className="relative z-10 w-full max-w-[420px] mx-4 animate-slide-up" data-testid="login-card">
+        {/* Logo */}
+        <div className="text-center mb-8">
+          <h1 className="font-heading text-4xl font-bold text-white tracking-tight">
+            Heva<span className="text-indigo-400">POS</span>
+          </h1>
+          <p className="text-slate-400 text-sm mt-2 font-medium">Restaurant management, simplified</p>
+        </div>
+
+        {/* Form Card */}
+        <div className="glass-dark rounded-2xl p-8">
           {!isOnline && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-300 rounded-lg flex items-center gap-2 text-sm text-red-700" data-testid="offline-warning">
+            <div className="mb-5 p-3 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-3 text-sm text-red-300" data-testid="offline-warning">
               <WifiOff className="w-5 h-5 shrink-0" />
               <div>
                 <div className="font-semibold">You are offline</div>
-                <div className="text-xs mt-0.5">Check your WiFi or mobile data connection and try again.</div>
+                <div className="text-xs text-red-400 mt-0.5">Check your WiFi or mobile data and try again.</div>
               </div>
             </div>
           )}
-          <form onSubmit={handleSubmit} className="space-y-4">
+
+          <form onSubmit={handleSubmit} className="space-y-5">
             <div>
-              <Label htmlFor="username">Username</Label>
-              <Input id="username" data-testid="login-username" value={username} onChange={(e) => setUsername(e.target.value)} placeholder="Enter username" required />
+              <label className="text-xs font-bold tracking-[0.1em] uppercase text-slate-400 mb-2 block">Username</label>
+              <Input
+                id="username"
+                data-testid="login-username"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="Enter username"
+                required
+                className="h-12 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-base"
+              />
             </div>
             <div>
-              <Label htmlFor="password">Password</Label>
+              <label className="text-xs font-bold tracking-[0.1em] uppercase text-slate-400 mb-2 block">Password</label>
               <div className="relative">
-                <Input id="password" data-testid="login-password" type={showPassword ? 'text' : 'password'} value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter password" required className="pr-10" />
-                <button type="button" data-testid="toggle-password" onClick={() => setShowPassword(!showPassword)} className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                <Input
+                  id="password"
+                  data-testid="login-password"
+                  type={showPassword ? 'text' : 'password'}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter password"
+                  required
+                  className="h-12 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 pr-12 text-base"
+                />
+                <button
+                  type="button"
+                  data-testid="toggle-password"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                >
                   {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
               </div>
             </div>
-            <Button type="submit" data-testid="login-submit" className="w-full" disabled={loading || !isOnline}>
-              {!isOnline ? 'Offline — Cannot Sign In' : loading ? 'Signing in...' : 'Sign In'}
+            <Button
+              type="submit"
+              data-testid="login-submit"
+              className="w-full h-12 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl text-base btn-haptic transition-all duration-150 mt-2"
+              disabled={loading || !isOnline}
+            >
+              {!isOnline ? 'Offline' : loading ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  Signing in...
+                </span>
+              ) : (
+                <span className="flex items-center gap-2 justify-center">
+                  Sign In
+                  <ArrowRight className="w-4 h-4" />
+                </span>
+              )}
             </Button>
           </form>
-        </CardContent>
-      </Card>
+        </div>
+
+        {/* Footer */}
+        <p className="text-center text-xs text-slate-500 mt-6">
+          Powered by HevaPOS Cloud
+        </p>
+      </div>
     </div>
   );
 };
