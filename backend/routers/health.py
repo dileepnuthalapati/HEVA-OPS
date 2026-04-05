@@ -33,19 +33,13 @@ async def get_status_checks():
 
 
 @router.post("/seed-database")
-async def seed_database_endpoint(secret: str = None, force: bool = False):
+async def seed_database_endpoint(secret: str = None):
     if secret != "hevapos2026":
         raise HTTPException(status_code=403, detail="Invalid secret. Use ?secret=hevapos2026")
 
-    if force:
-        await db.users.delete_many({})
-        await db.categories.delete_many({})
-        await db.products.delete_many({})
-        await db.restaurants.delete_many({})
-
     existing_users = await db.users.count_documents({})
     if existing_users > 0:
-        return {"message": f"Database already seeded with {existing_users} users. Skipping. Add &force=true to reseed.", "seeded": False}
+        return {"message": f"Database already seeded with {existing_users} users. Skipping.", "seeded": False}
 
     platform_owner = {
         "id": "platform_owner_1",
@@ -130,4 +124,50 @@ async def seed_database_endpoint(secret: str = None, force: bool = False):
             "staff": {"username": "user", "password": "user123"}
         },
         "data_created": {"users": 3, "restaurants": 1, "categories": 4, "products": 11}
+    }
+
+
+@router.post("/migrate-fix")
+async def migrate_fix_endpoint(secret: str = None):
+    """Safe migration: fixes missing restaurant_id on categories/products without deleting anything."""
+    if secret != "hevapos2026":
+        raise HTTPException(status_code=403, detail="Invalid secret")
+
+    results = {"categories_fixed": 0, "products_fixed": 0, "restaurants_checked": []}
+
+    # Get all restaurants
+    restaurants = await db.restaurants.find({}, {"_id": 0, "id": 1, "business_info": 1}).to_list(1000)
+
+    for rest in restaurants:
+        rid = rest["id"]
+        rname = rest.get("business_info", {}).get("name", rid)
+        results["restaurants_checked"].append(rname)
+
+        # Fix categories missing restaurant_id
+        cat_result = await db.categories.update_many(
+            {"$or": [{"restaurant_id": None}, {"restaurant_id": {"$exists": False}}]},
+            {"$set": {"restaurant_id": rid}}
+        )
+        results["categories_fixed"] += cat_result.modified_count
+
+        # Fix products missing restaurant_id
+        prod_result = await db.products.update_many(
+            {"$or": [{"restaurant_id": None}, {"restaurant_id": {"$exists": False}}]},
+            {"$set": {"restaurant_id": rid}}
+        )
+        results["products_fixed"] += prod_result.modified_count
+
+    # If there are categories with no restaurant and no restaurants exist, report them
+    orphan_cats = await db.categories.count_documents(
+        {"$or": [{"restaurant_id": None}, {"restaurant_id": {"$exists": False}}]}
+    )
+    orphan_prods = await db.products.count_documents(
+        {"$or": [{"restaurant_id": None}, {"restaurant_id": {"$exists": False}}]}
+    )
+    results["remaining_orphan_categories"] = orphan_cats
+    results["remaining_orphan_products"] = orphan_prods
+
+    return {
+        "message": "Migration complete. No data was deleted.",
+        "results": results
     }
