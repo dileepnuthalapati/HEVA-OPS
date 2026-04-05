@@ -371,11 +371,7 @@ const PrinterSettings = () => {
               <CardContent className="py-12 text-center">
                 <Printer className="w-16 h-16 mx-auto mb-4 text-muted-foreground" />
                 <h3 className="text-xl font-semibold mb-2">No printers configured</h3>
-                <p className="text-muted-foreground mb-4">Add a thermal receipt printer to start printing kitchen and customer receipts.</p>
-                <div className="flex justify-center gap-3">
-                  <Button variant="outline" onClick={() => setShowDiscovery(true)}><Search className="w-4 h-4 mr-2" /> Discover Printers</Button>
-                  <Button onClick={() => setShowAddPrinter(true)}><Plus className="w-4 h-4 mr-2" /> Add Manually</Button>
-                </div>
+                <p className="text-muted-foreground mb-4">Add a thermal receipt printer using the buttons above to start printing kitchen and customer receipts.</p>
               </CardContent>
             </Card>
           ) : (

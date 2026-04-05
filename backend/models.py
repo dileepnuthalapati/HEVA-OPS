@@ -37,6 +37,7 @@ class Category(BaseModel):
     id: str
     name: str
     description: Optional[str] = None
+    restaurant_id: Optional[str] = None
     created_at: Optional[str] = None
 
 
