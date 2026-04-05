@@ -8,25 +8,23 @@ from datetime import datetime, timezone, timedelta
 router = APIRouter()
 
 
+async def get_next_order_number(restaurant_id: str) -> int:
+    """Atomic daily order counter. Uses find_one_and_update on a counters collection
+    to guarantee unique, sequential order numbers per restaurant per day."""
+    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    counter_id = f"{restaurant_id}_{today_str}"
+    result = await db.order_counters.find_one_and_update(
+        {"_id": counter_id},
+        {"$inc": {"seq": 1}},
+        upsert=True,
+        return_document=True
+    )
+    return result["seq"]
+
+
 @router.post("/orders", response_model=Order)
 async def create_order(order_data: OrderCreate, current_user: User = Depends(get_current_user)):
-    # Daily reset: order numbers start from 1 each day, scoped per restaurant
-    today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    reset_query = {"created_at": {"$gte": f"{today_str}T00:00:00"}}
-    if current_user.restaurant_id:
-        reset_query["restaurant_id"] = current_user.restaurant_id
-    last_today = await db.orders.find_one(
-        reset_query,
-        sort=[("order_number", -1)]
-    )
-    if last_today:
-        last_num = last_today.get("order_number", 0)
-        try:
-            order_number = int(last_num) + 1
-        except (ValueError, TypeError):
-            order_number = 1
-    else:
-        order_number = 1
+    order_number = await get_next_order_number(current_user.restaurant_id or "default")
 
     order_id = f"order_{datetime.now(timezone.utc).timestamp()}"
     order_dict = {

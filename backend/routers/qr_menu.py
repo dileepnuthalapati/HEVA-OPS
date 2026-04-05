@@ -201,9 +201,9 @@ async def place_guest_order(request: Request, restaurant_id: str, table_hash: st
     # Calculate totals
     subtotal = sum(item.total for item in order_data.items)
 
-    # Get next order number
-    last_order = await db.orders.find_one(sort=[("order_number", -1)])
-    order_number = (int(last_order.get("order_number", 0)) + 1) if last_order else 1
+    # Get next order number using atomic counter (shared with POS orders)
+    from routers.orders import get_next_order_number
+    order_number = await get_next_order_number(restaurant_id)
 
     order_id = f"qr_{datetime.now(timezone.utc).timestamp()}"
     order_dict = {
