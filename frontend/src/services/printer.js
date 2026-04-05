@@ -441,12 +441,12 @@ class ThermalPrinterService {
     return results;
   }
 
-  // Probe a single IP with a 1.5 second timeout (fast fail for unreachable IPs)
+  // Probe a single IP with a 0.8 second timeout (fast fail for unreachable IPs)
   async _probeWifiPrinter(ip, port) {
     try {
       const connectPromise = TcpSocket.connect({ ipAddress: ip, port: port });
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 1500)
+        setTimeout(() => reject(new Error('timeout')), 800)
       );
       const result = await Promise.race([connectPromise, timeoutPromise]);
       try { await TcpSocket.disconnect({ client: result.client }); } catch {}
@@ -470,7 +470,7 @@ class ThermalPrinterService {
     }
   }
 
-  async scanBLEDevices(onDeviceFound, durationMs = 10000) {
+  async scanBLEDevices(onDeviceFound, durationMs = 5000) {
     await this.initBLE();
     if (!this.isNative) throw new Error('BLE scanning requires the HevaPOS Android app.');
 
@@ -509,3 +509,4 @@ class ThermalPrinterService {
 const printerService = new ThermalPrinterService();
 export default printerService;
 export { base64ToBytes, base64ToRawString };
+;
