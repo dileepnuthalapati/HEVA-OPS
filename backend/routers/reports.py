@@ -118,6 +118,119 @@ async def generate_report(report_req: ReportRequest, current_user: User = Depend
     return StreamingResponse(buffer, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=sales_report_{report_req.start_date[:10]}_{report_req.end_date[:10]}.pdf"})
 
 
+@router.get("/reports/download-pdf")
+async def download_pdf_get(start_date: str, end_date: str, token: str):
+    """GET endpoint for PDF — works in Capacitor WebView and all browsers.
+    Opens directly in browser when navigated to via URL."""
+    from dependencies import decode_token
+    user = await decode_token(token)
+    if not user:
+        from fastapi import HTTPException
+        raise HTTPException(status_code=401, detail="Invalid token")
+
+    # Reuse the same PDF generation logic
+    start_str = f"{start_date[:10]}T00:00:00"
+    end_str = f"{end_date[:10]}T23:59:59"
+    query = {"created_at": {"$gte": start_str, "$lte": end_str}}
+    if user.restaurant_id:
+        query["restaurant_id"] = user.restaurant_id
+
+    all_orders = await db.orders.find(query, {"_id": 0}).to_list(10000)
+    completed_orders = [o for o in all_orders if o.get("status") == "completed"]
+    cancelled_orders = [o for o in all_orders if o.get("status") == "cancelled"]
+
+    cs = "$"
+    if user.restaurant_id:
+        rest = await db.restaurants.find_one({"id": user.restaurant_id}, {"_id": 0, "currency": 1})
+        currency_map = {"GBP": "£", "USD": "$", "EUR": "€", "INR": "₹"}
+        cs = currency_map.get((rest or {}).get("currency", "GBP"), "$")
+
+    total_sales = sum(o.get("total_amount", 0) or o.get("total", 0) for o in completed_orders)
+    total_orders = len(all_orders)
+    completed_count = len(completed_orders)
+    cancelled_count = len(cancelled_orders)
+    avg_order = total_sales / completed_count if completed_count > 0 else 0
+
+    cash_total = 0
+    card_total = 0
+    for o in completed_orders:
+        pm = o.get("payment_method", "cash")
+        amt = o.get("total_amount", 0) or o.get("total", 0)
+        if pm == "card":
+            card_total += amt
+        elif pm == "split":
+            pd = o.get("payment_details") or {}
+            cash_total += pd.get("cash", 0)
+            card_total += pd.get("card", 0)
+        else:
+            cash_total += amt
+
+    buffer = BytesIO()
+    doc_pdf = SimpleDocTemplate(buffer, pagesize=A4, topMargin=40, bottomMargin=40)
+    styles = getSampleStyleSheet()
+    story = []
+
+    title_style = ParagraphStyle('ReportTitle', parent=styles['Heading1'], fontSize=24, textColor=colors.HexColor('#0f172a'), spaceAfter=20, alignment=1)
+    story.append(Paragraph("Sales Report", title_style))
+    story.append(Spacer(1, 10))
+    story.append(Paragraph(f"Period: {start_date[:10]} to {end_date[:10]}", styles['Normal']))
+    story.append(Paragraph(f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}", styles['Normal']))
+    story.append(Spacer(1, 20))
+
+    summary_data = [
+        ["Metric", "Value"],
+        ["Total Sales (Completed)", f"{cs}{total_sales:.2f}"],
+        ["Total Orders", str(total_orders)],
+        ["Completed Orders", str(completed_count)],
+        ["Cancelled Orders", str(cancelled_count)],
+        ["Average Order Value", f"{cs}{avg_order:.2f}"],
+        ["Cash Total", f"{cs}{cash_total:.2f}"],
+        ["Card Total", f"{cs}{card_total:.2f}"],
+    ]
+    t = ReportLabTable(summary_data, colWidths=[200, 200])
+    t.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1e293b')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
+    ]))
+    story.append(t)
+    story.append(Spacer(1, 20))
+
+    if all_orders:
+        story.append(Paragraph("Order Details", styles['Heading2']))
+        order_data = [["Order #", "Date", "Status", "Items", "Total", "Payment"]]
+        for o in sorted(all_orders, key=lambda x: x.get("created_at", ""), reverse=True)[:100]:
+            status = o.get("status", "N/A").capitalize()
+            order_data.append([
+                str(o.get("order_number", "N/A")).zfill(3),
+                o.get("created_at", "")[:10],
+                status,
+                str(len(o.get("items", []))),
+                f"{cs}{(o.get('total_amount', 0) or o.get('total', 0)):.2f}",
+                o.get("payment_method", "N/A").upper() if o.get("status") == "completed" else "-"
+            ])
+        order_table = ReportLabTable(order_data, colWidths=[55, 75, 70, 45, 70, 70])
+        order_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#334155')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.grey)
+        ]))
+        story.append(order_table)
+
+    doc_pdf.build(story)
+    buffer.seek(0)
+    # Use inline disposition so browser displays PDF instead of downloading
+    return StreamingResponse(buffer, media_type="application/pdf", headers={
+        "Content-Disposition": f"inline; filename=sales_report_{start_date[:10]}_{end_date[:10]}.pdf"
+    })
+
+
 @router.get("/reports/stats")
 async def get_report_stats(start_date: str, end_date: str, current_user: User = Depends(require_admin)):
     start_str = f"{start_date[:10]}T00:00:00"

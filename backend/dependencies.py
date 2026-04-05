@@ -51,6 +51,28 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
+async def decode_token(token: str):
+    """Decode a JWT token and return the User object, or None if invalid."""
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        if not username:
+            return None
+        user_doc = await db.users.find_one({"username": username}, {"_id": 0})
+        if not user_doc:
+            return None
+        return User(
+            id=user_doc.get("id", ""),
+            username=user_doc["username"],
+            role=user_doc.get("role", "user"),
+            restaurant_id=user_doc.get("restaurant_id"),
+            created_at=user_doc.get("created_at")
+        )
+    except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
+        return None
+
+
+
 async def get_current_restaurant(current_user: User = Depends(get_current_user)):
     if not current_user.restaurant_id:
         raise HTTPException(status_code=400, detail="No restaurant associated with user")
