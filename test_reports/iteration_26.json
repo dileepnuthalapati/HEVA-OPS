@@ -1,0 +1,110 @@
+{
+  "summary": "Iteration 26 testing complete. CRITICAL FIX APPLIED: Sidebar text visibility issue fixed by adding !important to CSS color rules. All sidebar navigation links now work correctly. Reports filters and PDF download working. POS screen shows categories and products. Mobile responsiveness verified.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {"endpoint": "/api/audit", "issue": "Endpoint is /api/audit/logs not /api/audit - test file needs update", "priority": "LOW"}
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Console warning: Chart width/height -1 - recharts container sizing issue (non-blocking, visual only)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration25_comprehensive.py",
+    "/app/test_reports/pytest/pytest_results_iteration26.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "SIDEBAR TEXT VISIBILITY FIX: Added !important to .sidebar-link color rules in index.css to override Tailwind's hsl(var(--foreground)) which was setting dark text color",
+    "Root cause: Tailwind base styles were overriding the custom .sidebar-link color with hsl(var(--foreground)) = rgb(15, 23, 41) which is nearly invisible on dark sidebar background",
+    "Fix applied: color: #E2E8F0 !important for inactive links, color: #FFFFFF !important for hover and active states"
+  ],
+  "updated_files": [
+    "/app/frontend/src/index.css"
+  ],
+  "success_rate": {
+    "backend": "95% (21/22 passed, 1 failed due to wrong endpoint path in test)",
+    "frontend": "100% (all UI tests passed)"
+  },
+  "test_credentials": {
+    "platform_owner": {"username": "platform_owner", "password": "admin123"},
+    "restaurant_admin": {"username": "restaurant_admin", "password": "admin123", "restaurant_id": "rest_demo_1"},
+    "staff_user": {"username": "user", "password": "user123"},
+    "manager_pin": "1234",
+    "qr_menu_test_urls": ["/menu/rest_demo_1/KrGTedTy", "/menu/rest_demo_1/14-as7MV"]
+  },
+  "seed_data_creation": "Used existing seed data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 26 testing complete. CRITICAL CSS FIX APPLIED: Sidebar link text was nearly invisible due to Tailwind's hsl(var(--foreground)) overriding custom color. Fixed by adding !important to color rules in index.css. All features verified working: sidebar navigation (all 11 links for restaurant admin), reports filters (Today/7Days/30Days/90Days all change data), PDF download, POS screen with 5 categories and 12 products, QR menu public access, mobile responsiveness at 375px, platform owner dashboard and restaurant management.",
+  "test_results": {
+    "sidebar_visibility_fix": {
+      "before": "Inactive links had color rgb(15, 23, 41) - nearly invisible on dark background",
+      "after": "Inactive links now have color rgb(226, 232, 240) - clearly visible",
+      "active_links": "rgb(255, 255, 255) - white, clearly visible"
+    },
+    "sidebar_navigation": {
+      "pos_terminal": "PASSED - /pos loads with categories and products",
+      "dashboard": "PASSED - /dashboard loads with stats cards and charts",
+      "kitchen_kds": "PASSED - /kds loads",
+      "orders": "PASSED - /orders loads with order history",
+      "reports": "PASSED - /reports loads with filters and PDF download",
+      "menu_management": "PASSED - /menu-management loads with categories and products",
+      "tables": "PASSED - /tables loads with table cards",
+      "cash_drawer": "PASSED - /cash-drawer loads",
+      "printers": "PASSED - /printers loads",
+      "audit_log": "PASSED - /audit loads with events",
+      "settings": "PASSED - /settings loads with 4 tabs"
+    },
+    "reports_filters": {
+      "today": "£0.00, 0 orders",
+      "7_days": "£42.46, 5 orders",
+      "30_days": "£1547.75, 39 orders",
+      "90_days": "£1547.75, 39 orders",
+      "pdf_download": "PASSED - downloads sales_report_2026-01-05_2026-04-05.pdf"
+    },
+    "pos_screen": {
+      "categories": "5 (All, Pizzas, Drinks, Sides, Desserts)",
+      "products": "12 visible"
+    },
+    "qr_menu": {
+      "url": "/menu/rest_demo_1/KrGTedTy",
+      "status": "PASSED - shows restaurant name, table, categories, products"
+    },
+    "mobile_responsiveness_375px": {
+      "desktop_sidebar_hidden": true,
+      "mobile_header_visible": true,
+      "mobile_menu_works": true,
+      "sidebar_link_colors_correct": true
+    },
+    "platform_owner": {
+      "login": "PASSED",
+      "dashboard": "PASSED - shows Total Restaurants, Active Subscriptions, Trial Users, Monthly Revenue",
+      "restaurants": "PASSED - shows restaurant list with Edit/Users/Delete buttons"
+    },
+    "login_all_users": {
+      "restaurant_admin": "PASSED",
+      "platform_owner": "PASSED",
+      "staff_user": "PASSED (via backend test)"
+    }
+  },
+  "features_verified": {
+    "sidebar_text_visibility": "FIXED - All menu items now clearly readable",
+    "sidebar_navigation": "VERIFIED - All 11 links navigate to real pages (no blank pages)",
+    "reports_filters": "VERIFIED - All 4 range filters work and data changes",
+    "pdf_download": "VERIFIED - Downloads actual PDF file",
+    "pos_categories": "VERIFIED - 5 categories visible (All, Pizzas, Drinks, Sides, Desserts)",
+    "pos_products": "VERIFIED - 12 products visible",
+    "qr_menu": "VERIFIED - Public access works",
+    "mobile_responsiveness": "VERIFIED - All pages render correctly at 375px",
+    "platform_owner_pages": "VERIFIED - Dashboard and Restaurant Management work"
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "note": "All APIs are real. No mocked endpoints."
+  }
+}
