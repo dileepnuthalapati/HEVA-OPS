@@ -144,7 +144,7 @@
         async function placeOrder() {
             const items = Object.entries(cart).map(([id, qty]) => {
                 const p = menuData.products.find(x => x.id === id);
-                return { product_id: id, name: p.name, quantity: qty, price: p.price };
+                return { product_id: id, product_name: p.name, quantity: qty, unit_price: p.price, total: p.price * qty };
             });
             try {
                 const res = await fetch(`${API_BASE}/${restaurantId}/${tableHash}/order`, {
