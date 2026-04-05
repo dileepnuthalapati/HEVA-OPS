@@ -6,8 +6,8 @@
 - **Staff User**: username=`user`, password=`user123`
 
 ## API & Services
-- Backend API: https://stripe-billing-ui-1.preview.emergentagent.com/api
-- Frontend: https://stripe-billing-ui-1.preview.emergentagent.com
+- Backend API: https://revenue-dash-33.preview.emergentagent.com/api
+- Frontend: https://revenue-dash-33.preview.emergentagent.com
 - Stripe API Key: sk_test_emergent (placeholder - not functional for live Stripe Connect)
 - Stripe webhook secret: not configured (accepts raw payloads in dev)
 - Manager PIN for restaurant_admin: 1234 (set via /api/auth/set-manager-pin)
