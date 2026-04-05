@@ -99,7 +99,7 @@ export default function MenuManagement() {
   return (
     <div className="flex flex-col md:flex-row min-h-screen" data-testid="menu-management-page">
       <Sidebar />
-      <div className="flex-1 min-w-0 flex flex-col md:flex-row">
+      <div className="flex-1 min-w-0 pt-16 md:pt-8 flex flex-col md:flex-row">
 
         {/* Category Sidebar */}
         <div className="w-full md:w-64 lg:w-72 bg-muted/40 border-b md:border-b-0 md:border-r p-4 shrink-0">

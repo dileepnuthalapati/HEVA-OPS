@@ -68,14 +68,13 @@ body {
 }
 
 /* ===== SIDEBAR STYLES ===== */
-.sidebar {
+.sidebar-wrapper {
   width: 260px;
   min-width: 260px;
   height: 100vh;
   background: linear-gradient(180deg, #0F172A 0%, #1E293B 100%);
   color: white;
   padding: 1.5rem;
-  display: flex;
   flex-direction: column;
   position: sticky;
   top: 0;
