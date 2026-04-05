@@ -829,34 +829,32 @@ const POSScreen = () => {
       {/* Main Product Area */}
       <div className="flex-1 flex flex-col min-w-0 min-h-0">
         {/* Top Bar */}
-        <div className="bg-card border-b px-3 py-2 md:px-6 md:py-4 flex items-center justify-between gap-2 flex-shrink-0">
+        <div className="bg-white/80 backdrop-blur-lg border-b border-slate-200/60 px-3 py-2 md:px-6 md:py-3 flex items-center justify-between gap-2 flex-shrink-0">
           <div className="flex items-center gap-2 md:gap-4 min-w-0">
             {(user?.role === 'admin' || user?.role === 'platform_owner') && (
-              <Button
-                variant="outline"
+              <button
                 data-testid="back-to-dashboard-button"
                 onClick={() => navigate(user?.role === 'platform_owner' ? '/platform/dashboard' : '/dashboard')}
-                className="h-9 text-sm md:h-12 md:text-base shrink-0"
+                className="h-9 md:h-10 px-3 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-medium btn-haptic flex items-center gap-1.5 transition-colors"
               >
-                <ArrowLeft className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
+                <ArrowLeft className="w-4 h-4" />
                 <span className="hidden sm:inline">Dashboard</span>
-                <span className="sm:hidden">Back</span>
-              </Button>
+              </button>
             )}
             <div className="min-w-0">
-              <h1 className="text-lg md:text-3xl font-bold tracking-tight truncate">HevaPOS</h1>
-              <p className="text-xs md:text-base text-muted-foreground truncate">Welcome, {user?.username}</p>
+              <h1 className="font-heading text-lg md:text-2xl font-bold tracking-tight text-slate-900 truncate">POS Terminal</h1>
+              <p className="text-[11px] md:text-xs text-slate-400 font-medium tracking-wide truncate">{user?.username}</p>
             </div>
-            {/* Printer Status Indicator */}
+            {/* Printer Status */}
             <div
               data-testid="printer-status-indicator"
-              className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border ${
+              className={`hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-semibold border ${
                 printerStatus === 'online' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
                 printerStatus === 'offline' ? 'bg-red-50 text-red-700 border-red-200' :
                 printerStatus === 'none' ? 'bg-slate-50 text-slate-500 border-slate-200' :
                 'bg-amber-50 text-amber-700 border-amber-200'
               }`}
-              title={defaultPrinterName ? `${defaultPrinterName}` : 'No printer configured'}
+              title={defaultPrinterName || 'No printer configured'}
             >
               <Printer className="w-3 h-3" />
               <span className={`w-1.5 h-1.5 rounded-full ${
@@ -873,83 +871,93 @@ const POSScreen = () => {
             </div>
           </div>
           <div className="flex gap-1.5 md:gap-2 shrink-0">
-            <Button
-              variant="outline"
+            <button
               data-testid="pending-orders-button"
               onClick={() => {
                 const newVal = !showPendingOrders;
                 setShowPendingOrders(newVal);
                 if (newVal) loadCompletedOrders();
               }}
-              className="h-9 text-xs px-2 md:h-12 md:text-base md:px-4"
+              className={`h-9 md:h-10 px-3 md:px-4 rounded-xl text-xs md:text-sm font-semibold btn-haptic flex items-center gap-1.5 transition-all border ${
+                showPendingOrders 
+                  ? 'bg-indigo-50 border-indigo-200 text-indigo-700' 
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
             >
-              <Receipt className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
-              <span className="hidden sm:inline">Pending</span> ({pendingOrders.length})
-            </Button>
-            <Button variant="outline" data-testid="pos-logout-button" onClick={logout} className="h-9 text-xs px-2 md:h-12 md:text-base md:px-4">
-              <LogOut className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
+              <Receipt className="w-4 h-4" />
+              <span className="hidden sm:inline">Pending</span>
+              <span className="font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md text-[11px]">{pendingOrders.length}</span>
+            </button>
+            <button
+              data-testid="pos-logout-button"
+              onClick={logout}
+              className="h-9 md:h-10 px-3 rounded-xl border border-slate-200 text-slate-500 hover:text-red-500 hover:border-red-200 hover:bg-red-50 text-xs md:text-sm font-medium btn-haptic flex items-center gap-1.5 transition-colors"
+            >
+              <LogOut className="w-4 h-4" />
               <span className="hidden sm:inline">Logout</span>
-            </Button>
+            </button>
           </div>
         </div>
 
         {/* Search Bar */}
-        <div className="px-3 py-2 md:px-6 md:py-3 border-b bg-slate-50 flex-shrink-0">
+        <div className="px-3 py-2 md:px-6 md:py-3 border-b border-slate-100 bg-white flex-shrink-0">
           <div className="flex gap-2 md:gap-3">
             <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-muted-foreground" />
+              <Search className="absolute left-3.5 top-1/2 transform -translate-y-1/2 w-4 h-4 md:w-5 md:h-5 text-slate-400" />
               <Input
                 placeholder="Search products..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 md:pl-11 h-10 md:h-12 text-sm md:text-lg"
+                className="pl-10 md:pl-12 h-10 md:h-11 text-sm md:text-base rounded-xl border-slate-200 bg-slate-50 focus:bg-white"
                 data-testid="product-search-input"
               />
               {searchQuery && (
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="absolute right-1 top-1/2 transform -translate-y-1/2 h-10 w-10 p-0"
+                <button
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-slate-400 hover:text-slate-600"
                   onClick={() => setSearchQuery('')}
                 >
-                  <X className="w-5 h-5" />
-                </Button>
+                  <X className="w-4 h-4" />
+                </button>
               )}
             </div>
-            <Button
-              variant="outline"
+            <button
               onClick={() => setShowCustomProductDialog(true)}
               data-testid="add-custom-product-btn"
-              className="h-10 md:h-12 text-sm md:text-base whitespace-nowrap px-3 md:px-5"
+              className="h-10 md:h-11 px-3 md:px-4 rounded-xl border border-dashed border-slate-300 text-slate-500 hover:border-indigo-300 hover:text-indigo-600 hover:bg-indigo-50 text-sm font-medium btn-haptic flex items-center gap-1.5 transition-all"
             >
-              <PackagePlus className="w-4 h-4 md:w-5 md:h-5 mr-1 md:mr-2" />
+              <PackagePlus className="w-4 h-4" />
               <span className="hidden sm:inline">Custom Item</span>
-              <span className="sm:hidden">Custom</span>
-            </Button>
+            </button>
           </div>
         </div>
 
         {/* Categories */}
-        <div className="px-3 py-2 md:px-6 md:py-4 border-b flex-shrink-0">
-          <div className="flex gap-2 md:gap-3 overflow-x-auto scrollbar-hide">
-            <Button
-              variant={selectedCategory === null ? 'default' : 'outline'}
+        <div className="px-3 py-2 md:px-6 md:py-3 border-b border-slate-100 flex-shrink-0 bg-white">
+          <div className="flex gap-1.5 md:gap-2 overflow-x-auto scrollbar-thin pb-1">
+            <button
               data-testid="category-all-button"
               onClick={() => setSelectedCategory(null)}
-              className="whitespace-nowrap text-sm md:text-base h-9 md:h-11 px-3 md:px-5"
+              className={`whitespace-nowrap text-xs md:text-sm h-8 md:h-9 px-4 md:px-5 rounded-full font-semibold btn-haptic transition-all ${
+                selectedCategory === null
+                  ? 'bg-slate-900 text-white shadow-sm'
+                  : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+              }`}
             >
-              All Products
-            </Button>
+              All
+            </button>
             {categories.map((category) => (
-              <Button
+              <button
                 key={category.id}
-                variant={selectedCategory === category.id ? 'default' : 'outline'}
                 data-testid={`category-button-${category.id}`}
                 onClick={() => setSelectedCategory(category.id)}
-                className="whitespace-nowrap text-sm md:text-base h-9 md:h-11 px-3 md:px-5"
+                className={`whitespace-nowrap text-xs md:text-sm h-8 md:h-9 px-4 md:px-5 rounded-full font-semibold btn-haptic transition-all ${
+                  selectedCategory === category.id
+                    ? 'bg-slate-900 text-white shadow-sm'
+                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                }`}
               >
                 {category.name}
-              </Button>
+              </button>
             ))}
           </div>
         </div>
@@ -1119,32 +1127,51 @@ const POSScreen = () => {
               )}
             </div>
           ) : (
-            <div className="pos-grid">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
               {searchQuery && (
-                <div className="col-span-full mb-4 text-sm text-muted-foreground">
-                  Found {filteredProducts.length} product{filteredProducts.length !== 1 ? 's' : ''} for "{searchQuery}"
+                <div className="col-span-full mb-2 text-xs font-semibold tracking-wide uppercase text-slate-400">
+                  {filteredProducts.length} result{filteredProducts.length !== 1 ? 's' : ''} for "{searchQuery}"
                 </div>
               )}
               {filteredProducts.map((product) => (
-                <Card
+                <button
                   key={product.id}
                   data-testid={`product-card-${product.id}`}
-                  className={`product-card cursor-pointer select-none ${!product.in_stock ? 'opacity-50' : ''}`}
+                  className={`group relative text-left rounded-2xl border-2 transition-all duration-150 btn-haptic select-none ${
+                    !product.in_stock
+                      ? 'opacity-40 cursor-not-allowed border-slate-200 bg-slate-50'
+                      : cart.some(c => c.product_id === product.id)
+                        ? 'border-indigo-400 bg-indigo-50 ring-2 ring-indigo-200 shadow-md'
+                        : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
+                  }`}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
-                    if (product.in_stock !== false) {
-                      addToCart(product);
-                    }
+                    if (product.in_stock !== false) addToCart(product);
                   }}
                 >
-                  <CardContent className="p-4">
-                    <div className="product-name mb-1 line-clamp-2">{product.name}</div>
-                    <div className="product-category text-muted-foreground mb-2">{product.category_name}</div>
-                    <div className="product-price text-emerald-600">{getCurrencySymbol(currency)}{product.price.toFixed(2)}</div>
-                    {product.in_stock === false && <div className="text-sm text-red-500 mt-1 font-medium">Out of stock</div>}
-                  </CardContent>
-                </Card>
+                  <div className="p-3 md:p-4">
+                    <p className="font-semibold text-sm md:text-base text-slate-800 leading-tight line-clamp-2 mb-1">
+                      {product.name}
+                    </p>
+                    <p className="text-[11px] text-slate-400 font-medium mb-3 truncate">
+                      {product.category_name || 'Uncategorized'}
+                    </p>
+                    <p className="font-mono text-lg md:text-xl font-bold text-emerald-600 tracking-tight">
+                      {getCurrencySymbol(currency)}{product.price.toFixed(2)}
+                    </p>
+                    {product.in_stock === false && (
+                      <span className="absolute top-2 right-2 text-[10px] font-bold uppercase tracking-wider text-red-500 bg-red-50 px-2 py-0.5 rounded-full">
+                        Out of stock
+                      </span>
+                    )}
+                    {cart.some(c => c.product_id === product.id) && (
+                      <span className="absolute top-2 right-2 w-6 h-6 rounded-full bg-indigo-600 text-white text-xs font-bold flex items-center justify-center shadow-sm">
+                        {cart.find(c => c.product_id === product.id)?.quantity || 0}
+                      </span>
+                    )}
+                  </div>
+                </button>
               ))}
             </div>
           )}
@@ -1155,24 +1182,29 @@ const POSScreen = () => {
       {(() => {
         const cartContent = (
           <>
-            <div className="p-4 border-b">
+            <div className="p-4 border-b border-slate-100">
               <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <ShoppingCart className="w-5 h-5" />
-                  <h2 className="text-lg font-bold">Order</h2>
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-slate-900 flex items-center justify-center">
+                    <ShoppingCart className="w-4 h-4 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="font-heading text-base font-bold text-slate-900">Current Order</h2>
+                    <p className="text-[11px] text-slate-400 font-medium">{cart.length} item{cart.length !== 1 ? 's' : ''}</p>
+                  </div>
                 </div>
                 {cart.length > 0 && (
-                  <Button variant="ghost" size="sm" data-testid="clear-cart-button" onClick={clearCart}>
+                  <button data-testid="clear-cart-button" onClick={clearCart} className="text-slate-400 hover:text-red-500 transition-colors p-1.5 rounded-lg hover:bg-red-50">
                     <X className="w-4 h-4" />
-                  </Button>
+                  </button>
                 )}
               </div>
             </div>
 
             {/* Table Selection */}
-            <div className="px-4 py-2 border-b bg-slate-50">
+            <div className="px-4 py-2 border-b border-slate-100">
               <Select value={selectedTable || "no-table"} onValueChange={(v) => setSelectedTable(v === "no-table" ? null : v)}>
-                <SelectTrigger data-testid="table-selector" className="w-full h-9 text-sm">
+                <SelectTrigger data-testid="table-selector" className="w-full h-9 text-sm rounded-xl border-slate-200 bg-slate-50">
                   <SelectValue placeholder="Select table (optional)" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1337,23 +1369,23 @@ const POSScreen = () => {
                 </div>
               )}
               
-              <Button
-                className="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold h-12"
+              <button
+                className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold h-14 rounded-2xl btn-haptic text-base flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
                 data-testid="place-order-button"
                 onClick={() => { editingOrder ? updateOrder() : placeOrder(); setMobileCartOpen(false); }}
                 disabled={cart.length === 0 || isPlacingOrder}
               >
-                <Printer className="w-5 h-5 mr-2" />
-                {isPlacingOrder ? 'Sending...' : editingOrder ? `Update Order #${editingOrder.order_number}` : 'Place Order (Send to Kitchen)'}
-              </Button>
+                <Printer className="w-5 h-5" />
+                {isPlacingOrder ? 'Sending...' : editingOrder ? `Update Order #${editingOrder.order_number}` : 'Place Order'}
+              </button>
             </div>
           </>
         );
 
         return (
           <>
-            {/* Desktop Order Sidebar - always visible */}
-            <div className="hidden md:flex w-[380px] bg-card border-l flex-col cart-sidebar">
+            {/* Desktop Order Sidebar */}
+            <div className="hidden md:flex w-[380px] bg-white border-l border-slate-200/60 flex-col cart-sidebar">
               {cartContent}
             </div>
 
@@ -1368,17 +1400,19 @@ const POSScreen = () => {
             {/* Mobile floating cart button */}
             {!mobileCartOpen && (
               <div className="md:hidden fixed bottom-4 right-4 z-40">
-                <Button
+                <button
                   data-testid="mobile-cart-button"
-                  className="h-14 px-5 rounded-full shadow-lg bg-amber-500 hover:bg-amber-600 text-white"
+                  className="h-14 px-5 rounded-2xl shadow-xl bg-indigo-600 hover:bg-indigo-500 text-white font-semibold btn-haptic flex items-center gap-2 transition-all"
                   onClick={() => setMobileCartOpen(true)}
                 >
-                  <ShoppingCart className="w-5 h-5 mr-2" />
-                  Order {cart.length > 0 && `(${cart.reduce((s, i) => s + i.quantity, 0)})`}
+                  <ShoppingCart className="w-5 h-5" />
+                  <span>Order</span>
                   {cart.length > 0 && (
-                    <span className="ml-2 font-mono font-bold">{getCurrencySymbol(currency)}{calculateCartTotal().toFixed(2)}</span>
+                    <span className="font-mono bg-white/20 px-2.5 py-0.5 rounded-lg text-sm">
+                      {cart.reduce((s, i) => s + i.quantity, 0)} &middot; {getCurrencySymbol(currency)}{calculateCartTotal().toFixed(2)}
+                    </span>
                   )}
-                </Button>
+                </button>
               </div>
             )}
           </>
@@ -1604,41 +1638,45 @@ const POSScreen = () => {
             
             {/* Single Payment Method Selection */}
             {!splitPaymentMode && (
-              <div className="space-y-3">
+              <div className="space-y-4">
                 <div className="grid grid-cols-2 gap-3">
                   <button
-                    className={`h-20 flex flex-col items-center justify-center gap-2 rounded-xl border-2 transition-all font-semibold ${
+                    className={`h-20 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 transition-all font-semibold btn-haptic ${
                       selectedPaymentMethod === 'cash'
-                        ? 'border-emerald-500 bg-emerald-100 ring-2 ring-emerald-300 text-emerald-800 scale-[1.02] shadow-md'
-                        : 'border-slate-300 bg-slate-50 hover:border-emerald-300 hover:bg-emerald-50 text-slate-600'
+                        ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200 text-emerald-800 shadow-lg shadow-emerald-100'
+                        : 'border-slate-200 bg-white hover:border-emerald-300 hover:bg-emerald-50/50 text-slate-500'
                     }`}
                     data-testid="payment-cash-button"
                     onClick={() => setSelectedPaymentMethod('cash')}
                   >
-                    <Banknote className="w-8 h-8" />
-                    <span className="text-base font-bold">Cash</span>
+                    <Banknote className="w-7 h-7" strokeWidth={2} />
+                    <span className="text-sm font-bold">Cash</span>
                   </button>
                   <button
-                    className={`h-20 flex flex-col items-center justify-center gap-2 rounded-xl border-2 transition-all font-semibold ${
+                    className={`h-20 flex flex-col items-center justify-center gap-2 rounded-2xl border-2 transition-all font-semibold btn-haptic ${
                       selectedPaymentMethod === 'card'
-                        ? 'border-blue-500 bg-blue-100 ring-2 ring-blue-300 text-blue-800 scale-[1.02] shadow-md'
-                        : 'border-slate-300 bg-slate-50 hover:border-blue-300 hover:bg-blue-50 text-slate-600'
+                        ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200 text-blue-800 shadow-lg shadow-blue-100'
+                        : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/50 text-slate-500'
                     }`}
                     data-testid="payment-card-button"
                     onClick={() => setSelectedPaymentMethod('card')}
                   >
-                    <CreditCard className="w-8 h-8" />
-                    <span className="text-base font-bold">Card</span>
+                    <CreditCard className="w-7 h-7" strokeWidth={2} />
+                    <span className="text-sm font-bold">Card</span>
                   </button>
                 </div>
-                <Button
-                  className="w-full h-12 bg-emerald-600 hover:bg-emerald-700 text-white text-base font-bold"
+                {/* MASSIVE PAY BUTTON - Z Pattern anchor */}
+                <button
+                  className="w-full h-14 bg-emerald-600 hover:bg-emerald-500 text-white text-lg font-bold rounded-2xl btn-haptic transition-all shadow-lg shadow-emerald-200 flex items-center justify-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed"
                   data-testid="confirm-payment-button"
                   onClick={() => completeOrder(selectedPaymentMethod)}
                   disabled={!selectedPaymentMethod}
                 >
-                  Complete — {getCurrencySymbol(currency)}{calculateGrandTotal().toFixed(2)}
-                </Button>
+                  <span>Complete Payment</span>
+                  <span className="font-mono bg-white/20 px-3 py-1 rounded-xl text-base">
+                    {getCurrencySymbol(currency)}{calculateGrandTotal().toFixed(2)}
+                  </span>
+                </button>
               </div>
             )}
             
