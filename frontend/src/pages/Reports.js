@@ -74,52 +74,14 @@ const Reports = () => {
     loadStats(startDate, endDate);
   };
 
-  const downloadPDF = async () => {
+  const downloadPDF = () => {
     if (!stats) return;
-    try {
-      toast.loading('Generating PDF...', { id: 'pdf' });
-      const apiUrl = process.env.REACT_APP_BACKEND_URL;
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch(`${apiUrl}/api/reports/generate`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          start_date: startDate,
-          end_date: endDate,
-          report_type: 'sales',
-        }),
-      });
-      if (!response.ok) throw new Error(`Server returned ${response.status}`);
-      const contentType = response.headers.get('content-type') || '';
-      if (!contentType.includes('pdf')) {
-        throw new Error('Server did not return a PDF file');
-      }
-      const blob = await response.blob();
-      if (!blob || blob.size === 0) throw new Error('Empty PDF received');
-      const filename = `sales_report_${startDate}_${endDate}.pdf`;
-
-      // Create blob URL and trigger download
-      const blobUrl = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
-      const link = document.createElement('a');
-      link.href = blobUrl;
-      link.download = filename;
-      link.style.display = 'none';
-      link.target = '_blank';
-      document.body.appendChild(link);
-      link.click();
-
-      setTimeout(() => {
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(blobUrl);
-      }, 1000);
-      toast.success('PDF downloaded!', { id: 'pdf' });
-    } catch (error) {
-      console.error('PDF download error:', error);
-      toast.error('PDF download failed: ' + error.message, { id: 'pdf' });
-    }
+    const apiUrl = process.env.REACT_APP_BACKEND_URL;
+    const token = localStorage.getItem('auth_token');
+    // Direct GET URL — opens PDF in browser/new tab. Works reliably on Capacitor WebView.
+    const pdfUrl = `${apiUrl}/api/reports/download-pdf?start_date=${startDate}&end_date=${endDate}&token=${token}`;
+    window.open(pdfUrl, '_blank');
+    toast.success('Opening PDF...', { id: 'pdf' });
   };
 
   const cs = getCurrencySymbol(currency);
@@ -147,34 +109,7 @@ const Reports = () => {
                 className="h-10 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold text-slate-700 btn-haptic flex items-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
                 data-testid="download-pdf-btn"
               >
-                <Download className="w-4 h-4" /> Download PDF
-              </button>
-              <button
-                onClick={async () => {
-                  if (!stats) return;
-                  try {
-                    toast.loading('Opening PDF...', { id: 'pdf-view' });
-                    const apiUrl = process.env.REACT_APP_BACKEND_URL;
-                    const token = localStorage.getItem('auth_token');
-                    const res = await fetch(`${apiUrl}/api/reports/generate`, {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-                      body: JSON.stringify({ start_date: startDate, end_date: endDate, report_type: 'sales' }),
-                    });
-                    if (!res.ok) throw new Error(`Server returned ${res.status}`);
-                    const blob = await res.blob();
-                    const url = window.URL.createObjectURL(new Blob([blob], { type: 'application/pdf' }));
-                    window.open(url, '_blank');
-                    toast.success('PDF opened in new tab', { id: 'pdf-view' });
-                  } catch (e) {
-                    toast.error('Failed: ' + e.message, { id: 'pdf-view' });
-                  }
-                }}
-                disabled={!stats || loading}
-                className="h-10 px-4 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-sm font-semibold text-slate-700 btn-haptic flex items-center gap-2 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
-                data-testid="view-pdf-btn"
-              >
-                <FileText className="w-4 h-4" /> View PDF
+                <Download className="w-4 h-4" /> View PDF
               </button>
             </div>
           </div>
