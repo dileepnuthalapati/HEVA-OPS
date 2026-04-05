@@ -146,6 +146,7 @@
                 const p = menuData.products.find(x => x.id === id);
                 return { product_id: id, product_name: p.name, quantity: qty, unit_price: p.price, total: p.price * qty };
             });
+            const orderTotal = items.reduce((s, i) => s + i.total, 0);
             try {
                 const res = await fetch(`${API_BASE}/${restaurantId}/${tableHash}/order`, {
                     method: 'POST',
@@ -153,19 +154,82 @@
                     body: JSON.stringify({ items })
                 });
                 if (!res.ok) throw new Error('Order failed');
+                const result = await res.json();
+
+                // Check if restaurant accepts online payments
+                let payEnabled = false;
+                try {
+                    const payRes = await fetch(`${window.location.origin}/api/payments/connect/status/${restaurantId}`);
+                    const payData = await payRes.json();
+                    payEnabled = payData.pay_enabled === true;
+                } catch(e) {}
+
+                const currency = menuData.restaurant?.currency || 'GBP';
+                const symbol = currency === 'GBP' ? '\u00a3' : currency === 'EUR' ? '\u20ac' : currency === 'USD' ? '$' : currency + ' ';
+                const restName = menuData.restaurant?.business_info?.name || 'Restaurant';
+
                 cart = {};
                 document.getElementById('app').innerHTML = `
                     <div class="header">
-                        <h1>${menuData.restaurant?.business_info?.name || 'Restaurant'}</h1>
+                        <h1>${restName}</h1>
+                        <p>Order #${String(result.order_number).padStart(3, '0')} \u2022 ${result.table}</p>
                     </div>
-                    <div class="order-sent">
-                        <div class="checkmark">&#10003;</div>
-                        <h2>Order Sent!</h2>
-                        <p>Your order has been sent to the kitchen.</p>
-                        <p style="margin-top:16px;"><a href="${window.location.href}" style="color:#4f46e5;font-weight:600;">Order more</a></p>
+                    <div style="padding:24px 16px;text-align:center;">
+                        <div style="width:64px;height:64px;border-radius:50%;background:#059669;color:white;font-size:32px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">&#10003;</div>
+                        <h2 style="font-size:22px;font-weight:700;margin-bottom:4px;">Order Sent!</h2>
+                        <p style="color:#64748b;margin-bottom:24px;">Your order has been sent to the kitchen</p>
+
+                        <div style="background:white;border:1px solid #e2e8f0;border-radius:16px;padding:20px;text-align:left;max-width:400px;margin:0 auto;">
+                            <h3 style="font-size:14px;font-weight:700;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px;margin-bottom:12px;">Order Summary</h3>
+                            ${items.map(i => `
+                                <div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #f1f5f9;">
+                                    <span style="font-weight:600;">${i.quantity}x ${i.product_name}</span>
+                                    <span style="font-weight:700;color:#059669;">${symbol}${i.total.toFixed(2)}</span>
+                                </div>
+                            `).join('')}
+                            <div style="display:flex;justify-content:space-between;padding:16px 0 0;margin-top:8px;border-top:2px solid #1e293b;">
+                                <span style="font-size:18px;font-weight:800;">Total</span>
+                                <span style="font-size:18px;font-weight:800;color:#059669;">${symbol}${orderTotal.toFixed(2)}</span>
+                            </div>
+                        </div>
+
+                        <div style="margin-top:24px;display:flex;flex-direction:column;gap:12px;max-width:400px;margin-left:auto;margin-right:auto;">
+                            ${payEnabled ? `
+                                <button onclick="payNow('${result.order_id}')" style="width:100%;padding:14px;border-radius:12px;border:none;background:#1e293b;color:white;font-size:16px;font-weight:700;cursor:pointer;">
+                                    Pay ${symbol}${orderTotal.toFixed(2)} Now
+                                </button>
+                                <p style="font-size:12px;color:#94a3b8;">Secure payment via Stripe</p>
+                            ` : `
+                                <div style="background:#fef3c7;border:1px solid #fbbf24;border-radius:12px;padding:16px;">
+                                    <p style="font-size:15px;font-weight:700;color:#92400e;margin-bottom:4px;">Amount Due: ${symbol}${orderTotal.toFixed(2)}</p>
+                                    <p style="font-size:13px;color:#a16207;">Please pay at the counter when your order is ready</p>
+                                </div>
+                            `}
+                            <a href="${window.location.href}" style="display:block;width:100%;padding:12px;border-radius:12px;border:1.5px solid #e2e8f0;background:white;text-align:center;font-size:14px;font-weight:600;color:#1e293b;text-decoration:none;">
+                                Order More Items
+                            </a>
+                        </div>
                     </div>`;
             } catch (e) {
                 alert('Failed to place order: ' + e.message);
+            }
+        }
+
+        async function payNow(orderId) {
+            try {
+                const res = await fetch(`${window.location.origin}/api/payments/create-checkout-session`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ order_id: orderId, origin_url: window.location.origin })
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || 'Payment failed');
+                }
+                const data = await res.json();
+                if (data.url) window.location.href = data.url;
+            } catch(e) {
+                alert('Payment error: ' + e.message);
             }
         }
 
