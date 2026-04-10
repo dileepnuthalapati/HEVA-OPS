@@ -44,16 +44,37 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 23. Standalone KDS Monitor HTML (PIN-protected, keyboard shortcuts)
 24. PDF download via window.open (works on Capacitor WebView)
 
-## Bug Fixes (April 5, 2026 - Order Number Fix)
-- **Root cause**: QR orders used separate non-scoped numbering; POS orders used string comparison with race conditions
-- **Fix**: Atomic counter via `order_counters` MongoDB collection using `find_one_and_update` + `$inc`
-- Both POS and QR orders now share the same sequential counter per restaurant per day
-- Fixed 2 legacy orders with string "001" order numbers converted to integer 1
-- Seeded counter for existing orders to prevent duplicates on the fix date
+## Bug Fixes (April 10, 2026 - Iteration 28)
+### Order Number Atomic Counter
+- Root cause: QR orders used separate non-scoped numbering; POS used string comparison with race conditions
+- Fix: `order_counters` MongoDB collection using `find_one_and_update` + `$inc` (shared between POS & QR)
+- Verified: Sequential numbers under concurrent load
 
-## Testing Status
-- Order number fix: Verified via curl (orders #4, #5 created sequentially)
-- User live testing: PENDING
+### Double-Tap Duplicate Order Prevention
+- Root cause: React useState guard (`isPlacingOrder`) has async update race condition
+- Fix: Replaced with `useRef` (`placingOrderRef`) for synchronous guard
+- Also fixed: `addToCart` uses ref guard with 250ms cooldown
+
+### Printer WiFi Detection (Native APK)
+- Root cause: Backend `/api/printer/check` runs from Railway cloud, can't reach local `192.168.x.x` printers
+- Fix: APK uses native Capacitor TCP Socket for direct reachability check; browser uses backend as fallback
+- Added: WiFi printer retry logic (up to 2 retries with 500ms delay)
+- Improved: WiFi scanner probe timeout increased from 800ms to 2000ms for Ethernet-connected printers
+
+### KDS Table Names + Quantity Display
+- Root cause: Public KDS endpoint didn't enrich orders with table info from tables collection
+- Fix: Added table lookup to public endpoint; POS orders now store `table_name` directly
+- KDS quantity: Increased from 24px/12px to 38px/20px (44px/24px on 1920px+ screens)
+- Added: Takeaway label for orders without table
+
+### POS 15.4" Screen Layout
+- Added `2xl:grid-cols-6` breakpoint for product grid
+- Responsive cart sidebar: 340px (md), 380px (lg), 400px (xl)
+
+## Testing Status (Iteration 28 - April 10, 2026)
+- Backend: 100% (12/12 passed)
+- Frontend: 100% (all UI tests passed)
+- Note: WiFi native printer check untestable from browser (requires APK)
 
 ## Upcoming (P1)
 - Quick POS PIN Login for staff shift changes
