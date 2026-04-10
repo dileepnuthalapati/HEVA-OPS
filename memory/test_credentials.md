@@ -1,17 +1,32 @@
-# HevaPOS Test Credentials
+# HevaPOS - Test Credentials
 
-## User Accounts
-- **Platform Owner**: username=`platform_owner`, password=`admin123`
-- **Restaurant Admin**: username=`restaurant_admin`, password=`admin123` (restaurant_id: rest_demo_1)
-- **Staff User**: username=`user`, password=`user123`
+## Login Accounts
 
-## API & Services
-- Backend API: https://revenue-dash-33.preview.emergentagent.com/api
-- Frontend: https://revenue-dash-33.preview.emergentagent.com
-- Stripe API Key: sk_test_emergent (placeholder - not functional for live Stripe Connect)
-- Stripe webhook secret: not configured (accepts raw payloads in dev)
-- Manager PIN for restaurant_admin: 1234 (set via /api/auth/set-manager-pin)
+### Platform Owner
+- Username: `platform_owner`
+- Password: `admin123`
+- Navigates to: `/platform/dashboard`
+
+### Restaurant Admin
+- Username: `restaurant_admin`
+- Password: `admin123`
+- Restaurant ID: `rest_demo_1`
+- POS PIN: `2222`
+- Navigates to: `/dashboard`
+
+### Staff User
+- Username: `user`
+- Password: `user123`
+- POS PIN: `1111`
+- Navigates to: `/pos`
+
+### Production User
+- Username: `SKAdmin`
+- Password: `saswata@123`
+
+## Manager PIN
+- PIN: `1234` (for void authorization)
 
 ## QR Menu Test URLs
-- /menu/rest_demo_1/KrGTedTy (Table 1)
+- /menu/rest_demo_1/1-TedTy (Table 1)
 - /menu/rest_demo_1/14-as7MV (Table 2)

@@ -3,15 +3,6 @@
 ## Overview
 Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB), mobile-first frontend (React + Capacitor APK). Three roles: Platform Owner, Restaurant Admin, Staff. Revenue model: **0.3% commission on QR orders via Stripe Connect**.
 
-## Design System: "Modern Utility"
-- **Color Palette**: Slate & Indigo (Admin), High-contrast Light Mode (POS)
-- **Semantic Colors**: Emerald=success/payments, Indigo=navigation, Amber=warnings, Red=void/cancel
-- **Typography**: Manrope (body), Satoshi (headings), JetBrains Mono (prices/numbers)
-- **Buttons**: Rounded-2xl, haptic (scale-95 on press), shadow-lg on primary actions
-- **Layout**: Z-pattern POS (Pay button bottom-right), pill-shaped categories
-- **Effects**: Glassmorphism on login/modals, micro-animations, custom scrollbars
-- **Sidebar**: Dark gradient (#0F172A to #1E293B), text color #E2E8F0 with !important override
-
 ## Architecture
 ```
 /app/backend/routers/ (auth, platform, restaurants, menu, orders, reports, payments, cash_drawer, kds, qr_menu, audit, docs, tables, reservations, receipts, printers, staff, subscriptions, notifications, email, health)
@@ -27,57 +18,34 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 6. Void/Audit System (quick-tap reasons, Manager PIN)
 7. Revenue Analytics Dashboard + Kitchen Efficiency widget
 8. Menu Management (consolidated categories + products)
-9. Report PDF Export (server-generated reportlab, actual file download + View PDF in new tab)
-10. Staff Management UI (CRUD, password reset)
+9. Report PDF Export (server-generated reportlab)
+10. Staff Management UI (CRUD, password reset, POS PIN set/remove)
 11. Security tab with Manager PIN setup UI
 12. Offline authentication (cached credential fallback)
 13. Multi-currency restaurant creation with auto-seeded categories
 14. Cash Drawer (staff + admin access, restaurant-scoped)
 15. Table management with QR hash generation
-16. Order Sequencing daily reset (restaurant-scoped, atomic counter)
-17. Multi-tenancy security (strict restaurant_id scoping on all endpoints)
+16. Order Sequencing daily reset (atomic counter, race-condition safe)
+17. Multi-tenancy security (strict restaurant_id scoping)
 18. Design System Overhaul (Phase 1-3: Modern Utility)
 19. Cmd+K Global Command Search
-20. Sidebar routing fix (all 11 admin links navigate correctly)
-21. Sidebar text visibility fix (Tailwind !important override for #E2E8F0)
-22. Standalone QR Menu HTML (served by FastAPI, works without React frontend)
-23. Standalone KDS Monitor HTML (PIN-protected, keyboard shortcuts)
-24. PDF download via window.open (works on Capacitor WebView)
+20. Standalone QR Menu HTML (served by FastAPI, works without React frontend)
+21. Standalone KDS Monitor HTML (PIN-protected, keyboard shortcuts)
+22. PDF download via window.open (works on Capacitor WebView)
+23. **Quick POS PIN Login** (4-digit PIN pad, auto-submit, role-based navigation)
+24. **Double-tap prevention** (touch-action:manipulation + useRef guards)
+25. **Printer WiFi scan optimization** (priority IPs first, retry logic, 1.2s timeout)
+26. **KDS table names + large quantity display** (enriched from tables collection, 38px badges)
 
-## Bug Fixes (April 10, 2026 - Iteration 28)
-### Order Number Atomic Counter
-- Root cause: QR orders used separate non-scoped numbering; POS used string comparison with race conditions
-- Fix: `order_counters` MongoDB collection using `find_one_and_update` + `$inc` (shared between POS & QR)
-- Verified: Sequential numbers under concurrent load
-
-### Double-Tap Duplicate Order Prevention
-- Root cause: React useState guard (`isPlacingOrder`) has async update race condition
-- Fix: Replaced with `useRef` (`placingOrderRef`) for synchronous guard
-- Also fixed: `addToCart` uses ref guard with 250ms cooldown
-
-### Printer WiFi Detection (Native APK)
-- Root cause: Backend `/api/printer/check` runs from Railway cloud, can't reach local `192.168.x.x` printers
-- Fix: APK uses native Capacitor TCP Socket for direct reachability check; browser uses backend as fallback
-- Added: WiFi printer retry logic (up to 2 retries with 500ms delay)
-- Improved: WiFi scanner probe timeout increased from 800ms to 2000ms for Ethernet-connected printers
-
-### KDS Table Names + Quantity Display
-- Root cause: Public KDS endpoint didn't enrich orders with table info from tables collection
-- Fix: Added table lookup to public endpoint; POS orders now store `table_name` directly
-- KDS quantity: Increased from 24px/12px to 38px/20px (44px/24px on 1920px+ screens)
-- Added: Takeaway label for orders without table
-
-### POS 15.4" Screen Layout
-- Added `2xl:grid-cols-6` breakpoint for product grid
-- Responsive cart sidebar: 340px (md), 380px (lg), 400px (xl)
-
-## Testing Status (Iteration 28 - April 10, 2026)
-- Backend: 100% (12/12 passed)
-- Frontend: 100% (all UI tests passed)
-- Note: WiFi native printer check untestable from browser (requires APK)
+## Quick POS PIN Login (April 10, 2026)
+- Backend: `/api/auth/pin-login`, `/api/auth/set-pos-pin`, `/api/auth/remove-pos-pin/{id}`, `/api/auth/restaurant-has-pins/{id}`
+- PIN is bcrypt hashed (`pos_pin_hash` field), unique per restaurant
+- Login page: Password/Quick PIN toggle (preserved across logout via `last_restaurant_id`)
+- PIN pad: 4 dots, auto-submit on 4th digit, shake animation on error
+- Role-based navigation: staff→/pos, admin→/dashboard
+- Settings > User Management: Green PIN badge, set/remove PIN dialog
 
 ## Upcoming (P1)
-- Quick POS PIN Login for staff shift changes
 - Daily email summary for restaurant admins
 - Automated trial expiry email sequences (7d, 3d, 1d)
 
@@ -94,4 +62,3 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 - [ ] Configure MongoDB Atlas connection string
 - [ ] Deploy backend to Railway
 - [ ] Build Android APK via Capacitor
-- [ ] QR codes will work once deployed to production URL
