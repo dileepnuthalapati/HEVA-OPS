@@ -46,6 +46,25 @@ export const authAPI = {
     }
     return response.data;
   },
+  pinLogin: async (pin, restaurantId) => {
+    const response = await api.post('/auth/pin-login', { pin, restaurant_id: restaurantId });
+    if (response.data.access_token) {
+      setAuthToken(response.data.access_token);
+    }
+    return response.data;
+  },
+  setPosPin: async (userId, pin) => {
+    const response = await api.post('/auth/set-pos-pin', { user_id: userId, pin });
+    return response.data;
+  },
+  removePosPin: async (userId) => {
+    const response = await api.delete(`/auth/remove-pos-pin/${userId}`);
+    return response.data;
+  },
+  restaurantHasPins: async (restaurantId) => {
+    const response = await api.get(`/auth/restaurant-has-pins/${restaurantId}`);
+    return response.data;
+  },
   getMe: async () => {
     const response = await api.get('/auth/me');
     return response.data;

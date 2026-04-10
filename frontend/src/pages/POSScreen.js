@@ -1162,6 +1162,7 @@ const POSScreen = () => {
                         ? 'border-indigo-400 bg-indigo-50 ring-2 ring-indigo-200 shadow-md'
                         : 'border-slate-200 bg-white hover:border-slate-300 hover:shadow-md'
                   }`}
+                  style={{ touchAction: 'manipulation' }}
                   onClick={(e) => {
                     e.preventDefault();
                     e.stopPropagation();
@@ -1390,6 +1391,7 @@ const POSScreen = () => {
               <button
                 className="w-full bg-indigo-600 hover:bg-indigo-500 text-white font-bold h-14 rounded-2xl btn-haptic text-base flex items-center justify-center gap-2 transition-all shadow-lg shadow-indigo-200 disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
                 data-testid="place-order-button"
+                style={{ touchAction: 'manipulation' }}
                 onClick={() => { editingOrder ? updateOrder() : placeOrder(); setMobileCartOpen(false); }}
                 disabled={cart.length === 0 || isPlacingOrder}
               >

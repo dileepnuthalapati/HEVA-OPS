@@ -9,7 +9,11 @@ router = APIRouter()
 
 @router.get("/restaurant/staff")
 async def list_restaurant_staff(current_user: User = Depends(require_admin)):
-    users = await db.users.find({"restaurant_id": current_user.restaurant_id}, {"_id": 0, "password": 0, "password_hash": 0}).to_list(100)
+    users = await db.users.find({"restaurant_id": current_user.restaurant_id}, {"_id": 0, "password": 0, "password_hash": 0, "pos_pin_hash": 0}).to_list(100)
+    # Add has_pin flag for UI
+    for u in users:
+        user_doc = await db.users.find_one({"id": u["id"]}, {"_id": 0, "pos_pin_hash": 1})
+        u["has_pos_pin"] = bool(user_doc and user_doc.get("pos_pin_hash"))
     return users
 
 
@@ -27,6 +31,8 @@ async def create_restaurant_staff(staff: StaffCreate, current_user: User = Depen
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": current_user.username,
     }
+    if staff.pos_pin and len(staff.pos_pin) == 4 and staff.pos_pin.isdigit():
+        user_doc["pos_pin_hash"] = get_password_hash(staff.pos_pin)
     await db.users.insert_one(user_doc)
     return {"message": f"Staff '{staff.username}' created", "id": user_doc["id"]}
 

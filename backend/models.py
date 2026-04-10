@@ -341,12 +341,14 @@ class StaffCreate(BaseModel):
     username: str
     password: str
     role: str = "user"
+    pos_pin: Optional[str] = None
 
 
 class StaffUpdate(BaseModel):
     username: str
     password: Optional[str] = None
     role: str = "user"
+    pos_pin: Optional[str] = None
 
 
 class PasswordReset(BaseModel):

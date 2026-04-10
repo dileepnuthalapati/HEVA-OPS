@@ -417,7 +417,7 @@ class ThermalPrinterService {
   /**
    * Scan the local WiFi network for printers.
    * Auto-detects subnet from the tablet's IP address.
-   * Uses aggressive parallelism + short timeouts for fast scanning.
+   * Priority scan: common printer IPs first, then remaining.
    */
   async scanWifiPrinters(onPrinterFound, onProgress) {
     if (!this.isNative) {
@@ -431,27 +431,43 @@ class ThermalPrinterService {
 
     if (onProgress) onProgress(`Scanning ${subnet}.x ...`);
     const results = [];
+    const found = new Set();
 
-    // Scan all 254 IPs in large parallel batches with short timeouts
-    const batchSize = 50;
-    for (let batchStart = 1; batchStart <= 254; batchStart += batchSize) {
-      const batchEnd = Math.min(batchStart + batchSize - 1, 254);
-      if (onProgress) onProgress(`Scanning ${subnet}.${batchStart}-${batchEnd}...`);
+    // Priority IPs: common printer address ranges
+    const priorityIps = [];
+    for (let i = 100; i <= 120; i++) priorityIps.push(i);
+    for (let i = 200; i <= 220; i++) priorityIps.push(i);
+    [1, 2, 50, 150, 250, 254].forEach(i => { if (!priorityIps.includes(i)) priorityIps.push(i); });
 
-      const batchPromises = [];
-      for (let i = batchStart; i <= batchEnd; i++) {
+    const remaining = [];
+    for (let i = 1; i <= 254; i++) {
+      if (!priorityIps.includes(i)) remaining.push(i);
+    }
+
+    const scanBatch = async (ips, label) => {
+      if (onProgress) onProgress(label);
+      const promises = ips.map(i => {
         const ip = `${subnet}.${i}`;
-        batchPromises.push(
-          this._probeWifiPrinter(ip, 9100).then(found => {
-            if (found) {
-              const device = { ip, port: 9100, name: `Printer at ${ip}` };
-              results.push(device);
-              onPrinterFound(device);
-            }
-          })
-        );
-      }
-      await Promise.all(batchPromises);
+        return this._probeWifiPrinter(ip, 9100).then(ok => {
+          if (ok && !found.has(ip)) {
+            found.add(ip);
+            const device = { ip, port: 9100, name: `Printer at ${ip}` };
+            results.push(device);
+            onPrinterFound(device);
+          }
+        });
+      });
+      await Promise.all(promises);
+    };
+
+    // Phase 1: Priority IPs (common printer addresses)
+    await scanBatch(priorityIps, `Checking common printer addresses...`);
+
+    // Phase 2: Remaining IPs in batches of 60
+    const batchSize = 60;
+    for (let i = 0; i < remaining.length; i += batchSize) {
+      const batch = remaining.slice(i, i + batchSize);
+      await scanBatch(batch, `Scanning ${subnet}.${batch[0]}-${batch[batch.length - 1]}...`);
     }
 
     if (onProgress) onProgress('');
@@ -474,12 +490,12 @@ class ThermalPrinterService {
     }
   }
 
-  // Probe a single IP with a 2 second timeout (reliable for Ethernet-connected printers)
+  // Probe a single IP with a 1.2 second timeout (balanced for Ethernet-connected printers)
   async _probeWifiPrinter(ip, port) {
     try {
       const connectPromise = TcpSocket.connect({ ipAddress: ip, port: port });
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 2000)
+        setTimeout(() => reject(new Error('timeout')), 1200)
       );
       const result = await Promise.race([connectPromise, timeoutPromise]);
       try { await TcpSocket.disconnect({ client: result.client }); } catch {}

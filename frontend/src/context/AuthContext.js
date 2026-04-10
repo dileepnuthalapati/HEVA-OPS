@@ -117,7 +117,28 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const pinLogin = async (pin, restaurantId) => {
+    try {
+      const response = await authAPI.pinLogin(pin, restaurantId);
+      const userData = {
+        username: response.username,
+        role: response.role,
+        restaurant_id: response.restaurant_id,
+      };
+      setUser(userData);
+      localStorage.setItem('user', JSON.stringify(userData));
+      return { user: userData, ...response };
+    } catch (error) {
+      throw error;
+    }
+  };
+
   const logout = () => {
+    // Preserve restaurant_id for PIN login after logout
+    const lastRestId = user?.restaurant_id;
+    if (lastRestId) {
+      localStorage.setItem('last_restaurant_id', lastRestId);
+    }
     setUser(null);
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user');
@@ -133,7 +154,8 @@ export const AuthProvider = ({ children }) => {
   return (
     <AuthContext.Provider value={{ 
       user, 
-      login, 
+      login,
+      pinLogin,
       logout, 
       loading, 
       isPlatformOwner,
