@@ -99,6 +99,7 @@ class Order(BaseModel):
     created_by: str = ""
     cancel_reason: Optional[str] = None
     table_id: Optional[str] = None
+    table_name: Optional[str] = None
     source: Optional[str] = "pos"
     created_at: Optional[str] = None
     completed_at: Optional[str] = None

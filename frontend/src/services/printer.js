@@ -125,70 +125,87 @@ class ThermalPrinterService {
 
   // Direct TCP from the tablet — works even with Railway backend
   // Supports chunked sending for large receipts (50+ items)
+  // Includes retry logic for flaky network connections
   async _printWifiNative(ip, port, base64Data) {
-    let clientId = null;
-    try {
-      console.log(`[Printer] TCP connecting to ${ip}:${port}...`);
-      const result = await TcpSocket.connect({ ipAddress: ip, port: port });
-      clientId = result.client;
-      console.log(`[Printer] TCP connected (client ${clientId}), sending data...`);
+    const MAX_RETRIES = 2;
+    let lastError = null;
 
-      // Chunk large receipts to prevent buffer overflow
-      // Max chunk size: 4KB (safe for most thermal printers)
-      const CHUNK_SIZE = 4096;
-      const rawBytes = base64ToBytes(base64Data);
-      
-      if (rawBytes.length <= CHUNK_SIZE) {
-        // Small receipt: send in one shot
-        await TcpSocket.send({
-          client: clientId,
-          data: base64Data,
-          encoding: 'base64',
-        });
-      } else {
-        // Large receipt: chunk with 50ms delays between chunks
-        console.log(`[Printer] Large receipt (${rawBytes.length} bytes), chunking into ${Math.ceil(rawBytes.length / CHUNK_SIZE)} parts`);
-        for (let offset = 0; offset < rawBytes.length; offset += CHUNK_SIZE) {
-          const chunk = rawBytes.slice(offset, Math.min(offset + CHUNK_SIZE, rawBytes.length));
-          // Convert chunk to base64
-          let binary = '';
-          for (let i = 0; i < chunk.length; i++) binary += String.fromCharCode(chunk[i]);
-          const chunkBase64 = btoa(binary);
-          
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      let clientId = null;
+      try {
+        if (attempt > 0) {
+          console.log(`[Printer] Retry attempt ${attempt}...`);
+          await new Promise(r => setTimeout(r, 500));
+        }
+        console.log(`[Printer] TCP connecting to ${ip}:${port}...`);
+        const result = await TcpSocket.connect({ ipAddress: ip, port: port });
+        clientId = result.client;
+        console.log(`[Printer] TCP connected (client ${clientId}), sending data...`);
+
+        // Chunk large receipts to prevent buffer overflow
+        // Max chunk size: 4KB (safe for most thermal printers)
+        const CHUNK_SIZE = 4096;
+        const rawBytes = base64ToBytes(base64Data);
+        
+        if (rawBytes.length <= CHUNK_SIZE) {
+          // Small receipt: send in one shot
           await TcpSocket.send({
             client: clientId,
-            data: chunkBase64,
+            data: base64Data,
             encoding: 'base64',
           });
-          // 50ms delay between chunks to let the printer buffer clear
-          if (offset + CHUNK_SIZE < rawBytes.length) {
-            await new Promise(r => setTimeout(r, 50));
+        } else {
+          // Large receipt: chunk with 50ms delays between chunks
+          console.log(`[Printer] Large receipt (${rawBytes.length} bytes), chunking into ${Math.ceil(rawBytes.length / CHUNK_SIZE)} parts`);
+          for (let offset = 0; offset < rawBytes.length; offset += CHUNK_SIZE) {
+            const chunk = rawBytes.slice(offset, Math.min(offset + CHUNK_SIZE, rawBytes.length));
+            // Convert chunk to base64
+            let binary = '';
+            for (let i = 0; i < chunk.length; i++) binary += String.fromCharCode(chunk[i]);
+            const chunkBase64 = btoa(binary);
+            
+            await TcpSocket.send({
+              client: clientId,
+              data: chunkBase64,
+              encoding: 'base64',
+            });
+            // 50ms delay between chunks to let the printer buffer clear
+            if (offset + CHUNK_SIZE < rawBytes.length) {
+              await new Promise(r => setTimeout(r, 50));
+            }
           }
         }
-      }
 
-      console.log('[Printer] WiFi TCP print sent successfully');
-      return { success: true, method: 'wifi-tcp', message: 'Printed via WiFi' };
-    } catch (error) {
-      const msg = error.message || String(error);
-      console.error('[Printer] WiFi TCP error:', msg);
-
-      if (msg.includes('timeout') || msg.includes('connect') || msg.includes('refused')) {
-        throw new Error(
-          `Cannot reach printer at ${ip}:${port}.\n\n` +
-          'Check that:\n' +
-          '1. The printer is powered on and connected to WiFi\n' +
-          '2. Your tablet is on the same WiFi network as the printer\n' +
-          '3. The printer IP address is correct (check printer\'s network settings page)'
-        );
-      }
-      throw new Error(`WiFi print failed: ${msg}`);
-    } finally {
-      // Always disconnect
-      if (clientId !== null) {
-        try { await TcpSocket.disconnect({ client: clientId }); } catch {}
+        console.log('[Printer] WiFi TCP print sent successfully');
+        return { success: true, method: 'wifi-tcp', message: 'Printed via WiFi' };
+      } catch (error) {
+        lastError = error;
+        const msg = error.message || String(error);
+        console.warn(`[Printer] WiFi TCP attempt ${attempt + 1} failed:`, msg);
+      } finally {
+        // Always disconnect
+        if (clientId !== null) {
+          try { await TcpSocket.disconnect({ client: clientId }); } catch {}
+        }
       }
     }
+
+    // All retries exhausted
+    const msg = lastError?.message || String(lastError);
+    console.error('[Printer] WiFi TCP all retries failed:', msg);
+
+    if (msg.includes('timeout') || msg.includes('connect') || msg.includes('refused')) {
+      throw new Error(
+        `Cannot reach printer at ${ip}:${port}.\n\n` +
+        'Check that:\n' +
+        '1. The printer is powered on and connected to the network\n' +
+        '2. Your tablet is on the same WiFi/LAN as the printer\n' +
+        '3. The printer IP address is correct\n' +
+        '4. No other device is blocking the printer port\n\n' +
+        'Tip: If the printer works with UberEats, try using the same IP address.'
+      );
+    }
+    throw new Error(`WiFi print failed: ${msg}`);
   }
 
   // Backend proxy fallback (for browser/development use)
@@ -441,12 +458,28 @@ class ThermalPrinterService {
     return results;
   }
 
-  // Probe a single IP with a 0.8 second timeout (fast fail for unreachable IPs)
+  // Quick TCP reachability check from the tablet (not via backend)
+  async checkPrinterReachable(ip, port = 9100) {
+    if (!this.isNative) return null; // Can't check from browser
+    try {
+      const connectPromise = TcpSocket.connect({ ipAddress: ip, port: port });
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('timeout')), 2000)
+      );
+      const result = await Promise.race([connectPromise, timeoutPromise]);
+      try { await TcpSocket.disconnect({ client: result.client }); } catch {}
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  // Probe a single IP with a 2 second timeout (reliable for Ethernet-connected printers)
   async _probeWifiPrinter(ip, port) {
     try {
       const connectPromise = TcpSocket.connect({ ipAddress: ip, port: port });
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 800)
+        setTimeout(() => reject(new Error('timeout')), 2000)
       );
       const result = await Promise.race([connectPromise, timeoutPromise]);
       try { await TcpSocket.disconnect({ client: result.client }); } catch {}

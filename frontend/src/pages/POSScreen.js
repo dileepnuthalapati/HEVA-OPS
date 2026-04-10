@@ -76,7 +76,8 @@ const POSScreen = () => {
   const [customProductPrice, setCustomProductPrice] = useState('');
   
   // Debounce for preventing double clicks
-  const [isAddingToCart, setIsAddingToCart] = useState(false);
+  const placingOrderRef = useRef(false);
+  const addingToCartRef = useRef(false);
   const [isPlacingOrder, setIsPlacingOrder] = useState(false);
 
   // Completed orders for today (visible in pending orders panel)
@@ -141,22 +142,36 @@ const POSScreen = () => {
       }
       setDefaultPrinterName(printer.name);
       if (printer.type === 'wifi') {
-        // For WiFi printers, attempt a quick TCP connection check via the backend
-        try {
-          const parts = printer.address.split(':');
-          const ip = parts[0];
-          const port = parseInt(parts[1]) || 9100;
-          const apiUrl = process.env.REACT_APP_BACKEND_URL;
-          const token = getAuthToken();
-          const res = await fetch(`${apiUrl}/api/printer/check`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-            body: JSON.stringify({ ip, port }),
-            signal: AbortSignal.timeout(5000),
-          });
-          setPrinterStatus(res.ok ? 'online' : 'offline');
-        } catch {
-          setPrinterStatus('offline');
+        const parts = printer.address.split(':');
+        const ip = parts[0];
+        const port = parseInt(parts[1]) || 9100;
+        
+        // On native APK: check directly from tablet (required for local network printers)
+        // Backend can't reach local 192.168.x.x from Railway
+        const isNative = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
+        if (isNative) {
+          try {
+            const reachable = await printerService.checkPrinterReachable(ip, port);
+            setPrinterStatus(reachable ? 'online' : 'offline');
+          } catch {
+            setPrinterStatus('offline');
+          }
+        } else {
+          // Browser fallback: use backend TCP check (works in preview, not production)
+          try {
+            const apiUrl = process.env.REACT_APP_BACKEND_URL;
+            const token = getAuthToken();
+            const res = await fetch(`${apiUrl}/api/printer/check`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+              body: JSON.stringify({ ip, port }),
+              signal: AbortSignal.timeout(5000),
+            });
+            const data = await res.json();
+            setPrinterStatus(data.reachable ? 'online' : 'offline');
+          } catch {
+            setPrinterStatus('unknown');
+          }
         }
       } else {
         // BT printers — mark as configured (can't ping them from web)
@@ -343,9 +358,9 @@ const POSScreen = () => {
   };
 
   const addToCart = (product) => {
-    // Prevent double-clicks
-    if (isAddingToCart) return;
-    setIsAddingToCart(true);
+    // Prevent double-clicks using ref (synchronous guard)
+    if (addingToCartRef.current) return;
+    addingToCartRef.current = true;
     
     const existing = cart.find((item) => item.product_id === product.id);
     if (existing) {
@@ -368,10 +383,9 @@ const POSScreen = () => {
         },
       ]);
     }
-    // Removed toast notification - too distracting during fast ordering
     
     // Reset after short delay
-    setTimeout(() => setIsAddingToCart(false), 300);
+    setTimeout(() => { addingToCartRef.current = false; }, 250);
   };
   
   // Add custom/temporary product to cart
@@ -538,7 +552,10 @@ const POSScreen = () => {
   };
 
   const placeOrder = async () => {
-    if (cart.length === 0 || isPlacingOrder) return;
+    if (cart.length === 0) return;
+    // Synchronous ref guard - prevents double-tap race condition
+    if (placingOrderRef.current) return;
+    placingOrderRef.current = true;
     setIsPlacingOrder(true);
 
     const subtotal = cart.reduce((sum, item) => sum + item.total, 0);
@@ -631,6 +648,7 @@ const POSScreen = () => {
         toast.error('Failed to save order');
       }
     } finally {
+      placingOrderRef.current = false;
       setIsPlacingOrder(false);
     }
   };
@@ -1127,7 +1145,7 @@ const POSScreen = () => {
               )}
             </div>
           ) : (
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3 md:gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 md:gap-4">
               {searchQuery && (
                 <div className="col-span-full mb-2 text-xs font-semibold tracking-wide uppercase text-slate-400">
                   {filteredProducts.length} result{filteredProducts.length !== 1 ? 's' : ''} for "{searchQuery}"
@@ -1385,7 +1403,7 @@ const POSScreen = () => {
         return (
           <>
             {/* Desktop Order Sidebar */}
-            <div className="hidden md:flex w-[380px] bg-white border-l border-slate-200/60 flex-col cart-sidebar">
+            <div className="hidden md:flex w-[340px] lg:w-[380px] xl:w-[400px] bg-white border-l border-slate-200/60 flex-col cart-sidebar">
               {cartContent}
             </div>
 

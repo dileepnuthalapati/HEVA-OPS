@@ -270,9 +270,21 @@ async def get_public_kds_orders(restaurant_id: str, kds_token: str):
         {"_id": 0}
     ).sort("created_at", 1).to_list(200)
 
+    # Enrich with table info (public endpoint needs this too)
+    table_ids = [o["table_id"] for o in orders if o.get("table_id")]
+    tables = {}
+    if table_ids:
+        table_docs = await db.tables.find({"id": {"$in": table_ids}}, {"_id": 0}).to_list(100)
+        tables = {t["id"]: t for t in table_docs}
+
     for o in orders:
         if "kds_status" not in o:
             o["kds_status"] = "new"
+        # Add table_name if not already present
+        if o.get("table_id") and not o.get("table_name"):
+            table = tables.get(o["table_id"])
+            if table:
+                o["table_name"] = table.get("name", f"Table {table['number']}")
 
     return {"orders": orders, "restaurant_name": rest.get("business_info", {}).get("name", "")}
 
