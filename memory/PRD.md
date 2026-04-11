@@ -3,7 +3,7 @@
 ## Overview
 Multi-tenant **Modular SaaS** business management system. Cloud backend (FastAPI + MongoDB), mobile-first frontend (React + Capacitor APK). Revenue model: **per-module monthly pricing + 0.3% commission on QR orders via Stripe Connect**.
 
-## Universal App Architecture (Apr 11, 2026)
+## Universal App Architecture
 ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 
 | Mode | Device | Boot Screen | Experience |
@@ -11,53 +11,45 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 | **Terminal (Kiosk)** | Store tablet | PIN Pad | Staff enter PIN → POS or Clock-In toast |
 | **Personal** | Staff phone | Email + Password | Heva Ops workspace (shifts, clock-in, swaps) |
 
-## Staff Capabilities System
-Each staff member has a `capabilities` array:
-- `pos.access` — Take orders on POS terminal
-- `kds.access` — View kitchen display
-- `workforce.clock_in` — Clock in/out of shifts
-- `workforce.manage_rota` — Create and edit shift schedules
-
-## Staff Onboarding (Apr 11, 2026)
-When admin creates a staff member, a unique onboarding link is generated. Admin shares the link (copy/paste). Staff opens on their phone, sees business name + their role, and sets their own password + 4-digit PIN. Token invalidated after use.
-
-**Flow:** Admin creates staff → "Staff Created" dialog with copyable onboarding URL → Staff opens link → Sets password + PIN → Success → Login
+## Email System (Apr 12, 2026)
+**Provider:** Resend (API key in .env)
+**Sender:** `noreply@hetupathways.com` (domain verified)
 
 **Endpoints:**
-- `GET /api/onboarding/{token}` — Public: returns staff info + business name
-- `POST /api/onboarding/{token}/complete` — Public: staff sets password + PIN
+- `POST /api/email/test` — Send test email to current admin (requires auth)
+- `POST /api/email/daily-summary/send` — Send yesterday's summary to current business admin
+- `POST /api/email/daily-summary/send-all` — Platform owner sends to ALL businesses
+- `POST /api/email/trial-reminders/send` — Platform owner triggers trial expiry checks (7d, 3d, 1d)
+
+**Daily Summary includes:** Total revenue, order count, cash/card breakdown, avg order value, top 5 sellers, staff performance
+**Trial Reminders:** Sent at 7, 3, 1, 0 days before `trial_end_date` on restaurant document
+
+**For production:** Set up Railway cron job to call `/api/email/daily-summary/send-all` daily at 8 AM
 
 ## All Completed Features
 1. Core POS (cart, discounts, split payments, offline mode)
-2. ESC/POS Receipt Generation + Kitchen Ticket Printing
-3. QR Table Ordering (public guest menu, WebSocket push)
+2. ESC/POS Receipt + Kitchen Ticket Printing
+3. QR Table Ordering (guest menu, WebSocket push)
 4. Stripe Connect Pay-at-Table
-5. Kitchen Display System (1080p, keyboard shortcuts)
-6. Void/Audit System (quick-tap reasons, Manager PIN)
-7. Revenue Analytics Dashboard + Kitchen Efficiency widget
-8. Menu Management (consolidated categories + products)
-9. Report PDF Export (server-generated reportlab)
-10. Staff Management (CRUD, email, capabilities, PIN)
-11. Security tab with Manager PIN + Device Registration
-12. Offline authentication (cached credential fallback)
-13. Multi-currency business creation
-14. Cash Drawer, Table management, QR hash generation
-15. Order Sequencing daily reset (atomic counter)
-16. Multi-tenancy security (strict restaurant_id scoping)
-17. Design System Overhaul (Modern Utility)
-18. Modular SaaS Architecture (Feature flags, JWT embedding)
-19. Workforce Module (Shifts, Attendance, Timesheets, Payroll, Swaps)
-20. Heva Ops Staff Companion (My Shifts, Clock In/Out, Swap Requests)
-21. Module Pricing System (Platform Owner configurable)
-22. Module-Aware UX (conditional sidebar, adaptive dashboard)
-23. Universal App Architecture — Split-Brain Routing
-24. Staff Capabilities System (pos.access, kds.access, workforce.clock_in, workforce.manage_rota)
-25. Attendance entry_source tracking (mobile_app vs pos_terminal)
-26. **Staff Onboarding Link (Apr 11, 2026)** — Auto-generated setup URL, staff sets own password + PIN
+5. Kitchen Display System
+6. Void/Audit System (Manager PIN)
+7. Revenue Analytics Dashboard
+8. Menu Management + Report PDF Export
+9. Staff Management (email, capabilities, PIN)
+10. Security (Manager PIN, Device Registration)
+11. Multi-currency, Multi-tenancy, Offline Auth
+12. Modular SaaS Architecture (Feature flags, JWT embedding)
+13. Workforce Module (Shifts, Attendance, Timesheets, Payroll, Swaps)
+14. Heva Ops Staff Companion
+15. Universal App — Split-Brain Routing
+16. Staff Capabilities System
+17. Staff Onboarding Link (self-service password + PIN setup)
+18. **Automated Email System (Apr 12, 2026)** — Resend integration, daily summaries, trial reminders
 
-## Upcoming (P1)
-- Automated daily email summary for business admins
-- Automated trial expiry email sequences (7d, 3d, 1d)
+## Upcoming
+- Add trial_end_date to business creation flow (auto 14-day trial)
+- Add "Send Daily Summary" button in Admin Dashboard UI
+- Background scheduler for automated daily email dispatch (Railway cron)
 
 ## Backlog (P2)
 - Print Void Receipt to Kitchen
@@ -72,4 +64,5 @@ When admin creates a staff member, a unique onboarding link is generated. Admin 
 - [ ] Configure MongoDB Atlas connection string
 - [ ] Deploy backend to Railway
 - [ ] Build Android APK via Capacitor
-- [ ] Add real emails to existing staff accounts
+- [ ] Set up Railway cron for daily email dispatch
+- [ ] Add real emails to all staff accounts
