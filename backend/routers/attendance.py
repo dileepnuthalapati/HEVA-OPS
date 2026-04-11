@@ -184,6 +184,75 @@ async def get_my_clock_status(current_user: User = Depends(require_feature("work
     return {"clocked_in": False}
 
 
+@router.get("/attendance/my-summary")
+async def get_my_hours_summary(current_user: User = Depends(require_feature("workforce"))):
+    """Get current user's hours and pay summary."""
+    staff = await db.users.find_one(
+        {"username": current_user.username, "restaurant_id": current_user.restaurant_id},
+        {"_id": 0, "password_hash": 0, "pos_pin_hash": 0, "manager_pin_hash": 0}
+    )
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff record not found")
+
+    staff_id = staff.get("id")
+    now = datetime.now(timezone.utc)
+
+    # This week (Mon-Sun)
+    week_start = (now - timedelta(days=now.weekday())).strftime("%Y-%m-%d")
+    week_records = await db.attendance.find(
+        {"staff_id": staff_id, "restaurant_id": current_user.restaurant_id, "date": {"$gte": week_start}, "clock_out": {"$ne": None}},
+        {"_id": 0}
+    ).to_list(100)
+    week_hours = sum(r.get("hours_worked", 0) or 0 for r in week_records)
+
+    # This month
+    month_start = now.strftime("%Y-%m-01")
+    month_records = await db.attendance.find(
+        {"staff_id": staff_id, "restaurant_id": current_user.restaurant_id, "date": {"$gte": month_start}, "clock_out": {"$ne": None}},
+        {"_id": 0}
+    ).to_list(500)
+    month_hours = sum(r.get("hours_worked", 0) or 0 for r in month_records)
+
+    # Recent records (last 14 days)
+    two_weeks_ago = (now - timedelta(days=14)).strftime("%Y-%m-%d")
+    recent = await db.attendance.find(
+        {"staff_id": staff_id, "restaurant_id": current_user.restaurant_id, "date": {"$gte": two_weeks_ago}},
+        {"_id": 0}
+    ).sort("date", -1).to_list(100)
+
+    # Pay calculation
+    pay_type = staff.get("pay_type", "hourly")
+    hourly_rate = staff.get("hourly_rate", 0) or 0
+    monthly_salary = staff.get("monthly_salary", 0) or 0
+
+    if pay_type == "monthly":
+        week_pay = monthly_salary / 4.33  # approximate weekly from monthly
+        month_pay = monthly_salary
+    else:
+        week_pay = week_hours * hourly_rate
+        month_pay = month_hours * hourly_rate
+
+    # Get currency
+    restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0, "currency": 1})
+    currency = restaurant.get("currency", "GBP") if restaurant else "GBP"
+
+    return {
+        "staff_name": staff.get("username", ""),
+        "position": staff.get("position", ""),
+        "pay_type": pay_type,
+        "hourly_rate": hourly_rate,
+        "monthly_salary": monthly_salary,
+        "currency": currency,
+        "week_hours": round(week_hours, 1),
+        "month_hours": round(month_hours, 1),
+        "week_pay": round(week_pay, 2),
+        "month_pay": round(month_pay, 2),
+        "week_sessions": len(week_records),
+        "month_sessions": len(month_records),
+        "recent_records": recent,
+    }
+
+
 @router.get("/attendance/dashboard-stats")
 async def workforce_dashboard_stats(current_user: User = Depends(require_feature("workforce"))):
     """Dashboard summary: today's shifts, clocked-in staff, total hours."""

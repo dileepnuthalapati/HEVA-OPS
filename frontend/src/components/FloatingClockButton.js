@@ -66,7 +66,7 @@ export default function FloatingClockButton() {
   const handleClock = async (clockPin) => {
     setLoading(true);
     try {
-      // Capture GPS location
+      // Capture GPS location — required for mobile clock-in
       let lat = null, lng = null;
       try {
         const pos = await new Promise((resolve, reject) =>
@@ -75,7 +75,9 @@ export default function FloatingClockButton() {
         lat = pos.coords.latitude;
         lng = pos.coords.longitude;
       } catch (geoErr) {
-        // Location might be blocked — backend will decide if it's required
+        toast.error('Location required for clock in. Please enable GPS.');
+        setLoading(false);
+        return;
       }
 
       const res = await attendanceAPI.clock(clockPin, user.restaurant_id, lat, lng, 'mobile_app');

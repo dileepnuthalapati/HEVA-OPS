@@ -365,7 +365,9 @@ class StaffCreate(BaseModel):
     capabilities: Optional[List[str]] = []
     pos_pin: Optional[str] = None
     position: Optional[str] = None
+    pay_type: Optional[str] = "hourly"  # hourly or monthly
     hourly_rate: Optional[float] = None
+    monthly_salary: Optional[float] = None
     phone: Optional[str] = None
     employment_type: Optional[str] = None  # full_time, part_time, casual
     joining_date: Optional[str] = None
@@ -380,7 +382,9 @@ class StaffUpdate(BaseModel):
     capabilities: Optional[List[str]] = None
     pos_pin: Optional[str] = None
     position: Optional[str] = None
+    pay_type: Optional[str] = None
     hourly_rate: Optional[float] = None
+    monthly_salary: Optional[float] = None
     phone: Optional[str] = None
     employment_type: Optional[str] = None
     joining_date: Optional[str] = None

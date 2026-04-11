@@ -583,6 +583,10 @@ export const attendanceAPI = {
     const response = await api.get('/attendance/dashboard-stats');
     return response.data;
   },
+  getMySummary: async () => {
+    const response = await api.get('/attendance/my-summary');
+    return response.data;
+  },
 };
 
 export const timesheetAPI = {

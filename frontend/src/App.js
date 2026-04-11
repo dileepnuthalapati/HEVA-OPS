@@ -40,6 +40,7 @@ import HevaOpsLayout from './pages/HevaOpsLayout';
 import StaffShifts from './pages/StaffShifts';
 import StaffClockIn from './pages/StaffClockIn';
 import StaffSwapRequests from './pages/StaffSwapRequests';
+import StaffMyPay from './pages/StaffMyPay';
 
 // Pages - All Users
 import Login from './pages/Login';
@@ -178,6 +179,7 @@ const AppRoutes = () => {
         <Route path="shifts" element={<StaffShifts />} />
         <Route path="clock" element={<StaffClockIn />} />
         <Route path="swaps" element={<StaffSwapRequests />} />
+        <Route path="pay" element={<StaffMyPay />} />
       </Route>
     </Routes>
   );

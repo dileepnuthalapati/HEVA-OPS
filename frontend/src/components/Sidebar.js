@@ -67,6 +67,7 @@ const staffModuleItems = {
   workforce: [
     { path: '/heva-ops/shifts', icon: Calendar, label: 'My Shifts' },
     { path: '/heva-ops/clock', icon: Clock, label: 'Clock In/Out' },
+    { path: '/heva-ops/pay', icon: Wallet, label: 'My Pay' },
     { path: '/heva-ops/swaps', icon: ArrowRightLeft, label: 'Swap Requests' },
   ],
 };

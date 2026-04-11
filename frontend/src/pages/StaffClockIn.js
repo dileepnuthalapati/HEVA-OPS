@@ -51,7 +51,7 @@ export default function StaffClockIn() {
   const handleClock = async (clockPin) => {
     setLoading(true);
     try {
-      // Capture GPS
+      // Capture GPS — required for mobile clock-in
       let lat = null, lng = null;
       try {
         const pos = await new Promise((resolve, reject) =>
@@ -59,7 +59,12 @@ export default function StaffClockIn() {
         );
         lat = pos.coords.latitude;
         lng = pos.coords.longitude;
-      } catch {}
+      } catch (gpsErr) {
+        toast.error('Location access required. Please enable GPS and allow location permission.');
+        setPin('');
+        setLoading(false);
+        return;
+      }
 
       const res = await attendanceAPI.clock(clockPin, user?.restaurant_id, lat, lng, 'mobile_app');
       const action = res.action || (status === 'clocked_in' ? 'clock_out' : 'clock_in');

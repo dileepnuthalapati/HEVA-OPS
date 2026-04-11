@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink, useNavigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Calendar, Clock, ArrowRightLeft, LogOut } from 'lucide-react';
+import { Calendar, Clock, ArrowRightLeft, LogOut, Wallet } from 'lucide-react';
 
 export default function HevaOpsLayout() {
   const { user, logout } = useAuth();
@@ -11,7 +11,8 @@ export default function HevaOpsLayout() {
 
   const navItems = [
     { path: '/heva-ops/shifts', icon: Calendar, label: 'My Shifts' },
-    { path: '/heva-ops/clock', icon: Clock, label: 'Clock In/Out' },
+    { path: '/heva-ops/clock', icon: Clock, label: 'Clock In' },
+    { path: '/heva-ops/pay', icon: Wallet, label: 'My Pay' },
     { path: '/heva-ops/swaps', icon: ArrowRightLeft, label: 'Swaps' },
   ];
 

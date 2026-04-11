@@ -37,7 +37,7 @@ const RestaurantSettings = () => {
   const [staffLoading, setStaffLoading] = useState(false);
   const [showStaffDialog, setShowStaffDialog] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
-  const [staffForm, setStaffForm] = useState({ username: '', email: '', password: '', role: 'user', capabilities: [], pos_pin: '', position: '', hourly_rate: '', phone: '', employment_type: 'full_time', joining_date: '', tax_id: '' });
+  const [staffForm, setStaffForm] = useState({ username: '', email: '', password: '', role: 'user', capabilities: [], pos_pin: '', position: '', pay_type: 'hourly', hourly_rate: '', monthly_salary: '', phone: '', employment_type: 'full_time', joining_date: '', tax_id: '' });
   const [staffSaving, setStaffSaving] = useState(false);
   const [onboardingLink, setOnboardingLink] = useState(null); // { url, username }
 
@@ -146,7 +146,7 @@ const RestaurantSettings = () => {
 
   const openEditStaff = (staff) => {
     setEditingStaff(staff);
-    setStaffForm({ username: staff.username, email: staff.email || '', password: '', role: staff.role, capabilities: staff.capabilities || [], pos_pin: '', position: staff.position || '', hourly_rate: staff.hourly_rate || '', phone: staff.phone || '', employment_type: staff.employment_type || 'full_time', joining_date: staff.joining_date || '', tax_id: staff.tax_id || '' });
+    setStaffForm({ username: staff.username, email: staff.email || '', password: '', role: staff.role, capabilities: staff.capabilities || [], pos_pin: '', position: staff.position || '', pay_type: staff.pay_type || 'hourly', hourly_rate: staff.hourly_rate || '', monthly_salary: staff.monthly_salary || '', phone: staff.phone || '', employment_type: staff.employment_type || 'full_time', joining_date: staff.joining_date || '', tax_id: staff.tax_id || '' });
     setShowStaffDialog(true);
   };
 
@@ -161,6 +161,7 @@ const RestaurantSettings = () => {
       const cleanedData = {
         ...staffForm,
         hourly_rate: staffForm.hourly_rate ? parseFloat(staffForm.hourly_rate) : null,
+        monthly_salary: staffForm.monthly_salary ? parseFloat(staffForm.monthly_salary) : null,
         phone: staffForm.phone || null,
         position: staffForm.position || null,
         tax_id: staffForm.tax_id || null,
@@ -175,7 +176,7 @@ const RestaurantSettings = () => {
         setShowStaffDialog(false);
         // Show onboarding link
         if (result.onboarding_token) {
-          const baseUrl = window.location.origin;
+          const baseUrl = process.env.REACT_APP_BACKEND_URL || window.location.origin;
           setOnboardingLink({
             url: `${baseUrl}/onboarding/${result.onboarding_token}`,
             username: staffForm.username,
@@ -848,8 +849,19 @@ const RestaurantSettings = () => {
                 <Input value={staffForm.position} onChange={(e) => setStaffForm({ ...staffForm, position: e.target.value })} placeholder="e.g., Server, Chef" className="h-10" data-testid="staff-position-input" />
               </div>
               <div>
-                <Label>Hourly Rate</Label>
-                <Input type="number" step="0.01" value={staffForm.hourly_rate} onChange={(e) => setStaffForm({ ...staffForm, hourly_rate: e.target.value })} placeholder="0.00" className="h-10" data-testid="staff-hourly-rate" />
+                <Label>Pay Type</Label>
+                <select value={staffForm.pay_type} onChange={(e) => setStaffForm({ ...staffForm, pay_type: e.target.value })} className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm" data-testid="staff-pay-type">
+                  <option value="hourly">Hourly</option>
+                  <option value="monthly">Monthly (Salaried)</option>
+                </select>
+              </div>
+              <div>
+                <Label>{staffForm.pay_type === 'monthly' ? 'Monthly Salary' : 'Hourly Rate'}</Label>
+                {staffForm.pay_type === 'monthly' ? (
+                  <Input type="number" step="0.01" value={staffForm.monthly_salary} onChange={(e) => setStaffForm({ ...staffForm, monthly_salary: e.target.value })} placeholder="0.00" className="h-10" data-testid="staff-monthly-salary" />
+                ) : (
+                  <Input type="number" step="0.01" value={staffForm.hourly_rate} onChange={(e) => setStaffForm({ ...staffForm, hourly_rate: e.target.value })} placeholder="0.00" className="h-10" data-testid="staff-hourly-rate" />
+                )}
               </div>
               <div>
                 <Label>Phone</Label>

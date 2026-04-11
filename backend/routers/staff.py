@@ -41,7 +41,9 @@ async def create_restaurant_staff(staff: StaffCreate, current_user: User = Depen
         "restaurant_id": current_user.restaurant_id,
         "capabilities": staff.capabilities or [],
         "position": staff.position or "",
+        "pay_type": staff.pay_type or "hourly",
         "hourly_rate": staff.hourly_rate or 0,
+        "monthly_salary": staff.monthly_salary or 0,
         "phone": staff.phone or "",
         "employment_type": staff.employment_type or "full_time",
         "joining_date": staff.joining_date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
@@ -147,8 +149,12 @@ async def update_staff(user_id: str, staff: StaffUpdate, current_user: User = De
         update["capabilities"] = staff.capabilities
     if staff.position is not None:
         update["position"] = staff.position
+    if staff.pay_type is not None:
+        update["pay_type"] = staff.pay_type
     if staff.hourly_rate is not None:
         update["hourly_rate"] = staff.hourly_rate
+    if staff.monthly_salary is not None:
+        update["monthly_salary"] = staff.monthly_salary
     if staff.phone is not None:
         update["phone"] = staff.phone
     if staff.employment_type is not None:
