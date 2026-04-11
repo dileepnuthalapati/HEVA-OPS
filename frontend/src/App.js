@@ -7,6 +7,7 @@ import axios from "axios";
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { OfflineProvider } from './context/OfflineContext';
 import OfflineIndicator from './components/OfflineIndicator';
+import FloatingClockButton from './components/FloatingClockButton';
 
 // Pages - Platform Owner
 import PlatformDashboard from './pages/PlatformDashboard';
@@ -172,6 +173,7 @@ function App() {
         <BrowserRouter>
           <div className="App">
             <OfflineIndicator />
+            <FloatingClockButton />
             <AppRoutes />
             <Toaster position="bottom-right" duration={2000} closeButton toastOptions={{ style: { fontSize: '13px' } }} />
           </div>

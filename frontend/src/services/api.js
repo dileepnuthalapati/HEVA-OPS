@@ -563,6 +563,10 @@ export const attendanceAPI = {
     const response = await api.get('/attendance/live');
     return response.data;
   },
+  getMyStatus: async () => {
+    const response = await api.get('/attendance/my-status');
+    return response.data;
+  },
   resolveFlag: async (recordId, hoursWorked) => {
     const response = await api.put(`/attendance/${recordId}/flag-resolve?hours_worked=${hoursWorked}`);
     return response.data;

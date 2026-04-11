@@ -1,0 +1,116 @@
+{
+  "summary": "Iteration 33: Public Endpoints & Floating Clock Button - Backend 19/19 passed (100%), Frontend all tests passed. QR and KDS public endpoints work without auth. Floating clock button visible and functional. ONE BUG FOUND: /attendance/clock endpoint blocked by router-level guard.",
+  "backend_issues": {
+    "critical": [
+      {
+        "endpoint": "POST /api/attendance/clock",
+        "issue": "Router-level guard blocks public access. The attendance router has `router = APIRouter(dependencies=[Depends(require_feature('workforce'))])` which requires JWT auth for ALL endpoints including /attendance/clock which should be public (PIN-based auth only)",
+        "priority": "HIGH",
+        "fix": "Remove router-level dependency and add require_feature('workforce') only to endpoints that need it (GET /attendance, GET /attendance/live, PUT /attendance/{id}/flag-resolve). Leave POST /attendance/clock without auth guard."
+      }
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration33_public_endpoints.py",
+    "/app/test_reports/pytest/pytest_results_iteration33.xml"
+  ],
+  "action_items": [
+    "FIX CRITICAL: Remove router-level guard from attendance.py and add require_feature('workforce') only to endpoints that need auth (not /attendance/clock)"
+  ],
+  "critical_code_review_comments": [
+    "BUG: /app/backend/routers/attendance.py line 9 has router-level guard that blocks the public /attendance/clock endpoint",
+    "QR public endpoints correctly check features backward-compatibly (line 103-107 in qr_menu.py)",
+    "KDS public endpoints (verify-pin, public/orders, public/stats) correctly have NO auth guard",
+    "FloatingClockButton component correctly checks hasFeature('workforce') before rendering"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration33_public_endpoints.py"
+  ],
+  "success_rate": {
+    "backend": "100% (19/19 passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "skadmin": {"username": "SKAdmin", "password": "saswata@123", "restaurant_id": "rest_demo_1"},
+    "staff_user": {"username": "user", "password": "user123", "pos_pin": "1111"},
+    "manager_pin": "1234 (for KDS verify-pin, set on restaurant_admin)"
+  },
+  "seed_data_creation": "No new seed data created",
+  "retest_needed": true,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 33 verified: (1) QR public endpoints GET/POST /api/qr/{restaurant_id}/{table_hash} work without auth, (2) KDS public endpoints verify-pin, public/orders, public/stats work without auth, (3) KDS auth endpoints still require auth+feature, (4) Floating clock button visible for SKAdmin with workforce enabled, (5) PIN pad dialog opens correctly. BUG FOUND: /attendance/clock endpoint requires JWT auth due to router-level guard but should be public (PIN-based). Test PIN for clock: user account has pos_pin=1111.",
+  "features_verified": {
+    "qr_public_menu": {
+      "status": "VERIFIED",
+      "evidence": "GET /api/qr/rest_demo_1/{table_hash} returns 200 without auth"
+    },
+    "qr_public_order": {
+      "status": "VERIFIED",
+      "evidence": "POST /api/qr/rest_demo_1/{table_hash}/order returns 200 without auth"
+    },
+    "kds_verify_pin": {
+      "status": "VERIFIED",
+      "evidence": "POST /api/kds/verify-pin returns 200 with kds_token without auth"
+    },
+    "kds_public_orders": {
+      "status": "VERIFIED",
+      "evidence": "GET /api/kds/public/orders/{restaurant_id}/{kds_token} returns 200 without auth"
+    },
+    "kds_public_stats": {
+      "status": "VERIFIED",
+      "evidence": "GET /api/kds/public/stats/{restaurant_id}/{kds_token} returns 200 without auth"
+    },
+    "kds_auth_protected": {
+      "status": "VERIFIED",
+      "evidence": "GET /api/kds/orders returns 403 without auth, 200 with auth"
+    },
+    "attendance_my_status": {
+      "status": "VERIFIED",
+      "evidence": "GET /api/attendance/my-status returns 200 for both admin and staff users"
+    },
+    "attendance_clock": {
+      "status": "BUG",
+      "evidence": "POST /api/attendance/clock returns 403 without auth due to router-level guard - should be public"
+    },
+    "floating_clock_button": {
+      "status": "VERIFIED",
+      "evidence": "Button visible bottom-right on dashboard, POS, orders pages with data-testid='floating-clock-btn'"
+    },
+    "floating_clock_pinpad": {
+      "status": "VERIFIED",
+      "evidence": "PIN pad dialog opens with data-testid='floating-clock-dialog' and keys fclock-key-0 through fclock-key-9"
+    },
+    "pos_page": {
+      "status": "VERIFIED",
+      "evidence": "POS Terminal loads with product grid, categories, order panel"
+    },
+    "orders_page": {
+      "status": "VERIFIED",
+      "evidence": "Order History loads with order cards, filter tabs"
+    },
+    "sidebar_workforce_items": {
+      "status": "VERIFIED",
+      "evidence": "Sidebar shows Shift Scheduler, Attendance, Timesheets for SKAdmin"
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Email sending via /api/email/*"]
+  },
+  "rca_of_the_issue": {
+    "issue": "/attendance/clock endpoint blocked by router-level guard",
+    "root_cause": "Line 9 of /app/backend/routers/attendance.py has `router = APIRouter(dependencies=[Depends(require_feature('workforce'))])` which applies the workforce feature guard to ALL endpoints in the router, including /attendance/clock which should be public (PIN-based auth)",
+    "reproduction_steps": [
+      "1. Call POST /api/attendance/clock without JWT auth",
+      "2. Observe 403 'Not authenticated' response",
+      "3. Expected: 200 (clock in) or 401 (invalid PIN)"
+    ],
+    "mitigation": "Remove router-level dependency. Add require_feature('workforce') individually to endpoints that need it: GET /attendance, GET /attendance/live, GET /attendance/my-status, PUT /attendance/{id}/flag-resolve. Leave POST /attendance/clock without any auth guard since it uses PIN-based authentication."
+  }
+}

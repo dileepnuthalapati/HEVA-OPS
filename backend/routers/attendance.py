@@ -117,12 +117,27 @@ async def get_attendance(start_date: str, end_date: str, current_user: User = De
 
 @router.get("/attendance/live")
 async def get_live_attendance(current_user: User = Depends(require_admin)):
-    """Get who is currently clocked in."""
+    """Get who is currently clocked in (admin only)."""
     records = await db.attendance.find(
         {"restaurant_id": current_user.restaurant_id, "clock_out": None},
         {"_id": 0}
     ).to_list(100)
     return records
+
+
+@router.get("/attendance/my-status")
+async def get_my_clock_status(current_user: User = Depends(get_current_user)):
+    """Get current user's clock-in status."""
+    staff = await db.users.find_one({"username": current_user.username}, {"_id": 0, "id": 1})
+    if not staff:
+        return {"clocked_in": False}
+    record = await db.attendance.find_one(
+        {"staff_id": staff["id"], "restaurant_id": current_user.restaurant_id, "clock_out": None},
+        {"_id": 0}
+    )
+    if record:
+        return {"clocked_in": True, "clock_in": record["clock_in"], "staff_name": record.get("staff_name")}
+    return {"clocked_in": False}
 
 
 @router.put("/attendance/{record_id}/flag-resolve")

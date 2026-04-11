@@ -25,11 +25,10 @@ export default function StaffClockIn() {
   useEffect(() => {
     const checkStatus = async () => {
       try {
-        const live = await attendanceAPI.getLive();
-        const myRecord = live.find(r => r.staff_name === user?.username);
-        if (myRecord) {
+        const res = await attendanceAPI.getMyStatus();
+        if (res.clocked_in) {
           setStatus('clocked_in');
-          setLastAction({ type: 'in', time: myRecord.clock_in });
+          setLastAction({ type: 'in', time: res.clock_in });
         } else {
           setStatus('clocked_out');
         }

@@ -19,11 +19,12 @@ from dependencies import get_current_user, require_feature
 from models import User
 from datetime import datetime, timezone, timedelta
 
-router = APIRouter(prefix="/kds", tags=["Kitchen Display"], dependencies=[Depends(require_feature("kds"))])
+# No router-level guard — public KDS endpoints (token-based) must remain accessible
+router = APIRouter(prefix="/kds", tags=["Kitchen Display"])
 
 
 @router.get("/orders")
-async def get_kds_orders(current_user: User = Depends(get_current_user)):
+async def get_kds_orders(current_user: User = Depends(require_feature("kds"))):
     """Get all active orders for the kitchen display (pending status, any kds_status except served)."""
     now = datetime.now(timezone.utc)
     # Business day: 2AM to 2AM
@@ -117,25 +118,25 @@ async def _update_kds_status(order_id: str, new_status: str, time_field: str, us
 
 
 @router.put("/orders/{order_id}/acknowledge")
-async def acknowledge_order(order_id: str, current_user: User = Depends(get_current_user)):
+async def acknowledge_order(order_id: str, current_user: User = Depends(require_feature("kds"))):
     """Kitchen acknowledges they've seen the order."""
     return await _update_kds_status(order_id, "acknowledged", "acknowledged_at", current_user.username, current_user.restaurant_id)
 
 
 @router.put("/orders/{order_id}/preparing")
-async def start_preparing(order_id: str, current_user: User = Depends(get_current_user)):
+async def start_preparing(order_id: str, current_user: User = Depends(require_feature("kds"))):
     """Kitchen starts preparing the order."""
     return await _update_kds_status(order_id, "preparing", "prep_started_at", current_user.username, current_user.restaurant_id)
 
 
 @router.put("/orders/{order_id}/ready")
-async def mark_ready(order_id: str, current_user: User = Depends(get_current_user)):
+async def mark_ready(order_id: str, current_user: User = Depends(require_feature("kds"))):
     """Order is ready for pickup."""
     return await _update_kds_status(order_id, "ready", "ready_at", current_user.username, current_user.restaurant_id)
 
 
 @router.put("/orders/{order_id}/recall")
-async def recall_order(order_id: str, current_user: User = Depends(get_current_user)):
+async def recall_order(order_id: str, current_user: User = Depends(require_feature("kds"))):
     """Recall a ready order back to preparing."""
     order = await db.orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
@@ -147,7 +148,7 @@ async def recall_order(order_id: str, current_user: User = Depends(get_current_u
 
 
 @router.get("/stats")
-async def get_kds_stats(current_user: User = Depends(get_current_user)):
+async def get_kds_stats(current_user: User = Depends(require_feature("kds"))):
     """Get KDS performance stats (avg prep time, queue depth)."""
     now = datetime.now(timezone.utc)
     if now.hour < 2:
@@ -204,7 +205,7 @@ async def get_kds_stats(current_user: User = Depends(get_current_user)):
 import secrets
 
 @router.post("/generate-token")
-async def generate_kds_token(current_user: User = Depends(get_current_user)):
+async def generate_kds_token(current_user: User = Depends(require_feature("kds"))):
     """Generate a unique KDS monitor token for this restaurant."""
     if not current_user.restaurant_id:
         raise HTTPException(status_code=403, detail="No restaurant assigned")
