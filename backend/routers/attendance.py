@@ -6,7 +6,7 @@ from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 from typing import Optional
 
-router = APIRouter(dependencies=[Depends(require_feature("workforce"))])
+router = APIRouter()
 
 
 class ClockRequest(BaseModel):
@@ -18,7 +18,14 @@ class ClockRequest(BaseModel):
 async def clock_in_out(data: ClockRequest):
     """Staff clocks in or out using their PIN. Auto-detects current state."""
     if not data.pin or len(data.pin) != 4 or not data.pin.isdigit():
-        raise HTTPException(status_code=400, detail="PIN must be 4 digits")
+        raise HTTPException(status_code=400, detail="PIN must be exactly 4 digits")
+
+    # Check workforce feature is enabled for this restaurant
+    restaurant = await db.restaurants.find_one({"id": data.restaurant_id}, {"_id": 0, "features": 1})
+    if restaurant:
+        features = restaurant.get("features")
+        if features is not None and not features.get("workforce", False):
+            raise HTTPException(status_code=403, detail="Workforce module not enabled for this restaurant")
 
     users = await db.users.find(
         {"restaurant_id": data.restaurant_id, "pos_pin_hash": {"$exists": True, "$ne": None}},
@@ -101,7 +108,7 @@ async def clock_in_out(data: ClockRequest):
 
 
 @router.get("/attendance")
-async def get_attendance(start_date: str, end_date: str, current_user: User = Depends(get_current_user)):
+async def get_attendance(start_date: str, end_date: str, current_user: User = Depends(require_feature("workforce"))):
     """Get attendance records. Managers see all, staff see only their own."""
     query = {
         "restaurant_id": current_user.restaurant_id,
@@ -126,7 +133,7 @@ async def get_live_attendance(current_user: User = Depends(require_admin)):
 
 
 @router.get("/attendance/my-status")
-async def get_my_clock_status(current_user: User = Depends(get_current_user)):
+async def get_my_clock_status(current_user: User = Depends(require_feature("workforce"))):
     """Get current user's clock-in status."""
     staff = await db.users.find_one({"username": current_user.username}, {"_id": 0, "id": 1})
     if not staff:

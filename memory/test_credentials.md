@@ -15,7 +15,9 @@
 ## Staff User (rest_demo_1)
 - Username: `user`
 - Password: `user123`
+- POS PIN: `1111` (also used for clock in/out)
 - Navigates to: `/pos`
 
-## Manager PIN (for void authorization)
-- PIN: `1234` (set on SKAdmin account)
+## Manager PIN (for void authorization & KDS verify-pin)
+- PIN: `1234` (set on restaurant_admin account)
+- Also works for KDS token generation via POST /api/kds/verify-pin
