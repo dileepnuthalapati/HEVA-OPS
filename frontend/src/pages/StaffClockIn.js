@@ -61,7 +61,7 @@ export default function StaffClockIn() {
         lng = pos.coords.longitude;
       } catch {}
 
-      const res = await attendanceAPI.clock(clockPin, user?.restaurant_id, lat, lng);
+      const res = await attendanceAPI.clock(clockPin, user?.restaurant_id, lat, lng, 'mobile_app');
       const action = res.action || (status === 'clocked_in' ? 'clock_out' : 'clock_in');
 
       if (action === 'clock_in') {

@@ -80,6 +80,10 @@ export const authAPI = {
     });
     return response.data;
   },
+  verifyManagerPin: async (pin, restaurantId) => {
+    const response = await api.post('/auth/verify-manager-pin', { pin, restaurant_id: restaurantId });
+    return response.data;
+  },
 };
 
 export const platformAdminAPI = {
@@ -551,10 +555,11 @@ export const shiftAPI = {
 };
 
 export const attendanceAPI = {
-  clock: async (pin, restaurantId, latitude, longitude) => {
+  clock: async (pin, restaurantId, latitude, longitude, entrySource) => {
     const body = { pin, restaurant_id: restaurantId };
     if (latitude != null) body.latitude = latitude;
     if (longitude != null) body.longitude = longitude;
+    if (entrySource) body.entry_source = entrySource;
     const response = await api.post('/attendance/clock', body);
     return response.data;
   },

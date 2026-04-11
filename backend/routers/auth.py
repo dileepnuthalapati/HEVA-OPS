@@ -33,7 +33,15 @@ async def register(request: Request, user_data: UserCreate):
 @router.post("/auth/login")
 @limiter.limit("10/minute")
 async def login(request: Request, credentials: UserLogin):
-    user = await db.users.find_one({"username": credentials.username})
+    # Support login via email OR username
+    identifier = credentials.username.strip()
+    if "@" in identifier:
+        user = await db.users.find_one({"email": identifier})
+    else:
+        user = await db.users.find_one({"username": identifier})
+    # Fallback: try the other field
+    if not user:
+        user = await db.users.find_one({"$or": [{"username": identifier}, {"email": identifier}]})
     if not user:
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
@@ -47,6 +55,8 @@ async def login(request: Request, credentials: UserLogin):
     if restaurant_id:
         features = await get_restaurant_features(restaurant_id)
 
+    capabilities = user.get("capabilities", [])
+
     token = create_access_token({"sub": user["username"], "role": user.get("role", "user"), "features": features})
     return {
         "access_token": token,
@@ -55,6 +65,8 @@ async def login(request: Request, credentials: UserLogin):
         "username": user["username"],
         "restaurant_id": restaurant_id,
         "features": features,
+        "capabilities": capabilities,
+        "email": user.get("email", ""),
     }
 
 
@@ -174,6 +186,7 @@ async def pin_login(request: Request, data: PinLoginRequest):
                 "username": user["username"],
                 "restaurant_id": user.get("restaurant_id"),
                 "features": features,
+                "capabilities": user.get("capabilities", []),
             }
 
     raise HTTPException(status_code=401, detail="Invalid PIN")
@@ -220,3 +233,24 @@ async def restaurant_has_pins(restaurant_id: str):
         {"restaurant_id": restaurant_id, "pos_pin_hash": {"$exists": True, "$ne": None}}
     )
     return {"has_pins": count > 0, "pin_count": count}
+
+
+class VerifyManagerPinRequest(PydanticBaseModel):
+    pin: str
+    restaurant_id: str
+
+
+@router.post("/auth/verify-manager-pin")
+@limiter.limit("10/minute")
+async def verify_manager_pin(request: Request, data: VerifyManagerPinRequest):
+    """Verify a manager PIN for terminal unregistration or admin actions."""
+    admins = await db.users.find(
+        {"restaurant_id": data.restaurant_id, "role": "admin", "manager_pin_hash": {"$exists": True, "$ne": None}},
+        {"_id": 0}
+    ).to_list(20)
+
+    for admin in admins:
+        if verify_password(data.pin, admin["manager_pin_hash"]):
+            return {"verified": True, "admin_username": admin.get("username")}
+
+    raise HTTPException(status_code=401, detail="Invalid Manager PIN")

@@ -14,6 +14,7 @@ class ClockRequest(BaseModel):
     restaurant_id: str
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    entry_source: Optional[str] = "mobile_app"  # "mobile_app" or "pos_terminal"
 
 
 import math
@@ -45,11 +46,11 @@ async def clock_in_out(data: ClockRequest):
     if features is not None and not features.get("workforce", False):
         raise HTTPException(status_code=403, detail="Workforce module not enabled for this restaurant")
 
-    # Geofence enforcement: if business has lat/lng set, validate distance
+    # Geofence enforcement: skip for pos_terminal, enforce for mobile_app
     biz = restaurant.get("business_info", {})
     biz_lat = biz.get("latitude")
     biz_lng = biz.get("longitude")
-    if biz_lat is not None and biz_lng is not None:
+    if data.entry_source != "pos_terminal" and biz_lat is not None and biz_lng is not None:
         if data.latitude is None or data.longitude is None:
             raise HTTPException(status_code=400, detail="Location required for clock in/out. Please enable GPS.")
         distance = haversine_distance(biz_lat, biz_lng, data.latitude, data.longitude)
@@ -110,6 +111,7 @@ async def clock_in_out(data: ClockRequest):
             "staff_id": staff_id,
             "clock_out": now.isoformat(),
             "hours_worked": round(hours_worked, 2),
+            "entry_source": data.entry_source,
             "message": f"Clocked out. Worked {hours_worked:.1f} hours today.",
         }
     else:
@@ -126,6 +128,7 @@ async def clock_in_out(data: ClockRequest):
             "flagged": False,
             "flag_reason": None,
             "approved": False,
+            "entry_source": data.entry_source,
             "clock_in_lat": data.latitude,
             "clock_in_lng": data.longitude,
             "created_at": now.isoformat(),
@@ -136,6 +139,7 @@ async def clock_in_out(data: ClockRequest):
             "staff_name": matched_user.get("username"),
             "staff_id": staff_id,
             "clock_in": now.isoformat(),
+            "entry_source": data.entry_source,
             "message": "Clocked in. Have a great shift!",
         }
 

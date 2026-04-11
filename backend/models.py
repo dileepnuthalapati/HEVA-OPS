@@ -354,12 +354,15 @@ class RestaurantUserCreate(BaseModel):
     password: str
     role: str = "admin"
     email: Optional[str] = None
+    capabilities: Optional[List[str]] = None
 
 
 class StaffCreate(BaseModel):
     username: str
     password: str
+    email: str
     role: str = "user"
+    capabilities: Optional[List[str]] = []
     pos_pin: Optional[str] = None
     position: Optional[str] = None
     hourly_rate: Optional[float] = None
@@ -371,8 +374,10 @@ class StaffCreate(BaseModel):
 
 class StaffUpdate(BaseModel):
     username: str
+    email: Optional[str] = None
     password: Optional[str] = None
     role: str = "user"
+    capabilities: Optional[List[str]] = None
     pos_pin: Optional[str] = None
     position: Optional[str] = None
     hourly_rate: Optional[float] = None

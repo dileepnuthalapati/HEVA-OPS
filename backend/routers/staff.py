@@ -9,7 +9,7 @@ router = APIRouter()
 
 @router.get("/restaurant/staff")
 async def list_restaurant_staff(current_user: User = Depends(require_admin)):
-    users = await db.users.find({"restaurant_id": current_user.restaurant_id}, {"_id": 0, "password": 0, "password_hash": 0, "pos_pin_hash": 0}).to_list(100)
+    users = await db.users.find({"restaurant_id": current_user.restaurant_id}, {"_id": 0, "password": 0, "password_hash": 0, "pos_pin_hash": 0, "manager_pin_hash": 0}).to_list(100)
     # Add has_pin flag for UI
     for u in users:
         user_doc = await db.users.find_one({"id": u["id"]}, {"_id": 0, "pos_pin_hash": 1})
@@ -22,12 +22,19 @@ async def create_restaurant_staff(staff: StaffCreate, current_user: User = Depen
     existing = await db.users.find_one({"username": staff.username})
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")
+    # Check email uniqueness
+    if staff.email:
+        existing_email = await db.users.find_one({"email": staff.email})
+        if existing_email:
+            raise HTTPException(status_code=400, detail="Email already in use")
     user_doc = {
         "id": f"user_{datetime.now(timezone.utc).timestamp()}",
         "username": staff.username,
+        "email": staff.email,
         "password_hash": get_password_hash(staff.password),
         "role": staff.role if staff.role in ["user", "admin"] else "user",
         "restaurant_id": current_user.restaurant_id,
+        "capabilities": staff.capabilities or [],
         "position": staff.position or "",
         "hourly_rate": staff.hourly_rate or 0,
         "phone": staff.phone or "",
@@ -58,8 +65,16 @@ async def update_staff(user_id: str, staff: StaffUpdate, current_user: User = De
     if not user:
         raise HTTPException(status_code=404, detail="Staff member not found")
     update = {"username": staff.username, "role": staff.role}
+    if staff.email is not None:
+        # Check email uniqueness
+        existing_email = await db.users.find_one({"email": staff.email, "id": {"$ne": user_id}})
+        if existing_email:
+            raise HTTPException(status_code=400, detail="Email already in use")
+        update["email"] = staff.email
     if staff.password:
         update["password_hash"] = get_password_hash(staff.password)
+    if staff.capabilities is not None:
+        update["capabilities"] = staff.capabilities
     if staff.position is not None:
         update["position"] = staff.position
     if staff.hourly_rate is not None:
