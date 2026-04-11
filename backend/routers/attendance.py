@@ -12,6 +12,23 @@ router = APIRouter()
 class ClockRequest(BaseModel):
     pin: str
     restaurant_id: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+import math
+
+def haversine_distance(lat1, lon1, lat2, lon2):
+    """Calculate distance in meters between two GPS coordinates."""
+    R = 6371000
+    phi1, phi2 = math.radians(lat1), math.radians(lat2)
+    dphi = math.radians(lat2 - lat1)
+    dlambda = math.radians(lon2 - lon1)
+    a = math.sin(dphi/2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda/2)**2
+    return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
+
+
+GEOFENCE_RADIUS_METERS = 10
 
 
 @router.post("/attendance/clock")
@@ -20,12 +37,24 @@ async def clock_in_out(data: ClockRequest):
     if not data.pin or len(data.pin) != 4 or not data.pin.isdigit():
         raise HTTPException(status_code=400, detail="PIN must be exactly 4 digits")
 
-    # Check workforce feature is enabled for this restaurant
-    restaurant = await db.restaurants.find_one({"id": data.restaurant_id}, {"_id": 0, "features": 1})
-    if restaurant:
-        features = restaurant.get("features")
-        if features is not None and not features.get("workforce", False):
-            raise HTTPException(status_code=403, detail="Workforce module not enabled for this restaurant")
+    # Check workforce feature and get restaurant data
+    restaurant = await db.restaurants.find_one({"id": data.restaurant_id}, {"_id": 0})
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+    features = restaurant.get("features")
+    if features is not None and not features.get("workforce", False):
+        raise HTTPException(status_code=403, detail="Workforce module not enabled for this restaurant")
+
+    # Geofence enforcement: if business has lat/lng set, validate distance
+    biz = restaurant.get("business_info", {})
+    biz_lat = biz.get("latitude")
+    biz_lng = biz.get("longitude")
+    if biz_lat is not None and biz_lng is not None:
+        if data.latitude is None or data.longitude is None:
+            raise HTTPException(status_code=400, detail="Location required for clock in/out. Please enable GPS.")
+        distance = haversine_distance(biz_lat, biz_lng, data.latitude, data.longitude)
+        if distance > GEOFENCE_RADIUS_METERS:
+            raise HTTPException(status_code=403, detail=f"You are {int(distance)}m away. Clock in/out is only allowed within {GEOFENCE_RADIUS_METERS}m.")
 
     users = await db.users.find(
         {"restaurant_id": data.restaurant_id, "pos_pin_hash": {"$exists": True, "$ne": None}},
@@ -71,6 +100,8 @@ async def clock_in_out(data: ClockRequest):
             {"$set": {
                 "clock_out": now.isoformat(),
                 "hours_worked": round(hours_worked, 2),
+                "clock_out_lat": data.latitude,
+                "clock_out_lng": data.longitude,
             }}
         )
         return {
@@ -95,6 +126,8 @@ async def clock_in_out(data: ClockRequest):
             "flagged": False,
             "flag_reason": None,
             "approved": False,
+            "clock_in_lat": data.latitude,
+            "clock_in_lng": data.longitude,
             "created_at": now.isoformat(),
         }
         await db.attendance.insert_one(record)

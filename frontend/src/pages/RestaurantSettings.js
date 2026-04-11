@@ -27,6 +27,7 @@ const RestaurantSettings = () => {
   const [formData, setFormData] = useState({
     name: '', address_line1: '', address_line2: '', city: '', postcode: '',
     phone: '', email: '', website: '', vat_number: '', receipt_footer: '',
+    latitude: null, longitude: null,
   });
 
   // Staff state
@@ -34,7 +35,7 @@ const RestaurantSettings = () => {
   const [staffLoading, setStaffLoading] = useState(false);
   const [showStaffDialog, setShowStaffDialog] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
-  const [staffForm, setStaffForm] = useState({ username: '', password: '', role: 'user', pos_pin: '' });
+  const [staffForm, setStaffForm] = useState({ username: '', password: '', role: 'user', pos_pin: '', position: '', hourly_rate: '', phone: '', employment_type: 'full_time', joining_date: '', tax_id: '' });
   const [staffSaving, setStaffSaving] = useState(false);
 
   // PIN dialog
@@ -80,7 +81,7 @@ const RestaurantSettings = () => {
     e.preventDefault();
     setSaving(true);
     try {
-      await restaurantAPI.updateSettings(formData);
+      await restaurantAPI.updateSettings({ business_info: formData });
       toast.success('Settings saved successfully!');
       loadRestaurant();
     } catch (error) { toast.error('Failed to save settings'); }
@@ -132,13 +133,13 @@ const RestaurantSettings = () => {
 
   const openAddStaff = () => {
     setEditingStaff(null);
-    setStaffForm({ username: '', password: '', role: 'user', pos_pin: '' });
+    setStaffForm({ username: '', password: '', role: 'user', pos_pin: '', position: '', hourly_rate: '', phone: '', employment_type: 'full_time', joining_date: new Date().toISOString().split('T')[0], tax_id: '' });
     setShowStaffDialog(true);
   };
 
   const openEditStaff = (staff) => {
     setEditingStaff(staff);
-    setStaffForm({ username: staff.username, password: '', role: staff.role, pos_pin: '' });
+    setStaffForm({ username: staff.username, password: '', role: staff.role, pos_pin: '', position: staff.position || '', hourly_rate: staff.hourly_rate || '', phone: staff.phone || '', employment_type: staff.employment_type || 'full_time', joining_date: staff.joining_date || '', tax_id: staff.tax_id || '' });
     setShowStaffDialog(true);
   };
 
@@ -340,6 +341,16 @@ const RestaurantSettings = () => {
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
+                        <Label htmlFor="latitude" className="text-sm font-semibold">Latitude <span className="text-muted-foreground text-xs">(for geofence clock-in)</span></Label>
+                        <Input id="latitude" data-testid="latitude-input" type="number" step="any" value={formData.latitude || ''} onChange={(e) => handleChange('latitude', parseFloat(e.target.value) || null)} placeholder="51.5074" className="h-12" />
+                      </div>
+                      <div>
+                        <Label htmlFor="longitude" className="text-sm font-semibold">Longitude <span className="text-muted-foreground text-xs">(for geofence clock-in)</span></Label>
+                        <Input id="longitude" data-testid="longitude-input" type="number" step="any" value={formData.longitude || ''} onChange={(e) => handleChange('longitude', parseFloat(e.target.value) || null)} placeholder="-0.1278" className="h-12" />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
                         <Label htmlFor="phone" className="text-sm font-semibold">Phone Number <span className="text-red-500">*</span></Label>
                         <Input id="phone" data-testid="phone-input" value={formData.phone} onChange={(e) => handleChange('phone', e.target.value)} placeholder="020 1234 5678" required className="h-12" />
                       </div>
@@ -396,7 +407,7 @@ const RestaurantSettings = () => {
                     <div className="border-t border-dashed pt-3 mt-3">
                       {formData.receipt_footer && <div className="text-center mb-2">{formData.receipt_footer}</div>}
                       {formData.website && <div className="text-center text-xs">Visit us at: {formData.website}</div>}
-                      <div className="text-center text-xs text-muted-foreground mt-3">Powered by HevaPOS</div>
+                      <div className="text-center text-xs text-muted-foreground mt-3">Powered by Heva One</div>
                     </div>
                   </div>
                 </CardContent>
@@ -641,31 +652,66 @@ const RestaurantSettings = () => {
 
       {/* Add/Edit Staff Dialog */}
       <Dialog open={showStaffDialog} onOpenChange={(open) => { if (!open) setShowStaffDialog(false); }}>
-        <DialogContent className="max-w-sm">
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingStaff ? 'Edit User' : 'Add User'}</DialogTitle>
-            <DialogDescription>{editingStaff ? 'Update user details' : 'Create a new user account'}</DialogDescription>
+            <DialogTitle>{editingStaff ? 'Edit Staff' : 'Add Staff'}</DialogTitle>
+            <DialogDescription>{editingStaff ? 'Update staff details' : 'Onboard a new team member'}</DialogDescription>
           </DialogHeader>
-          <form onSubmit={handleStaffSubmit} className="space-y-4 mt-2">
-            <div>
-              <Label htmlFor="staff-username">Username *</Label>
-              <Input id="staff-username" data-testid="staff-username-input" value={staffForm.username} onChange={(e) => setStaffForm({ ...staffForm, username: e.target.value })} placeholder="e.g., john_waiter" required className="h-11" />
-            </div>
-            <div>
-              <Label htmlFor="staff-password">{editingStaff ? 'New Password (leave blank to keep)' : 'Password *'}</Label>
-              <Input id="staff-password" data-testid="staff-password-input" type="password" value={staffForm.password} onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })} placeholder="Enter password" required={!editingStaff} className="h-11" />
-            </div>
-            <div>
-              <Label>Role</Label>
-              <Select value={staffForm.role} onValueChange={(v) => setStaffForm({ ...staffForm, role: v })}>
-                <SelectTrigger data-testid="staff-role-select" className="h-11">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="user">Staff (POS only)</SelectItem>
-                  <SelectItem value="admin">Admin (Full access)</SelectItem>
-                </SelectContent>
-              </Select>
+          <form onSubmit={handleStaffSubmit} className="space-y-3 mt-2 max-h-[65vh] overflow-y-auto pr-1">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="col-span-2">
+                <Label htmlFor="staff-username">Username *</Label>
+                <Input id="staff-username" data-testid="staff-username-input" value={staffForm.username} onChange={(e) => setStaffForm({ ...staffForm, username: e.target.value })} placeholder="e.g., john_waiter" required className="h-10" />
+              </div>
+              <div className="col-span-2">
+                <Label htmlFor="staff-password">{editingStaff ? 'New Password (leave blank to keep)' : 'Password *'}</Label>
+                <Input id="staff-password" data-testid="staff-password-input" type="password" value={staffForm.password} onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })} placeholder="Enter password" required={!editingStaff} className="h-10" />
+              </div>
+              <div>
+                <Label>Role</Label>
+                <Select value={staffForm.role} onValueChange={(v) => setStaffForm({ ...staffForm, role: v })}>
+                  <SelectTrigger data-testid="staff-role-select" className="h-10">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="user">Staff</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Employment Type</Label>
+                <Select value={staffForm.employment_type} onValueChange={(v) => setStaffForm({ ...staffForm, employment_type: v })}>
+                  <SelectTrigger className="h-10" data-testid="staff-employment-type">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="full_time">Full-time</SelectItem>
+                    <SelectItem value="part_time">Part-time</SelectItem>
+                    <SelectItem value="casual">Casual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Position</Label>
+                <Input value={staffForm.position} onChange={(e) => setStaffForm({ ...staffForm, position: e.target.value })} placeholder="e.g., Server, Chef" className="h-10" data-testid="staff-position-input" />
+              </div>
+              <div>
+                <Label>Hourly Rate</Label>
+                <Input type="number" step="0.01" value={staffForm.hourly_rate} onChange={(e) => setStaffForm({ ...staffForm, hourly_rate: e.target.value })} placeholder="0.00" className="h-10" data-testid="staff-hourly-rate" />
+              </div>
+              <div>
+                <Label>Phone</Label>
+                <Input value={staffForm.phone} onChange={(e) => setStaffForm({ ...staffForm, phone: e.target.value })} placeholder="+44 7700 900000" className="h-10" data-testid="staff-phone" />
+              </div>
+              <div>
+                <Label>Joining Date</Label>
+                <Input type="date" value={staffForm.joining_date} onChange={(e) => setStaffForm({ ...staffForm, joining_date: e.target.value })} className="h-10" data-testid="staff-joining-date" />
+              </div>
+              <div className="col-span-2">
+                <Label>NI / Tax ID (optional)</Label>
+                <Input value={staffForm.tax_id} onChange={(e) => setStaffForm({ ...staffForm, tax_id: e.target.value })} placeholder="National Insurance or Tax ID" className="h-10" data-testid="staff-tax-id" />
+              </div>
             </div>
             <div className="flex gap-2 pt-2">
               <Button type="submit" data-testid="staff-submit-btn" disabled={staffSaving} className="flex-1">

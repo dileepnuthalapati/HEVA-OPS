@@ -551,8 +551,11 @@ export const shiftAPI = {
 };
 
 export const attendanceAPI = {
-  clock: async (pin, restaurantId) => {
-    const response = await api.post('/attendance/clock', { pin, restaurant_id: restaurantId });
+  clock: async (pin, restaurantId, latitude, longitude) => {
+    const body = { pin, restaurant_id: restaurantId };
+    if (latitude != null) body.latitude = latitude;
+    if (longitude != null) body.longitude = longitude;
+    const response = await api.post('/attendance/clock', body);
     return response.data;
   },
   getAll: async (startDate, endDate) => {

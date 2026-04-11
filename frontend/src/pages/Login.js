@@ -147,9 +147,9 @@ const Login = () => {
         {/* Logo */}
         <div className="text-center mb-8">
           <h1 className="font-heading text-4xl font-bold text-white tracking-tight">
-            Heva<span className="text-indigo-400">POS</span>
+            Heva<span className="text-indigo-400">One</span>
           </h1>
-          <p className="text-slate-400 text-sm mt-2 font-medium">Restaurant management, simplified</p>
+          <p className="text-slate-400 text-sm mt-2 font-medium">Business management, simplified</p>
         </div>
 
         {/* Mode Toggle */}
@@ -319,7 +319,7 @@ const Login = () => {
 
         {/* Footer */}
         <p className="text-center text-xs text-slate-500 mt-6">
-          Powered by HevaPOS Cloud
+          Powered by Heva One
         </p>
       </div>
 

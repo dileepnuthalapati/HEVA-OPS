@@ -363,6 +363,10 @@ class StaffCreate(BaseModel):
     pos_pin: Optional[str] = None
     position: Optional[str] = None
     hourly_rate: Optional[float] = None
+    phone: Optional[str] = None
+    employment_type: Optional[str] = None  # full_time, part_time, casual
+    joining_date: Optional[str] = None
+    tax_id: Optional[str] = None
 
 
 class StaffUpdate(BaseModel):
@@ -372,6 +376,10 @@ class StaffUpdate(BaseModel):
     pos_pin: Optional[str] = None
     position: Optional[str] = None
     hourly_rate: Optional[float] = None
+    phone: Optional[str] = None
+    employment_type: Optional[str] = None
+    joining_date: Optional[str] = None
+    tax_id: Optional[str] = None
 
 
 class PasswordReset(BaseModel):

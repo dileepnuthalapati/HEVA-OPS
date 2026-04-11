@@ -51,7 +51,17 @@ export default function StaffClockIn() {
   const handleClock = async (clockPin) => {
     setLoading(true);
     try {
-      const res = await attendanceAPI.clock(clockPin, user?.restaurant_id);
+      // Capture GPS
+      let lat = null, lng = null;
+      try {
+        const pos = await new Promise((resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 10000 })
+        );
+        lat = pos.coords.latitude;
+        lng = pos.coords.longitude;
+      } catch {}
+
+      const res = await attendanceAPI.clock(clockPin, user?.restaurant_id, lat, lng);
       const action = res.action || (status === 'clocked_in' ? 'clock_out' : 'clock_in');
 
       if (action === 'clock_in') {

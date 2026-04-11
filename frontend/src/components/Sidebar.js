@@ -22,7 +22,7 @@ const MODULE_META = {
 
 const platformMenu = [
   { path: '/platform/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/restaurants', icon: Building2, label: 'Restaurants' },
+  { path: '/restaurants', icon: Building2, label: 'Businesses' },
   { path: '/platform/reports', icon: BarChart3, label: 'Platform Reports' },
   { path: '/platform/categories', icon: Globe, label: 'Categories' },
   { path: '/platform/settings', icon: Settings, label: 'Settings' },
@@ -225,7 +225,7 @@ function SidebarShell({ user, onLogout, onOpenSearch, children }) {
   return (
     <div className="flex flex-col h-full">
       <div className="mb-6" data-testid="sidebar-logo">
-        <h1 className="font-heading text-xl font-bold tracking-tight text-white">HevaPOS</h1>
+        <h1 className="font-heading text-xl font-bold tracking-tight text-white">Heva One</h1>
         <p className="text-[11px] tracking-[0.15em] uppercase text-slate-400 mt-0.5 font-medium">
           {user?.role === 'platform_owner' ? 'Platform' : user?.role === 'admin' ? 'Restaurant' : 'Staff'}
         </p>
@@ -308,7 +308,7 @@ const Sidebar = () => {
               </div>
             </SheetContent>
           </Sheet>
-          <h1 className="font-heading text-base font-bold text-slate-900 tracking-tight">HevaPOS</h1>
+          <h1 className="font-heading text-base font-bold text-slate-900 tracking-tight">Heva One</h1>
           <button
             onClick={() => setSearchOpen(true)}
             className="p-2 -mr-2 rounded-lg hover:bg-slate-100 transition-colors"

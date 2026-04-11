@@ -35,7 +35,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 # Create FastAPI app
-fastapi_app = FastAPI(title="HevaPOS API")
+fastapi_app = FastAPI(title="Heva One API")
 fastapi_app.state.limiter = limiter
 fastapi_app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 

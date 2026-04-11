@@ -41,6 +41,7 @@ const RestaurantManagement = () => {
   const [editingRestaurant, setEditingRestaurant] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
+    business_type: 'restaurant',
     address_line1: '',
     address_line2: '',
     city: '',
@@ -93,6 +94,7 @@ const RestaurantManagement = () => {
           currency: formData.currency,
           business_info: {
             name: formData.name,
+            business_type: formData.business_type,
             address_line1: formData.address_line1,
             address_line2: formData.address_line2,
             city: formData.city,
@@ -115,6 +117,7 @@ const RestaurantManagement = () => {
           currency: formData.currency,
           business_info: {
             name: formData.name,
+            business_type: formData.business_type,
             address_line1: formData.address_line1,
             address_line2: formData.address_line2,
             city: formData.city,
@@ -171,6 +174,7 @@ const RestaurantManagement = () => {
     setEditingRestaurant(restaurant);
     setFormData({
       name: restaurant.business_info?.name || '',
+      business_type: restaurant.business_info?.business_type || 'restaurant',
       address_line1: restaurant.business_info?.address_line1 || '',
       address_line2: restaurant.business_info?.address_line2 || '',
       city: restaurant.business_info?.city || '',
@@ -249,6 +253,7 @@ const RestaurantManagement = () => {
   const resetForm = () => {
     setFormData({
       name: '',
+      business_type: 'restaurant',
       address_line1: '',
       address_line2: '',
       city: '',
@@ -297,8 +302,8 @@ const RestaurantManagement = () => {
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-2xl md:text-4xl font-bold tracking-tight mb-1 md:mb-2">Restaurant Management</h1>
-              <p className="text-muted-foreground">Manage all your HevaPOS customers</p>
+              <h1 className="text-2xl md:text-4xl font-bold tracking-tight mb-1 md:mb-2">Business Management</h1>
+              <p className="text-muted-foreground">Manage all your Heva One businesses</p>
             </div>
             <Dialog open={showAddDialog} onOpenChange={(open) => {
               setShowAddDialog(open);
@@ -313,26 +318,44 @@ const RestaurantManagement = () => {
                   resetForm();
                 }}>
                   <Plus className="w-4 h-4 mr-2" />
-                  Add Restaurant
+                  Add Business
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>{editingRestaurant ? 'Edit Restaurant' : 'Add New Restaurant'}</DialogTitle>
+                  <DialogTitle>{editingRestaurant ? 'Edit Business' : 'Add New Business'}</DialogTitle>
                   <DialogDescription>
-                    {editingRestaurant ? 'Update restaurant details' : 'Create a new restaurant account with custom pricing'}
+                    {editingRestaurant ? 'Update business details' : 'Onboard a new business with their modules and pricing'}
                   </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4 mt-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="col-span-2">
-                      <Label htmlFor="name">Restaurant Name *</Label>
+                      <Label htmlFor="name">Business Name *</Label>
                       <Input
                         id="name"
                         value={formData.name}
                         onChange={(e) => handleChange('name', e.target.value)}
                         required
                       />
+                    </div>
+
+                    <div className="col-span-2">
+                      <Label htmlFor="business_type">Business Type *</Label>
+                      <Select value={formData.business_type || 'restaurant'} onValueChange={(v) => handleChange('business_type', v)}>
+                        <SelectTrigger id="business_type"><SelectValue placeholder="Select type" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="restaurant">Restaurant</SelectItem>
+                          <SelectItem value="cafe">Cafe / Coffee Shop</SelectItem>
+                          <SelectItem value="bar">Bar / Pub</SelectItem>
+                          <SelectItem value="takeaway">Takeaway / Fast Food</SelectItem>
+                          <SelectItem value="retail">Retail Store</SelectItem>
+                          <SelectItem value="salon">Salon / Spa</SelectItem>
+                          <SelectItem value="gym">Gym / Fitness</SelectItem>
+                          <SelectItem value="hotel">Hotel / Hospitality</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     
                     <div className="col-span-2">
@@ -689,6 +712,11 @@ const RestaurantManagement = () => {
                           </div>
                           {restaurant.features && (
                             <div className="flex flex-wrap gap-1 pt-1.5">
+                              {restaurant.business_info?.business_type && restaurant.business_info.business_type !== 'restaurant' && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-medium capitalize">
+                                  {restaurant.business_info.business_type.replace('_', ' ')}
+                                </span>
+                              )}
                               {Object.entries(restaurant.features).filter(([,v]) => v).map(([key]) => (
                                 <span key={key} className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-medium uppercase">
                                   {key.replace('_', ' ')}

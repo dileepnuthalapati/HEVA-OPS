@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { attendanceAPI } from '../services/api';
 import { toast } from 'sonner';
@@ -7,6 +8,7 @@ import { Clock, LogIn, LogOut } from 'lucide-react';
 
 export default function FloatingClockButton() {
   const { user, hasFeature } = useAuth();
+  const location = useLocation();
   const [isClockedIn, setIsClockedIn] = useState(false);
   const [clockedSince, setClockedSince] = useState(null);
   const [elapsed, setElapsed] = useState('');
@@ -14,8 +16,10 @@ export default function FloatingClockButton() {
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Hide on POS screen and login
+  const isHiddenRoute = ['/pos', '/login', '/kds'].includes(location.pathname);
   // Only show for restaurant users with workforce enabled
-  const shouldShow = user && user.role !== 'platform_owner' && hasFeature('workforce');
+  const shouldShow = user && user.role !== 'platform_owner' && hasFeature('workforce') && !isHiddenRoute;
 
   // Check current clock-in status
   useEffect(() => {
@@ -61,7 +65,19 @@ export default function FloatingClockButton() {
   const handleClock = async (clockPin) => {
     setLoading(true);
     try {
-      const res = await attendanceAPI.clock(clockPin, user.restaurant_id);
+      // Capture GPS location
+      let lat = null, lng = null;
+      try {
+        const pos = await new Promise((resolve, reject) =>
+          navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 10000 })
+        );
+        lat = pos.coords.latitude;
+        lng = pos.coords.longitude;
+      } catch (geoErr) {
+        // Location might be blocked — backend will decide if it's required
+      }
+
+      const res = await attendanceAPI.clock(clockPin, user.restaurant_id, lat, lng);
       if (res.action === 'clock_in') {
         setIsClockedIn(true);
         setClockedSince(new Date().toISOString());

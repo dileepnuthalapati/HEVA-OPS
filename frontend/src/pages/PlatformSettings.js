@@ -13,8 +13,8 @@ import { Settings, Bell, Shield, CreditCard, Mail, Globe, Key, UserPlus, Trash2,
 
 const PlatformSettings = () => {
   const [settings, setSettings] = useState({
-    platformName: 'HevaPOS',
-    supportEmail: 'support@hevapos.com',
+    platformName: 'Heva One',
+    supportEmail: 'support@hevaone.com',
     defaultTrialDays: 14,
     defaultPlanPrice: 19.99,
     defaultCurrency: 'GBP',
