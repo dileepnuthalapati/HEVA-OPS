@@ -29,28 +29,27 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 17. Multi-tenancy security (strict restaurant_id scoping)
 18. Design System Overhaul (Phase 1-3: Modern Utility)
 19. Cmd+K Global Command Search
-20. Standalone QR Menu HTML (served by FastAPI, works without React frontend)
+20. Standalone QR Menu HTML (served by FastAPI)
 21. Standalone KDS Monitor HTML (PIN-protected, keyboard shortcuts)
 22. PDF download via window.open (works on Capacitor WebView)
-23. **Quick POS PIN Login** (4-digit PIN pad, auto-submit, role-based navigation)
-24. **Double-tap prevention** (touch-action:manipulation + useRef guards)
-25. **Printer WiFi scan optimization** (priority IPs first, retry logic, 1.2s timeout)
-26. **KDS table names + large quantity display** (enriched from tables collection, 38px badges)
+23. Quick POS PIN Login (4-digit PIN pad, auto-submit, role-based navigation)
+24. Double-tap prevention (touch-action:manipulation + useRef guards)
+25. Printer WiFi scan optimization (priority IPs, retry logic, 1.2s timeout)
+26. KDS table names + large quantity display (enriched from tables collection)
+27. **Daily Revenue Widget** (today's total, cash/card progress bar, 7-day sparkline, % change)
 
-## Quick POS PIN Login (April 10, 2026)
-- Backend: `/api/auth/pin-login`, `/api/auth/set-pos-pin`, `/api/auth/remove-pos-pin/{id}`, `/api/auth/restaurant-has-pins/{id}`
-- PIN is bcrypt hashed (`pos_pin_hash` field), unique per restaurant
-- Login page: Password/Quick PIN toggle (preserved across logout via `last_restaurant_id`)
-- PIN pad: 4 dots, auto-submit on 4th digit, shake animation on error
-- Role-based navigation: staff→/pos, admin→/dashboard
-- Settings > User Management: Green PIN badge, set/remove PIN dialog
+## Daily Revenue Widget (April 11, 2026)
+- Big total revenue with % change from yesterday (green up/red down badge)
+- Cash vs Card visual progress bar (emerald=cash, indigo=card)
+- 7-day bar chart sparkline with today highlighted in indigo
+- Backend: `GET /api/reports/weekly-trend` returns 7 days of daily totals with cash/card split
+- Metric cards: Orders (POS/QR), Avg Order, Tables, Completed
 
 ## Upcoming (P1)
 - Daily email summary for restaurant admins
 - Automated trial expiry email sequences (7d, 3d, 1d)
 
 ## Backlog (P2)
-- Daily revenue widget on Admin Dashboard
 - Print Void Receipt to Kitchen
 - Split monolithic server.py into modular routers
 - Deliverect / Middleware API Integration

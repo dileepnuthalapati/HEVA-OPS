@@ -2,6 +2,13 @@
 
 ## Login Accounts
 
+### SKAdmin (Production User)
+- Username: `SKAdmin`
+- Password: `saswata@123`
+- Role: admin
+- Restaurant: rest_demo_1
+- Navigates to: `/dashboard`
+
 ### Platform Owner
 - Username: `platform_owner`
 - Password: `admin123`
@@ -19,10 +26,6 @@
 - Password: `user123`
 - POS PIN: `1111`
 - Navigates to: `/pos`
-
-### Production User
-- Username: `SKAdmin`
-- Password: `saswata@123`
 
 ## Manager PIN
 - PIN: `1234` (for void authorization)
