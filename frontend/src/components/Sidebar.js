@@ -64,6 +64,11 @@ const staffModuleItems = {
   kds: [
     { path: '/kds', icon: ChefHat, label: 'Kitchen (KDS)' },
   ],
+  workforce: [
+    { path: '/heva-ops/shifts', icon: Calendar, label: 'My Shifts' },
+    { path: '/heva-ops/clock', icon: Clock, label: 'Clock In/Out' },
+    { path: '/heva-ops/swaps', icon: ArrowRightLeft, label: 'Swap Requests' },
+  ],
 };
 
 // Reports & Audit — shown only when relevant modules are active

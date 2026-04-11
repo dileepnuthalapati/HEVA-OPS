@@ -78,7 +78,7 @@ export default function FloatingClockButton() {
         // Location might be blocked — backend will decide if it's required
       }
 
-      const res = await attendanceAPI.clock(clockPin, user.restaurant_id, lat, lng);
+      const res = await attendanceAPI.clock(clockPin, user.restaurant_id, lat, lng, 'mobile_app');
       if (res.action === 'clock_in') {
         setIsClockedIn(true);
         setClockedSince(new Date().toISOString());

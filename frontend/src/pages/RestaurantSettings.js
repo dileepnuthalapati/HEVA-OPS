@@ -9,8 +9,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash } from 'lucide-react';
+import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash, Monitor, Smartphone } from 'lucide-react';
 import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const TABS = [
   { id: 'business', label: 'Business Info', icon: Store },
@@ -20,6 +21,7 @@ const TABS = [
 ];
 
 const RestaurantSettings = () => {
+  const { hasFeature, user } = useAuth();
   const [activeTab, setActiveTab] = useState('business');
   const [restaurant, setRestaurant] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -35,8 +37,9 @@ const RestaurantSettings = () => {
   const [staffLoading, setStaffLoading] = useState(false);
   const [showStaffDialog, setShowStaffDialog] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
-  const [staffForm, setStaffForm] = useState({ username: '', password: '', role: 'user', pos_pin: '', position: '', hourly_rate: '', phone: '', employment_type: 'full_time', joining_date: '', tax_id: '' });
+  const [staffForm, setStaffForm] = useState({ username: '', email: '', password: '', role: 'user', capabilities: [], pos_pin: '', position: '', hourly_rate: '', phone: '', employment_type: 'full_time', joining_date: '', tax_id: '' });
   const [staffSaving, setStaffSaving] = useState(false);
+  const [onboardingLink, setOnboardingLink] = useState(null); // { url, username }
 
   // PIN dialog
   const [pinDialog, setPinDialog] = useState({ open: false, staff: null });
@@ -133,35 +136,81 @@ const RestaurantSettings = () => {
 
   const openAddStaff = () => {
     setEditingStaff(null);
-    setStaffForm({ username: '', password: '', role: 'user', pos_pin: '', position: '', hourly_rate: '', phone: '', employment_type: 'full_time', joining_date: new Date().toISOString().split('T')[0], tax_id: '' });
+    // Default capabilities based on active modules
+    const defaultCaps = [];
+    if (hasFeature('pos')) defaultCaps.push('pos.access');
+    if (hasFeature('workforce')) defaultCaps.push('workforce.clock_in');
+    setStaffForm({ username: '', email: '', password: '', role: 'user', capabilities: defaultCaps, pos_pin: '', position: '', hourly_rate: '', phone: '', employment_type: 'full_time', joining_date: new Date().toISOString().split('T')[0], tax_id: '' });
     setShowStaffDialog(true);
   };
 
   const openEditStaff = (staff) => {
     setEditingStaff(staff);
-    setStaffForm({ username: staff.username, password: '', role: staff.role, pos_pin: '', position: staff.position || '', hourly_rate: staff.hourly_rate || '', phone: staff.phone || '', employment_type: staff.employment_type || 'full_time', joining_date: staff.joining_date || '', tax_id: staff.tax_id || '' });
+    setStaffForm({ username: staff.username, email: staff.email || '', password: '', role: staff.role, capabilities: staff.capabilities || [], pos_pin: '', position: staff.position || '', hourly_rate: staff.hourly_rate || '', phone: staff.phone || '', employment_type: staff.employment_type || 'full_time', joining_date: staff.joining_date || '', tax_id: staff.tax_id || '' });
     setShowStaffDialog(true);
   };
 
   const handleStaffSubmit = async (e) => {
     e.preventDefault();
     if (!staffForm.username.trim()) return toast.error('Username is required');
+    if (!staffForm.email.trim()) return toast.error('Email is required');
     if (!editingStaff && !staffForm.password.trim()) return toast.error('Password is required');
     setStaffSaving(true);
     try {
+      // Clean up form data - convert empty strings to null for optional fields
+      const cleanedData = {
+        ...staffForm,
+        hourly_rate: staffForm.hourly_rate ? parseFloat(staffForm.hourly_rate) : null,
+        phone: staffForm.phone || null,
+        position: staffForm.position || null,
+        tax_id: staffForm.tax_id || null,
+        joining_date: staffForm.joining_date || null,
+      };
       if (editingStaff) {
-        await staffAPI.update(editingStaff.id, staffForm);
+        await staffAPI.update(editingStaff.id, cleanedData);
         toast.success(`Staff "${staffForm.username}" updated`);
+        setShowStaffDialog(false);
       } else {
-        await staffAPI.create(staffForm);
+        const result = await staffAPI.create(cleanedData);
+        setShowStaffDialog(false);
+        // Show onboarding link
+        if (result.onboarding_token) {
+          const baseUrl = window.location.origin;
+          setOnboardingLink({
+            url: `${baseUrl}/onboarding/${result.onboarding_token}`,
+            username: staffForm.username,
+          });
+        }
         toast.success(`Staff "${staffForm.username}" created`);
       }
-      setShowStaffDialog(false);
       loadStaff();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to save staff');
+      const detail = error.response?.data?.detail;
+      const errorMsg = Array.isArray(detail) 
+        ? detail.map(e => e.msg || e).join(', ')
+        : (typeof detail === 'string' ? detail : 'Failed to save staff');
+      toast.error(errorMsg);
     } finally { setStaffSaving(false); }
   };
+
+  const toggleCapability = (cap) => {
+    setStaffForm(prev => ({
+      ...prev,
+      capabilities: prev.capabilities.includes(cap)
+        ? prev.capabilities.filter(c => c !== cap)
+        : [...prev.capabilities, cap]
+    }));
+  };
+
+  // Available capabilities based on active modules
+  const availableCapabilities = [
+    ...(hasFeature('pos') ? [{ key: 'pos.access', label: 'POS Access', desc: 'Take orders on POS terminal' }] : []),
+    ...(hasFeature('kds') ? [{ key: 'kds.access', label: 'KDS Access', desc: 'View kitchen display' }] : []),
+    ...(hasFeature('workforce') ? [
+      { key: 'workforce.clock_in', label: 'Clock In/Out', desc: 'Clock in and out of shifts' },
+      { key: 'workforce.manage_rota', label: 'Manage Rota', desc: 'Create and edit shift schedules' },
+    ] : []),
+  ];
 
   const handleDeleteStaff = async (staff) => {
     if (!window.confirm(`Delete staff member "${staff.username}"?`)) return;
@@ -520,11 +569,16 @@ const RestaurantSettings = () => {
                           </div>
                           <div className="min-w-0">
                             <div className="font-semibold truncate">{member.username}</div>
-                            <div className="text-xs text-muted-foreground">
-                              <span className={`px-2 py-0.5 rounded-full ${member.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+                            <div className="text-xs text-muted-foreground truncate">{member.email || ''}</div>
+                            <div className="flex flex-wrap items-center gap-1 mt-1">
+                              <span className={`px-2 py-0.5 rounded-full text-xs ${member.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
                                 {member.role === 'admin' ? 'Admin' : 'Staff'}
                               </span>
-                              {member.created_at && <span className="ml-2">Joined {new Date(member.created_at).toLocaleDateString()}</span>}
+                              {(member.capabilities || []).map(cap => (
+                                <span key={cap} className="px-1.5 py-0.5 rounded text-[10px] bg-indigo-50 text-indigo-600 font-medium">
+                                  {cap.split('.')[0]}
+                                </span>
+                              ))}
                             </div>
                           </div>
                         </div>
@@ -554,6 +608,75 @@ const RestaurantSettings = () => {
           {/* Security Tab */}
           {activeTab === 'security' && (
             <div className="space-y-6">
+              {/* Terminal Registration */}
+              <Card data-testid="terminal-registration-card">
+                <CardHeader>
+                  <CardTitle className="text-xl font-semibold flex items-center gap-2"><Monitor className="w-5 h-5" /> Device Registration</CardTitle>
+                  <CardDescription>Register this device as a POS Terminal (Kiosk Mode)</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {localStorage.getItem('heva_terminal') ? (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
+                        <CheckCircle className="w-8 h-8 text-emerald-600 shrink-0" />
+                        <div>
+                          <p className="font-bold text-emerald-900">Registered as POS Terminal</p>
+                          <p className="text-sm text-emerald-700">This device boots into PIN Pad kiosk mode.</p>
+                        </div>
+                      </div>
+                      <Button
+                        variant="destructive"
+                        onClick={() => {
+                          localStorage.removeItem('heva_terminal');
+                          toast.success('Terminal unregistered');
+                          window.location.href = '/login';
+                        }}
+                        data-testid="unregister-terminal-btn"
+                      >
+                        Unregister Terminal
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                        <Smartphone className="w-8 h-8 text-slate-500 shrink-0" />
+                        <div>
+                          <p className="font-bold text-slate-800">Personal Mode</p>
+                          <p className="text-sm text-slate-600">This device runs in Personal mode. Register it to enable Kiosk/PIN Pad mode for shared terminals.</p>
+                        </div>
+                      </div>
+                      <div className="text-sm text-muted-foreground space-y-1 ml-1">
+                        <p className="font-medium text-foreground">What happens after registration:</p>
+                        <ul className="list-disc ml-4 space-y-0.5">
+                          <li>App shows a PIN Pad on launch (no login screen)</li>
+                          <li>Staff enter their 4-digit PIN to access POS or clock in</li>
+                          <li>After logout, returns to PIN Pad (never leaves kiosk)</li>
+                          <li>Unregister requires Manager PIN</li>
+                        </ul>
+                      </div>
+                      <Button
+                        onClick={() => {
+                          const terminalData = {
+                            device_mode: 'terminal',
+                            restaurant_id: user?.restaurant_id,
+                            business_name: formData.name || 'Heva One',
+                            registered_at: new Date().toISOString(),
+                            registered_by: user?.username,
+                          };
+                          localStorage.setItem('heva_terminal', JSON.stringify(terminalData));
+                          toast.success('Device registered as POS Terminal!');
+                          window.location.href = '/terminal';
+                        }}
+                        data-testid="register-terminal-btn"
+                        className="bg-indigo-600 hover:bg-indigo-700"
+                      >
+                        <Monitor className="w-4 h-4 mr-2" /> Register as POS Terminal
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
               {/* Change Password Card */}
               <Card data-testid="change-password-card">
                 <CardHeader>
@@ -661,12 +784,40 @@ const RestaurantSettings = () => {
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <Label htmlFor="staff-username">Username *</Label>
-                <Input id="staff-username" data-testid="staff-username-input" value={staffForm.username} onChange={(e) => setStaffForm({ ...staffForm, username: e.target.value })} placeholder="e.g., john_waiter" required className="h-10" />
+                <Input id="staff-username" data-testid="staff-username-input" value={staffForm.username} onChange={(e) => setStaffForm({ ...staffForm, username: e.target.value })} placeholder="e.g., john" required className="h-10" />
+              </div>
+              <div className="col-span-2">
+                <Label htmlFor="staff-email">Email *</Label>
+                <Input id="staff-email" data-testid="staff-email-input" type="email" value={staffForm.email} onChange={(e) => setStaffForm({ ...staffForm, email: e.target.value })} placeholder="john@company.com" required className="h-10" />
               </div>
               <div className="col-span-2">
                 <Label htmlFor="staff-password">{editingStaff ? 'New Password (leave blank to keep)' : 'Password *'}</Label>
                 <Input id="staff-password" data-testid="staff-password-input" type="password" value={staffForm.password} onChange={(e) => setStaffForm({ ...staffForm, password: e.target.value })} placeholder="Enter password" required={!editingStaff} className="h-10" />
               </div>
+
+              {/* Capabilities */}
+              {availableCapabilities.length > 0 && (
+                <div className="col-span-2">
+                  <Label className="text-sm font-semibold mb-2 block">Access & Capabilities</Label>
+                  <div className="space-y-2">
+                    {availableCapabilities.map(cap => (
+                      <label key={cap.key} className="flex items-start gap-3 p-2.5 rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors" data-testid={`cap-${cap.key}`}>
+                        <input
+                          type="checkbox"
+                          checked={staffForm.capabilities.includes(cap.key)}
+                          onChange={() => toggleCapability(cap.key)}
+                          className="mt-0.5 rounded border-slate-300"
+                        />
+                        <div>
+                          <div className="text-sm font-medium">{cap.label}</div>
+                          <div className="text-xs text-muted-foreground">{cap.desc}</div>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div>
                 <Label>Role</Label>
                 <Select value={staffForm.role} onValueChange={(v) => setStaffForm({ ...staffForm, role: v })}>
@@ -779,9 +930,44 @@ const RestaurantSettings = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Onboarding Link Dialog */}
+      <Dialog open={!!onboardingLink} onOpenChange={(open) => { if (!open) setOnboardingLink(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><CheckCircle className="w-5 h-5 text-emerald-600" /> Staff Created</DialogTitle>
+            <DialogDescription>Share this setup link with <span className="font-semibold">{onboardingLink?.username}</span></DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <p className="text-sm text-muted-foreground">
+              They'll use this link to set their own password and PIN — no need to share credentials manually.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                value={onboardingLink?.url || ''}
+                className="text-xs font-mono bg-muted"
+                data-testid="onboarding-link-input"
+                onClick={(e) => e.target.select()}
+              />
+              <Button
+                variant="outline"
+                onClick={() => {
+                  navigator.clipboard.writeText(onboardingLink?.url || '');
+                  toast.success('Link copied!');
+                }}
+                data-testid="copy-onboarding-link-btn"
+                className="shrink-0"
+              >
+                Copy
+              </Button>
+            </div>
+            <Button className="w-full" onClick={() => setOnboardingLink(null)} data-testid="close-onboarding-btn">Done</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
 export default RestaurantSettings;
-s;

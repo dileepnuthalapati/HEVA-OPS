@@ -1,249 +1,184 @@
 from fastapi import APIRouter, Depends, HTTPException
 from database import db
-from dependencies import get_current_user, require_platform_owner
+from dependencies import get_current_user, require_admin
 from models import User
-from pydantic import BaseModel
-from datetime import datetime, timezone
-import os
-import asyncio
+from services.email import send_email, daily_summary_html, trial_reminder_html
+from datetime import datetime, timezone, timedelta
 import logging
 
-logger = logging.getLogger(__name__)
-
 router = APIRouter()
+logger = logging.getLogger("email_router")
 
-RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
-SENDER_EMAIL = os.environ.get("SENDER_EMAIL", "onboarding@resend.dev")
-
-
-class EmailRequest(BaseModel):
-    recipient_email: str
-    subject: str
-    html_content: str
+CURRENCY_SYMBOLS = {"GBP": "£", "USD": "$", "EUR": "€", "INR": "₹"}
 
 
-async def send_email_async(to: str, subject: str, html: str) -> dict:
-    if not RESEND_API_KEY:
-        logger.warning("RESEND_API_KEY not configured - email not sent")
-        return {"status": "skipped", "message": "Email service not configured. Add RESEND_API_KEY to your environment variables."}
+async def _build_daily_summary(restaurant_id: str):
+    """Aggregate yesterday's data for a business."""
+    now = datetime.now(timezone.utc)
+    yesterday = now - timedelta(days=1)
+    yesterday_str = yesterday.strftime("%Y-%m-%d")
 
-    import resend
-    resend.api_key = RESEND_API_KEY
-
-    params = {
-        "from": SENDER_EMAIL,
-        "to": [to],
-        "subject": subject,
-        "html": html
-    }
-    try:
-        email = await asyncio.to_thread(resend.Emails.send, params)
-        return {"status": "success", "email_id": email.get("id")}
-    except Exception as e:
-        logger.error(f"Failed to send email: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to send email: {str(e)}")
-
-
-def _base_email_template(title: str, body_html: str, footer: str = "Powered by HevaPOS") -> str:
-    return f"""
-    <div style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif;color:#333;">
-        <div style="background:#0f172a;color:white;padding:24px;text-align:center;">
-            <h1 style="margin:0;font-size:22px;letter-spacing:0.5px;">HevaPOS</h1>
-            <p style="margin:6px 0 0;opacity:0.7;font-size:13px;">{title}</p>
-        </div>
-        <div style="padding:24px;line-height:1.6;">{body_html}</div>
-        <div style="background:#f8fafc;padding:16px;text-align:center;font-size:12px;color:#94a3b8;">
-            <p style="margin:0;">{footer}</p>
-        </div>
-    </div>"""
-
-
-@router.get("/email/status")
-async def email_status(current_user: User = Depends(require_platform_owner)):
-    configured = bool(RESEND_API_KEY)
-    return {
-        "configured": configured,
-        "sender_email": SENDER_EMAIL if configured else None,
-        "message": "Email service is active" if configured else "RESEND_API_KEY not configured. Sign up at resend.com (free) and add your API key."
-    }
-
-
-@router.post("/email/send")
-async def send_custom_email(request: EmailRequest, current_user: User = Depends(require_platform_owner)):
-    result = await send_email_async(request.recipient_email, request.subject, request.html_content)
-    return {"message": f"Email sent to {request.recipient_email}", **result}
-
-
-@router.post("/email/welcome/{restaurant_id}")
-async def send_welcome_email(restaurant_id: str, current_user: User = Depends(require_platform_owner)):
     restaurant = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0})
     if not restaurant:
-        raise HTTPException(status_code=404, detail="Restaurant not found")
+        return None, None, None
 
-    email_to = restaurant.get("owner_email", "")
-    if not email_to:
-        raise HTTPException(status_code=400, detail="Restaurant has no email address")
-
-    biz_name = restaurant.get("business_info", {}).get("name", "Your Restaurant")
-    trial_days = 14
-
-    body = f"""
-        <h2 style="color:#0f172a;margin-top:0;">Welcome to HevaPOS!</h2>
-        <p>Hi there,</p>
-        <p>Great news — <strong>{biz_name}</strong> has been successfully onboarded on HevaPOS!</p>
-        <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px;margin:20px 0;">
-            <p style="margin:0 0 8px;font-weight:600;color:#166534;">Your account is ready</p>
-            <p style="margin:0;font-size:14px;color:#15803d;">You have a <strong>{trial_days}-day free trial</strong> to explore all features — POS, orders, reports, receipts, table management, and more.</p>
-        </div>
-        <p><strong>What's included:</strong></p>
-        <ul style="color:#475569;padding-left:20px;">
-            <li>Full POS system with order management</li>
-            <li>Receipt printing (WiFi & Bluetooth)</li>
-            <li>Staff management & role-based access</li>
-            <li>Reports & analytics</li>
-            <li>Table management & reservations</li>
-        </ul>
-        <p>If you need any help getting started, just reply to this email.</p>
-        <p style="margin-top:24px;">Cheers,<br/><strong>The HevaPOS Team</strong></p>
-    """
-
-    result = await send_email_async(email_to, f"Welcome to HevaPOS — {biz_name} is ready!", _base_email_template("Welcome Aboard", body))
-
-    await db.notifications.insert_one({
-        "id": f"notif_welcome_{datetime.now(timezone.utc).timestamp()}",
-        "restaurant_id": restaurant_id,
-        "type": "welcome_email",
-        "message": f"Welcome email sent to {email_to} for {biz_name}",
-        "email": email_to,
-        "status": "sent" if result.get("status") == "success" else "skipped",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "sent_at": datetime.now(timezone.utc).isoformat() if result.get("status") == "success" else None,
-    })
-
-    return {"message": f"Welcome email sent to {email_to}", **result}
-
-
-@router.post("/email/payment-reminder/{restaurant_id}")
-async def send_payment_reminder(restaurant_id: str, current_user: User = Depends(require_platform_owner)):
-    restaurant = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0})
-    if not restaurant:
-        raise HTTPException(status_code=404, detail="Restaurant not found")
-
-    email_to = restaurant.get("owner_email", "")
-    if not email_to:
-        raise HTTPException(status_code=400, detail="Restaurant has no email address")
-
-    biz_name = restaurant.get("business_info", {}).get("name", "Your Restaurant")
+    biz_info = restaurant.get("business_info", {})
+    biz_name = biz_info.get("name", restaurant.get("name", "Business"))
     currency = restaurant.get("currency", "GBP")
-    price = restaurant.get("price", 0)
-    status = restaurant.get("subscription_status", "trial")
+    sym = CURRENCY_SYMBOLS.get(currency, currency + " ")
 
-    body = f"""
-        <h2 style="color:#0f172a;margin-top:0;">Payment Reminder</h2>
-        <p>Hi,</p>
-        <p>This is a friendly reminder regarding the subscription for <strong>{biz_name}</strong>.</p>
-        <div style="background:#fef3c7;border:1px solid #fcd34d;border-radius:8px;padding:16px;margin:20px 0;">
-            <p style="margin:0 0 8px;font-weight:600;color:#92400e;">Subscription Status: {status.upper()}</p>
-            <p style="margin:0;font-size:14px;color:#78350f;">Plan: <strong>{currency} {price:.2f}/month</strong></p>
-        </div>
-        {"<p style='color:#dc2626;font-weight:600;'>Your account has been suspended due to non-payment. Please make a payment to restore access.</p>" if status == "suspended" else ""}
-        <p>To continue using HevaPOS without interruption, please ensure your payment is up to date.</p>
-        <p>If you have any questions about billing, simply reply to this email.</p>
-        <p style="margin-top:24px;">Best regards,<br/><strong>The HevaPOS Team</strong></p>
-    """
-
-    result = await send_email_async(email_to, f"Payment Reminder — {biz_name}", _base_email_template("Payment Reminder", body))
-
-    await db.notifications.insert_one({
-        "id": f"notif_payment_{datetime.now(timezone.utc).timestamp()}",
-        "restaurant_id": restaurant_id,
-        "type": "payment_reminder",
-        "message": f"Payment reminder sent to {email_to} for {biz_name}",
-        "email": email_to,
-        "status": "sent" if result.get("status") == "success" else "skipped",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "sent_at": datetime.now(timezone.utc).isoformat() if result.get("status") == "success" else None,
-    })
-
-    return {"message": f"Payment reminder sent to {email_to}", **result}
-
-
-@router.post("/email/trial-reminder/{restaurant_id}")
-async def send_trial_reminder(restaurant_id: str, current_user: User = Depends(require_platform_owner)):
-    restaurant = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0})
-    if not restaurant:
-        raise HTTPException(status_code=404, detail="Restaurant not found")
-
-    email_to = restaurant.get("owner_email", "")
+    # Get admin email
+    admin = await db.users.find_one(
+        {"restaurant_id": restaurant_id, "role": "admin", "email": {"$exists": True, "$ne": ""}},
+        {"_id": 0}
+    )
+    email_to = admin.get("email") if admin else None
     if not email_to:
-        raise HTTPException(status_code=400, detail="Restaurant has no email address")
+        return None, None, None
 
-    biz_name = restaurant.get("business_info", {}).get("name", "Your Restaurant")
-    trial_ends = restaurant.get("trial_ends_at", "")
-    days_left = 0
-    if trial_ends:
-        try:
-            from datetime import datetime as dt
-            trial_dt = dt.fromisoformat(trial_ends.replace("Z", "+00:00"))
-            days_left = max(0, (trial_dt - datetime.now(timezone.utc)).days)
-        except Exception:
-            days_left = 0
+    # Aggregate orders from yesterday
+    orders = await db.orders.find(
+        {"restaurant_id": restaurant_id, "status": {"$ne": "cancelled"}},
+        {"_id": 0}
+    ).to_list(5000)
 
-    urgency_color = "#dc2626" if days_left <= 1 else "#ea580c" if days_left <= 3 else "#2563eb"
+    # Filter to yesterday's orders
+    day_orders = []
+    for o in orders:
+        created = o.get("created_at", "")
+        if isinstance(created, str) and created.startswith(yesterday_str):
+            day_orders.append(o)
 
-    body = f"""
-        <h2 style="color:#0f172a;margin-top:0;">Trial Expiry Reminder</h2>
-        <p>Hi,</p>
-        <p>Your free trial for <strong>{biz_name}</strong> is coming to an end.</p>
-        <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;padding:16px;margin:20px 0;text-align:center;">
-            <p style="margin:0;font-size:32px;font-weight:bold;color:{urgency_color};">{days_left} day{"s" if days_left != 1 else ""}</p>
-            <p style="margin:4px 0 0;font-size:14px;color:#71717a;">remaining in your trial</p>
-        </div>
-        <p>To keep using HevaPOS and avoid any disruption to your business, please subscribe before your trial ends.</p>
-        <p><strong>What happens when the trial ends?</strong></p>
-        <ul style="color:#475569;padding-left:20px;">
-            <li>POS access will be paused</li>
-            <li>Your data remains safe — nothing is deleted</li>
-            <li>Simply subscribe to resume instantly</li>
-        </ul>
-        <p>Need help or have questions? Reply to this email anytime.</p>
-        <p style="margin-top:24px;">Best regards,<br/><strong>The HevaPOS Team</strong></p>
-    """
+    total_revenue = sum(o.get("total_amount", 0) or 0 for o in day_orders)
+    total_orders = len(day_orders)
+    cash_amount = sum(o.get("total_amount", 0) or 0 for o in day_orders if o.get("payment_method") == "cash")
+    card_amount = sum(o.get("total_amount", 0) or 0 for o in day_orders if o.get("payment_method") in ("card", "stripe"))
 
-    result = await send_email_async(email_to, f"Trial ending soon — {biz_name} ({days_left} days left)", _base_email_template("Trial Reminder", body))
+    # Top products
+    product_map = {}
+    for o in day_orders:
+        for item in o.get("items", []):
+            name = item.get("name", "Unknown")
+            qty = item.get("quantity", 1)
+            price = item.get("price", 0) * qty
+            if name not in product_map:
+                product_map[name] = {"name": name, "quantity": 0, "revenue": 0}
+            product_map[name]["quantity"] += qty
+            product_map[name]["revenue"] += price
+    top_products = sorted(product_map.values(), key=lambda x: x["revenue"], reverse=True)[:5]
 
-    await db.notifications.insert_one({
-        "id": f"notif_trial_{datetime.now(timezone.utc).timestamp()}",
-        "restaurant_id": restaurant_id,
-        "type": "trial_reminder",
-        "message": f"Trial reminder sent to {email_to} — {days_left} days left for {biz_name}",
-        "email": email_to,
-        "status": "sent" if result.get("status") == "success" else "skipped",
-        "created_at": datetime.now(timezone.utc).isoformat(),
-        "sent_at": datetime.now(timezone.utc).isoformat() if result.get("status") == "success" else None,
-    })
+    # Staff performance
+    staff_map = {}
+    for o in day_orders:
+        staff = o.get("created_by", o.get("staff_name", "Unknown"))
+        if staff not in staff_map:
+            staff_map[staff] = {"name": staff, "orders": 0, "revenue": 0}
+        staff_map[staff]["orders"] += 1
+        staff_map[staff]["revenue"] += o.get("total_amount", 0) or 0
+    staff_stats = sorted(staff_map.values(), key=lambda x: x["revenue"], reverse=True)[:5]
 
-    return {"message": f"Trial reminder sent to {email_to}", **result}
+    data = {
+        "total_revenue": total_revenue,
+        "total_orders": total_orders,
+        "cash_amount": cash_amount,
+        "card_amount": card_amount,
+        "top_products": top_products,
+        "staff_stats": staff_stats,
+    }
+
+    html = daily_summary_html(biz_name, yesterday_str, data, sym)
+    return email_to, f"Daily Summary — {biz_name} ({yesterday_str})", html
 
 
-@router.post("/email/notification/{notification_id}")
-async def send_notification_email(notification_id: str, current_user: User = Depends(require_platform_owner)):
-    notification = await db.notifications.find_one({"id": notification_id}, {"_id": 0})
-    if not notification:
-        raise HTTPException(status_code=404, detail="Notification not found")
-
-    email_to = notification.get("email", "")
+@router.post("/email/daily-summary/send")
+async def trigger_daily_summary(current_user: User = Depends(require_admin)):
+    """Manually trigger daily summary email for the current business."""
+    email_to, subject, html = await _build_daily_summary(current_user.restaurant_id)
     if not email_to:
-        raise HTTPException(status_code=400, detail="No email address on this notification")
+        raise HTTPException(status_code=400, detail="No admin email found or no business data")
+    result = await send_email(email_to, subject, html)
+    return {"message": f"Daily summary sent to {email_to}", "result": result}
 
-    body = f"""
-        <h2 style="color:#0f172a;margin-top:0;">Notification</h2>
-        <p style="font-size:16px;margin:16px 0;">{notification.get('message', '')}</p>
-        <p style="color:#94a3b8;font-size:13px;">Type: {notification.get('type', 'general')}</p>
-        <p style="color:#94a3b8;font-size:13px;">Date: {notification.get('created_at', '')[:19].replace('T', ' ')}</p>
-    """
 
-    result = await send_email_async(email_to, f"HevaPOS: {notification.get('type', 'Notification')}", _base_email_template("Notification", body))
+@router.post("/email/daily-summary/send-all")
+async def send_all_daily_summaries(current_user: User = Depends(get_current_user)):
+    """Send daily summaries to ALL businesses (platform owner or cron job)."""
+    if current_user.role != "platform_owner":
+        raise HTTPException(status_code=403, detail="Platform owner only")
 
-    await db.notifications.update_one({"id": notification_id}, {"$set": {"status": "sent", "sent_at": datetime.now(timezone.utc).isoformat()}})
-    return {"message": f"Notification email sent to {email_to}", **result}
+    restaurants = await db.restaurants.find({}, {"_id": 0, "id": 1}).to_list(500)
+    results = []
+    for r in restaurants:
+        rid = r.get("id")
+        if not rid:
+            continue
+        email_to, subject, html = await _build_daily_summary(rid)
+        if email_to:
+            result = await send_email(email_to, subject, html)
+            results.append({"restaurant_id": rid, "email": email_to, "result": result})
+    return {"sent": len(results), "details": results}
+
+
+@router.post("/email/trial-reminders/send")
+async def send_trial_reminders(current_user: User = Depends(get_current_user)):
+    """Check all businesses for trial expiry and send reminders (7d, 3d, 1d)."""
+    if current_user.role != "platform_owner":
+        raise HTTPException(status_code=403, detail="Platform owner only")
+
+    now = datetime.now(timezone.utc)
+    today = now.date()
+
+    restaurants = await db.restaurants.find(
+        {"trial_end_date": {"$exists": True, "$ne": None}},
+        {"_id": 0}
+    ).to_list(500)
+
+    results = []
+    for r in restaurants:
+        trial_end = r.get("trial_end_date")
+        if not trial_end:
+            continue
+        if isinstance(trial_end, str):
+            try:
+                trial_end = datetime.fromisoformat(trial_end).date()
+            except ValueError:
+                continue
+
+        days_left = (trial_end - today).days
+        if days_left not in (7, 3, 1, 0):
+            continue
+
+        # Get admin email
+        admin = await db.users.find_one(
+            {"restaurant_id": r["id"], "role": "admin", "email": {"$exists": True, "$ne": ""}},
+            {"_id": 0}
+        )
+        if not admin or not admin.get("email"):
+            continue
+
+        biz_name = r.get("business_info", {}).get("name", r.get("name", "Business"))
+        html = trial_reminder_html(biz_name, days_left)
+        subject = f"{'URGENT: ' if days_left <= 1 else ''}Your Heva One trial {'expires today' if days_left <= 0 else f'expires in {days_left} days'}"
+
+        result = await send_email(admin["email"], subject, html)
+        results.append({"restaurant_id": r["id"], "days_left": days_left, "email": admin["email"], "result": result})
+
+    return {"reminders_sent": len(results), "details": results}
+
+
+@router.post("/email/test")
+async def send_test_email(current_user: User = Depends(require_admin)):
+    """Send a quick test email to the current admin."""
+    admin = await db.users.find_one({"username": current_user.username}, {"_id": 0})
+    email = admin.get("email") if admin else None
+    if not email:
+        raise HTTPException(status_code=400, detail="No email on your account. Update your email in Settings first.")
+
+    html = """
+    <div style="font-family:sans-serif;max-width:500px;margin:0 auto;padding:32px;text-align:center;">
+      <h1 style="color:#1e293b;">Heva One</h1>
+      <p style="color:#059669;font-size:18px;font-weight:600;">Email is working!</p>
+      <p style="color:#64748b;">This is a test email from your Heva One system.</p>
+    </div>"""
+    result = await send_email(email, "Heva One — Test Email", html)
+    return {"message": f"Test email sent to {email}", "result": result}

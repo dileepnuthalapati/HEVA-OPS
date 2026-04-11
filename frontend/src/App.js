@@ -45,10 +45,12 @@ import StaffSwapRequests from './pages/StaffSwapRequests';
 import Login from './pages/Login';
 import POSScreen from './pages/POSScreen';
 import KitchenDisplay from './pages/KitchenDisplay';
+import TerminalPinScreen from './pages/TerminalPinScreen';
 
 // Pages - Public (No Auth)
 import GuestMenu from './pages/GuestMenu';
 import PaymentSuccess from './pages/PaymentSuccess';
+import StaffOnboarding from './pages/StaffOnboarding';
 
 // Styles
 import './App.css';
@@ -104,15 +106,21 @@ const ProtectedRoute = ({ children, adminOnly = false, platformOwnerOnly = false
 };
 
 const AppRoutes = () => {
-  const { user, isPlatformOwner, isRestaurantAdmin } = useAuth();
+  const { user, isPlatformOwner, isRestaurantAdmin, isTerminalMode } = useAuth();
+
+  // Split-Brain: Terminal Mode → always show PIN pad when not logged in
+  const isTerminal = isTerminalMode;
 
   return (
     <Routes>
       {/* Public routes — no auth required */}
       <Route path="/menu/:restaurantId/:tableHash" element={<GuestMenu />} />
       <Route path="/payment-success" element={<PaymentSuccess />} />
+      <Route path="/onboarding/:token" element={<StaffOnboarding />} />
       
-      <Route path="/login" element={<Login />} />
+      {/* Terminal Kiosk: when not logged in, show PIN pad instead of login */}
+      <Route path="/login" element={isTerminal ? <TerminalPinScreen /> : <Login />} />
+      <Route path="/terminal" element={<TerminalPinScreen />} />
       <Route
         path="/"
         element={
@@ -122,13 +130,13 @@ const AppRoutes = () => {
             ) : isRestaurantAdmin ? (
               <Navigate to="/dashboard" replace />
             ) : (
-              // Staff: route to first available module
-              (user.features?.pos ? <Navigate to="/pos" replace /> :
+              // Staff: route based on capabilities first, then features
+              (user.capabilities?.includes('pos.access') || user.features?.pos ? <Navigate to="/pos" replace /> :
                user.features?.workforce ? <Navigate to="/heva-ops/shifts" replace /> :
                <Navigate to="/dashboard" replace />)
             )
           ) : (
-            <Navigate to="/login" replace />
+            isTerminal ? <Navigate to="/terminal" replace /> : <Navigate to="/login" replace />
           )
         }
       />

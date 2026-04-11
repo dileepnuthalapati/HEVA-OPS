@@ -1,0 +1,126 @@
+{
+  "summary": "Iteration 36: Universal App Architecture with Split-Brain Routing - All features verified. Backend 13/13 tests passed (100%). Frontend tests passed with 2 bug fixes applied. Login page shows Personal Mode (email+password), SKAdmin→/dashboard, staff user→/heva-ops/shifts. Terminal PIN screen works with numpad, PIN dots, admin settings. Settings > Security has Device Registration card. Settings > User Management has email field and capabilities checkboxes.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard charts", "issues": ["Console warnings about chart width/height being 0 or -1 during initial render - cosmetic only, charts render correctly after data loads"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration36_universal_app.py",
+    "/app/test_reports/pytest/pytest_results_iteration36.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Login page now shows Personal Mode only (email/username + password form) - no PIN pad toggle",
+    "SKAdmin login navigates to /dashboard correctly",
+    "Staff user 'user' login navigates to /heva-ops/shifts (Heva Ops workspace)",
+    "POST /api/auth/login accepts email OR username in the username field",
+    "POST /api/auth/verify-manager-pin with pin '1234' and restaurant_id 'rest_demo_1' returns verified:true",
+    "POST /api/auth/pin-login returns capabilities array in response",
+    "POST /api/attendance/clock accepts entry_source field (mobile_app or pos_terminal)",
+    "Settings > Security tab shows 'Device Registration' card with 'Register as POS Terminal' button",
+    "Settings > User Management > Add Staff form has Email field (required) and Access & Capabilities checkboxes",
+    "Available capabilities are filtered by active business modules (POS Access, KDS Access, Clock In/Out, Manage Rota)",
+    "Staff list shows email and capability badges for each member",
+    "Creating a new staff member with email and capabilities saves correctly via POST /api/restaurant/staff",
+    "Terminal PIN pad screen has numpad, PIN dots display, and admin settings icon",
+    "POS screen logout button shows 'Lock' text when in terminal mode"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration36_universal_app.py",
+    "/app/frontend/src/pages/RestaurantSettings.js"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13 passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "platform_owner": {"username": "platform_owner", "password": "admin123"},
+    "skadmin": {"username": "SKAdmin", "password": "saswata@123", "restaurant_id": "rest_demo_1", "manager_pin": "1234"},
+    "staff_user": {"username": "user", "password": "user123", "pos_pin": "1111"}
+  },
+  "seed_data_creation": "Created test staff member test_staff_1775934819 with email and capabilities for testing",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 36 verified Universal App Architecture with Split-Brain routing. Key changes: (1) Login page is now Personal Mode only - email/username + password form, no PIN pad toggle. (2) Terminal PIN screen is separate at /terminal, accessed when localStorage has 'heva_terminal' key. (3) Staff capabilities system: pos.access, workforce.clock_in, kds.access, workforce.manage_rota. (4) Settings > Security has Device Registration card for terminal mode. (5) Settings > User Management has email field (required) and capabilities checkboxes. (6) Attendance clock endpoint accepts entry_source field (mobile_app or pos_terminal) - geofencing skipped for pos_terminal. Bug fixes applied: (1) Fixed error handling in staff creation to properly display validation errors, (2) Fixed form data cleanup to convert empty strings to null for optional numeric fields.",
+  "features_verified": {
+    "login_personal_mode": {
+      "status": "VERIFIED",
+      "evidence": "Login page shows email/username + password form only, no PIN pad"
+    },
+    "skadmin_login_dashboard": {
+      "status": "VERIFIED",
+      "evidence": "SKAdmin/saswata@123 login navigates to /dashboard"
+    },
+    "staff_user_login_heva_ops": {
+      "status": "VERIFIED",
+      "evidence": "user/user123 login navigates to /heva-ops/shifts"
+    },
+    "auth_login_email_or_username": {
+      "status": "VERIFIED",
+      "evidence": "Backend test passed - POST /api/auth/login accepts email OR username"
+    },
+    "verify_manager_pin": {
+      "status": "VERIFIED",
+      "evidence": "Backend test passed - POST /api/auth/verify-manager-pin with pin '1234' returns verified:true"
+    },
+    "pin_login_capabilities": {
+      "status": "VERIFIED",
+      "evidence": "Backend test passed - POST /api/auth/pin-login returns capabilities array"
+    },
+    "attendance_entry_source": {
+      "status": "VERIFIED",
+      "evidence": "Backend test passed - POST /api/attendance/clock accepts entry_source field"
+    },
+    "settings_security_terminal_registration": {
+      "status": "VERIFIED",
+      "evidence": "Settings > Security tab shows Device Registration card with Register as POS Terminal button"
+    },
+    "settings_staff_email_capabilities": {
+      "status": "VERIFIED",
+      "evidence": "Add Staff form has Email field (required) and Access & Capabilities checkboxes"
+    },
+    "capabilities_filtered_by_modules": {
+      "status": "VERIFIED",
+      "evidence": "POS Access, KDS Access, Clock In/Out, Manage Rota checkboxes shown based on active modules"
+    },
+    "staff_list_email_badges": {
+      "status": "VERIFIED",
+      "evidence": "Staff list shows email and capability badges (pos, workforce) for each member"
+    },
+    "create_staff_with_email_capabilities": {
+      "status": "VERIFIED",
+      "evidence": "Created test_staff_1775934819 with email and capabilities successfully"
+    },
+    "terminal_pin_screen": {
+      "status": "VERIFIED",
+      "evidence": "Terminal PIN screen has numpad (0-9, DEL), PIN dots display, admin settings icon"
+    },
+    "pos_lock_button_terminal_mode": {
+      "status": "VERIFIED",
+      "evidence": "POS screen shows 'Lock' button instead of 'Logout' when in terminal mode"
+    }
+  },
+  "bugs_fixed": [
+    {
+      "file": "/app/frontend/src/pages/RestaurantSettings.js",
+      "issue": "Error handling in staff creation was trying to render validation error object as React child",
+      "fix": "Added proper error message extraction from Pydantic validation error array"
+    },
+    {
+      "file": "/app/frontend/src/pages/RestaurantSettings.js",
+      "issue": "Form was sending empty strings for optional numeric fields causing 422 validation errors",
+      "fix": "Added data cleanup to convert empty strings to null for optional fields before API call"
+    }
+  ],
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Email sending via /api/email/*"]
+  }
+}

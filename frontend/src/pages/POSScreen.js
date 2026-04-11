@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Sheet, SheetContent, SheetTitle } from '../components/ui/sheet';
 import { toast } from 'sonner';
-import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, CreditCard, Users, Percent, Tag, MessageSquare, Banknote, Search, PackagePlus, ArrowLeft } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, CreditCard, Users, Percent, Tag, MessageSquare, Banknote, Search, PackagePlus, ArrowLeft, Calendar } from 'lucide-react';
 import VoidReasonModal from '../components/VoidReasonModal';
 
 // Currency helper
@@ -29,7 +29,7 @@ const getCurrencySymbol = (currency) => {
 
 const POSScreen = () => {
   const navigate = useNavigate();
-  const { user, logout } = useAuth();
+  const { user, logout, isTerminalMode } = useAuth();
   const [categories, setCategories] = useState([]);
   const [products, setProducts] = useState([]);
   const [tables, setTables] = useState([]);
@@ -908,11 +908,11 @@ const POSScreen = () => {
             </button>
             <button
               data-testid="pos-logout-button"
-              onClick={logout}
+              onClick={() => { logout(); if (isTerminalMode) navigate('/terminal'); }}
               className="h-9 md:h-10 px-3 rounded-xl border border-slate-200 text-slate-500 hover:text-red-500 hover:border-red-200 hover:bg-red-50 text-xs md:text-sm font-medium btn-haptic flex items-center gap-1.5 transition-colors"
             >
               <LogOut className="w-4 h-4" />
-              <span className="hidden sm:inline">Logout</span>
+              <span className="hidden sm:inline">{isTerminalMode ? 'Lock' : 'Logout'}</span>
             </button>
           </div>
         </div>

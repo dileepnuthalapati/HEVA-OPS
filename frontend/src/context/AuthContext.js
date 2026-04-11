@@ -87,6 +87,8 @@ export const AuthProvider = ({ children }) => {
         role: response.role,
         restaurant_id: response.restaurant_id,
         features: response.features || {},
+        capabilities: response.capabilities || [],
+        email: response.email || '',
       };
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
@@ -126,6 +128,7 @@ export const AuthProvider = ({ children }) => {
         role: response.role,
         restaurant_id: response.restaurant_id,
         features: response.features || {},
+        capabilities: response.capabilities || [],
       };
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
@@ -159,7 +162,17 @@ export const AuthProvider = ({ children }) => {
     return user?.features?.[featureName] === true;
   };
 
+  // Capability check helper - reads from user.capabilities array
+  const hasCapability = (cap) => {
+    if (isPlatformOwner || isRestaurantAdmin) return true;
+    return (user?.capabilities || []).includes(cap);
+  };
+
+  // Device mode check
+  const isTerminalMode = !!localStorage.getItem('heva_terminal');
+
   const features = user?.features || {};
+  const capabilities = user?.capabilities || [];
 
   return (
     <AuthContext.Provider value={{ 
@@ -174,7 +187,10 @@ export const AuthProvider = ({ children }) => {
       canAccessRestaurants,
       isAdmin: isPlatformOwner || isRestaurantAdmin,
       hasFeature,
+      hasCapability,
+      isTerminalMode,
       features,
+      capabilities,
     }}>
       {children}
     </AuthContext.Provider>
