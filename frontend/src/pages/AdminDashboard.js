@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
-import { reportAPI, restaurantAPI, subscriptionAPI, tableAPI } from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import { reportAPI, restaurantAPI, subscriptionAPI, attendanceAPI } from '../services/api';
 import api from '../services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Switch } from '../components/ui/switch';
@@ -10,7 +11,8 @@ import { toast } from 'sonner';
 import { 
   TrendingUp, TrendingDown, ShoppingBag, Package, Coins, Calendar, 
   AlertTriangle, Clock, CreditCard, Banknote, QrCode,
-  MonitorSmartphone, UtensilsCrossed, Power, ChefHat, ArrowUpRight, ArrowDownRight
+  MonitorSmartphone, UtensilsCrossed, Power, ChefHat, ArrowUpRight, ArrowDownRight,
+  Users, UserCheck, Timer, CalendarClock
 } from 'lucide-react';
 
 const getCurrencySymbol = (currency) => {
@@ -20,6 +22,7 @@ const getCurrencySymbol = (currency) => {
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
+  const { hasFeature } = useAuth();
   const [stats, setStats] = useState(null);
   const [loading, setLoading] = useState(true);
   const [currency, setCurrency] = useState('GBP');
@@ -28,28 +31,57 @@ const AdminDashboard = () => {
   const [togglingQR, setTogglingQR] = useState(false);
   const [kdsStats, setKdsStats] = useState(null);
   const [weeklyTrend, setWeeklyTrend] = useState(null);
+  const [workforceStats, setWorkforceStats] = useState(null);
+
+  const hasPOS = hasFeature('pos');
+  const hasWorkforce = hasFeature('workforce');
 
   const loadAll = useCallback(async () => {
     try {
-      const [statsData, restaurant, sub, kds, weekly] = await Promise.all([
-        reportAPI.getTodayStats().catch(() => null),
+      const promises = [
         restaurantAPI.getMy().catch(() => null),
         subscriptionAPI.getMy().catch(() => null),
-        api.get('/kds/stats').then(r => r.data).catch(() => null),
-        reportAPI.getWeeklyTrend().catch(() => null),
-      ]);
-      if (statsData) setStats(statsData);
+      ];
+      // Only load POS stats if POS is enabled
+      if (hasPOS) {
+        promises.push(
+          reportAPI.getTodayStats().catch(() => null),
+          api.get('/kds/stats').then(r => r.data).catch(() => null),
+          reportAPI.getWeeklyTrend().catch(() => null),
+        );
+      }
+      // Only load workforce stats if workforce is enabled
+      if (hasWorkforce) {
+        promises.push(attendanceAPI.getDashboardStats().catch(() => null));
+      }
+
+      const results = await Promise.all(promises);
+      let idx = 0;
+      const restaurant = results[idx++];
+      const sub = results[idx++];
+
+      if (hasPOS) {
+        const statsData = results[idx++];
+        const kds = results[idx++];
+        const weekly = results[idx++];
+        if (statsData) setStats(statsData);
+        if (kds) setKdsStats(kds);
+        if (weekly) setWeeklyTrend(weekly);
+      }
+      if (hasWorkforce) {
+        const wfStats = results[idx++];
+        if (wfStats) setWorkforceStats(wfStats);
+      }
+
       if (restaurant?.currency) setCurrency(restaurant.currency);
       if (restaurant) setQrEnabled(restaurant.qr_ordering_enabled !== false);
       if (sub) setSubscription(sub);
-      if (kds) setKdsStats(kds);
-      if (weekly) setWeeklyTrend(weekly);
     } catch (error) {
       console.error('Dashboard load error:', error);
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [hasPOS, hasWorkforce]);
 
   useEffect(() => {
     loadAll();
@@ -94,7 +126,8 @@ const AdminDashboard = () => {
                 <span>{today}</span>
               </p>
             </div>
-            {/* QR Ordering Kill Switch */}
+            {/* QR Ordering Kill Switch - only when POS + QR modules exist */}
+            {hasPOS && (
             <div
               className={`flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-2.5 rounded-xl border transition-colors ${
                 qrEnabled ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'
@@ -114,6 +147,7 @@ const AdminDashboard = () => {
                 data-testid="qr-toggle-switch"
               />
             </div>
+            )}
           </div>
 
           {loading ? (
@@ -143,6 +177,131 @@ const AdminDashboard = () => {
                 </Card>
               )}
 
+              {/* ══════════════ Workforce Dashboard ══════════════ */}
+              {hasWorkforce && workforceStats && (
+                <div className="mb-4 md:mb-6" data-testid="workforce-dashboard">
+                  {!hasPOS && (
+                    <div className="mb-3">
+                      <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Workforce Overview</span>
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4 mb-4">
+                    <Card className="bg-white border-slate-200/60 shadow-sm" data-testid="wf-total-staff">
+                      <CardContent className="p-3 md:p-5">
+                        <div className="flex items-center justify-between mb-2 md:mb-3">
+                          <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Team</span>
+                          <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-indigo-50 flex items-center justify-center">
+                            <Users className="w-3.5 h-3.5 md:w-4 md:h-4 text-indigo-600" />
+                          </div>
+                        </div>
+                        <div className="text-lg md:text-2xl font-bold font-mono text-slate-900">{workforceStats.total_staff}</div>
+                        <p className="text-[10px] md:text-[11px] text-slate-400 font-medium mt-1">Total members</p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-white border-emerald-200/60 shadow-sm" data-testid="wf-clocked-in">
+                      <CardContent className="p-3 md:p-5">
+                        <div className="flex items-center justify-between mb-2 md:mb-3">
+                          <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-emerald-500">On Shift</span>
+                          <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-emerald-50 flex items-center justify-center">
+                            <UserCheck className="w-3.5 h-3.5 md:w-4 md:h-4 text-emerald-600" />
+                          </div>
+                        </div>
+                        <div className="text-lg md:text-2xl font-bold font-mono text-emerald-700">{workforceStats.clocked_in_count}</div>
+                        <p className="text-[10px] md:text-[11px] text-slate-400 font-medium mt-1">Clocked in now</p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-white border-slate-200/60 shadow-sm" data-testid="wf-scheduled">
+                      <CardContent className="p-3 md:p-5">
+                        <div className="flex items-center justify-between mb-2 md:mb-3">
+                          <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Scheduled</span>
+                          <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-violet-50 flex items-center justify-center">
+                            <CalendarClock className="w-3.5 h-3.5 md:w-4 md:h-4 text-violet-600" />
+                          </div>
+                        </div>
+                        <div className="text-lg md:text-2xl font-bold font-mono text-slate-900">{workforceStats.scheduled_shifts}</div>
+                        <p className="text-[10px] md:text-[11px] text-slate-400 font-medium mt-1">Shifts today</p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-white border-slate-200/60 shadow-sm" data-testid="wf-hours-today">
+                      <CardContent className="p-3 md:p-5">
+                        <div className="flex items-center justify-between mb-2 md:mb-3">
+                          <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Hours</span>
+                          <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-amber-50 flex items-center justify-center">
+                            <Timer className="w-3.5 h-3.5 md:w-4 md:h-4 text-amber-600" />
+                          </div>
+                        </div>
+                        <div className="text-lg md:text-2xl font-bold font-mono text-slate-900">{workforceStats.total_hours_today}h</div>
+                        <p className="text-[10px] md:text-[11px] text-slate-400 font-medium mt-1">Worked today</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Currently clocked in staff list */}
+                  {workforceStats.clocked_in_staff?.length > 0 && (
+                    <Card className="mb-4 bg-white border-emerald-200/40 shadow-sm" data-testid="wf-live-staff">
+                      <CardHeader className="px-4 md:px-6 py-3 md:pb-2">
+                        <CardTitle className="text-xs md:text-base font-bold text-slate-900 flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          Currently On Shift
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-4 md:px-6 pb-4">
+                        <div className="space-y-2">
+                          {workforceStats.clocked_in_staff.map((s, i) => (
+                            <div key={i} className="flex items-center justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-xs font-bold text-emerald-700">
+                                  {s.name?.charAt(0)?.toUpperCase() || '?'}
+                                </div>
+                                <span className="text-sm font-semibold text-slate-800">{s.name}</span>
+                              </div>
+                              <span className="text-xs text-slate-400 font-medium">
+                                Since {s.since ? new Date(s.since).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '--'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Today's scheduled shifts */}
+                  {workforceStats.shifts?.length > 0 && (
+                    <Card className="mb-4 md:mb-6 bg-white border-slate-200/60 shadow-sm" data-testid="wf-todays-shifts">
+                      <CardHeader className="px-4 md:px-6 py-3 md:pb-2">
+                        <CardTitle className="text-xs md:text-base font-bold text-slate-900">Today's Schedule</CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-4 md:px-6 pb-4">
+                        <div className="space-y-2">
+                          {workforceStats.shifts.map((s, i) => (
+                            <div key={i} className="flex items-center justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700">
+                                  {s.staff_name?.charAt(0)?.toUpperCase() || '?'}
+                                </div>
+                                <div className="min-w-0">
+                                  <span className="text-sm font-semibold text-slate-800 block truncate">{s.staff_name}</span>
+                                  {s.position && <span className="text-[10px] text-slate-400">{s.position}</span>}
+                                </div>
+                              </div>
+                              <span className="text-xs font-mono font-semibold text-slate-600 shrink-0 ml-2">
+                                {s.start_time} - {s.end_time}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
+              )}
+
+              {/* ══════════════ POS Section — only when POS module is active ══════════════ */}
+              {hasPOS && (
+              <>
               {/* ══════════════ Daily Revenue Widget ══════════════ */}
               {(() => {
                 const todayTotal = stats?.total_sales || 0;
@@ -433,6 +592,8 @@ const AdminDashboard = () => {
                     </div>
                   </CardContent>
                 </Card>
+              )}
+              </>
               )}
             </>
           )}

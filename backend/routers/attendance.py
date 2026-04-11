@@ -180,6 +180,47 @@ async def get_my_clock_status(current_user: User = Depends(require_feature("work
     return {"clocked_in": False}
 
 
+@router.get("/attendance/dashboard-stats")
+async def workforce_dashboard_stats(current_user: User = Depends(require_feature("workforce"))):
+    """Dashboard summary: today's shifts, clocked-in staff, total hours."""
+    now = datetime.now(timezone.utc)
+    today_str = now.strftime("%Y-%m-%d")
+
+    # Today's scheduled shifts
+    shifts_today = await db.shifts.find(
+        {"restaurant_id": current_user.restaurant_id, "date": today_str},
+        {"_id": 0}
+    ).to_list(200)
+
+    # Currently clocked in
+    clocked_in = await db.attendance.find(
+        {"restaurant_id": current_user.restaurant_id, "clock_out": None},
+        {"_id": 0}
+    ).to_list(100)
+
+    # Today's completed attendance (hours worked)
+    completed_today = await db.attendance.find(
+        {"restaurant_id": current_user.restaurant_id, "date": today_str, "clock_out": {"$ne": None}},
+        {"_id": 0}
+    ).to_list(200)
+    total_hours = sum(r.get("hours_worked", 0) or 0 for r in completed_today)
+
+    # Staff count
+    staff_count = await db.users.count_documents(
+        {"restaurant_id": current_user.restaurant_id, "role": {"$in": ["user", "admin"]}}
+    )
+
+    return {
+        "scheduled_shifts": len(shifts_today),
+        "clocked_in_count": len(clocked_in),
+        "clocked_in_staff": [{"name": r.get("staff_name", ""), "since": r.get("clock_in")} for r in clocked_in],
+        "completed_sessions": len(completed_today),
+        "total_hours_today": round(total_hours, 1),
+        "total_staff": staff_count,
+        "shifts": [{"staff_name": s.get("staff_name", ""), "start_time": s.get("start_time"), "end_time": s.get("end_time"), "position": s.get("position", "")} for s in shifts_today],
+    }
+
+
 @router.put("/attendance/{record_id}/flag-resolve")
 async def resolve_flagged(record_id: str, hours_worked: float, current_user: User = Depends(require_admin)):
     """Manager resolves a flagged attendance record by setting correct hours."""

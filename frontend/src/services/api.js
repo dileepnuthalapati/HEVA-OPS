@@ -577,6 +577,10 @@ export const attendanceAPI = {
     const response = await api.put(`/attendance/${recordId}/flag-resolve?hours_worked=${hoursWorked}`);
     return response.data;
   },
+  getDashboardStats: async () => {
+    const response = await api.get('/attendance/dashboard-stats');
+    return response.data;
+  },
 };
 
 export const timesheetAPI = {

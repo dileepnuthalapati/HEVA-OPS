@@ -266,8 +266,8 @@ const RestaurantSettings = () => {
       <div className="flex-1 min-w-0 p-4 md:p-8 pt-16 md:pt-8">
         <div className="max-w-4xl mx-auto">
           <div className="mb-6">
-            <h1 className="text-2xl md:text-4xl font-bold tracking-tight mb-1" data-testid="settings-heading">Restaurant Settings</h1>
-            <p className="text-muted-foreground text-sm">Manage your restaurant, staff, and security</p>
+            <h1 className="text-2xl md:text-4xl font-bold tracking-tight mb-1" data-testid="settings-heading">Settings</h1>
+            <p className="text-muted-foreground text-sm">Manage your business, team, and security</p>
           </div>
 
           {/* Tabs */}
@@ -318,8 +318,8 @@ const RestaurantSettings = () => {
                 <CardContent>
                   <form onSubmit={handleSubmit} className="space-y-6">
                     <div>
-                      <Label htmlFor="name" className="text-sm font-semibold">Restaurant Name <span className="text-red-500">*</span></Label>
-                      <Input id="name" data-testid="restaurant-name-input" value={formData.name} onChange={(e) => handleChange('name', e.target.value)} placeholder="Mario's Pizza Restaurant" required className="h-12" />
+                      <Label htmlFor="name" className="text-sm font-semibold">Business Name <span className="text-red-500">*</span></Label>
+                      <Input id="name" data-testid="restaurant-name-input" value={formData.name} onChange={(e) => handleChange('name', e.target.value)} placeholder="Your Business Name" required className="h-12" />
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div className="md:col-span-2">
@@ -784,3 +784,4 @@ const RestaurantSettings = () => {
 };
 
 export default RestaurantSettings;
+s;

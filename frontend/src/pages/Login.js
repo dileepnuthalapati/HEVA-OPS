@@ -15,7 +15,7 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
-  const [mode, setMode] = useState('password'); // 'password' or 'pin'
+  const [mode, setMode] = useState('pin'); // default to 'pin', fallback 'password'
   const [pin, setPin] = useState('');
   const [pinError, setPinError] = useState('');
   const [hasPins, setHasPins] = useState(false);
@@ -68,7 +68,7 @@ const Login = () => {
     setLoading(true);
     try {
       const response = await login(username, password);
-      navigateByRole(response.user.role);
+      navigateByRole(response.user.role, response.user.features);
     } catch (error) {
       if (!navigator.onLine || error.message === 'Network Error' || !error.response) {
         setIsOnline(false);
@@ -100,14 +100,14 @@ const Login = () => {
 
   const submitPin = async (pinValue) => {
     if (!lastRestaurantId) {
-      setPinError('No restaurant configured. Use password login first.');
+      setPinError('No business linked yet. Use password login first.');
       setPin('');
       return;
     }
     setLoading(true);
     try {
       const response = await pinLogin(pinValue, lastRestaurantId);
-      navigateByRole(response.user.role);
+      navigateByRole(response.user.role, response.user.features);
     } catch (error) {
       setPinError('Invalid PIN');
       setPin('');
@@ -123,13 +123,20 @@ const Login = () => {
     }
   };
 
-  const navigateByRole = (role) => {
+  const navigateByRole = (role, features = {}) => {
     if (role === 'platform_owner') {
       navigate('/platform/dashboard');
     } else if (role === 'admin') {
       navigate('/dashboard');
     } else {
-      navigate('/pos');
+      // Staff: route to first available module
+      if (features.pos) {
+        navigate('/pos');
+      } else if (features.workforce) {
+        navigate('/heva-ops/shifts');
+      } else {
+        navigate('/dashboard');
+      }
     }
   };
 
@@ -152,35 +159,33 @@ const Login = () => {
           <p className="text-slate-400 text-sm mt-2 font-medium">Business management, simplified</p>
         </div>
 
-        {/* Mode Toggle */}
-        {hasPins && (
-          <div className="flex justify-center gap-2 mb-4" data-testid="login-mode-toggle">
-            <button
-              onClick={() => { setMode('password'); setPinError(''); setPin(''); }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                mode === 'password'
-                  ? 'bg-indigo-600 text-white shadow-lg'
-                  : 'bg-slate-800/60 text-slate-400 hover:text-slate-300'
-              }`}
-              data-testid="mode-password-btn"
-            >
-              <Keyboard className="w-4 h-4" />
-              Password
-            </button>
-            <button
-              onClick={() => { setMode('pin'); setPinError(''); }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
-                mode === 'pin'
-                  ? 'bg-indigo-600 text-white shadow-lg'
-                  : 'bg-slate-800/60 text-slate-400 hover:text-slate-300'
-              }`}
-              data-testid="mode-pin-btn"
-            >
-              <Hash className="w-4 h-4" />
-              Quick PIN
-            </button>
-          </div>
-        )}
+        {/* Mode Toggle - always show both options */}
+        <div className="flex justify-center gap-2 mb-4" data-testid="login-mode-toggle">
+          <button
+            onClick={() => { setMode('pin'); setPinError(''); }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+              mode === 'pin'
+                ? 'bg-indigo-600 text-white shadow-lg'
+                : 'bg-slate-800/60 text-slate-400 hover:text-slate-300'
+            }`}
+            data-testid="mode-pin-btn"
+          >
+            <Hash className="w-4 h-4" />
+            Quick PIN
+          </button>
+          <button
+            onClick={() => { setMode('password'); setPinError(''); setPin(''); }}
+            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold transition-all ${
+              mode === 'password'
+                ? 'bg-indigo-600 text-white shadow-lg'
+                : 'bg-slate-800/60 text-slate-400 hover:text-slate-300'
+            }`}
+            data-testid="mode-password-btn"
+          >
+            <Keyboard className="w-4 h-4" />
+            Password
+          </button>
+        </div>
 
         {/* Form Card */}
         <div className="glass-dark rounded-2xl p-8">
