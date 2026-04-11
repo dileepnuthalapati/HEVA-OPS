@@ -159,6 +159,13 @@ class CashDrawerClose(BaseModel):
     notes: Optional[str] = None
 
 
+class RestaurantFeatures(BaseModel):
+    pos: bool = True
+    kds: bool = False
+    qr_ordering: bool = False
+    workforce: bool = False
+
+
 class Restaurant(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
@@ -168,6 +175,7 @@ class Restaurant(BaseModel):
     price: Optional[float] = 0
     currency: str = "GBP"
     business_info: Optional[dict] = {}
+    features: Optional[dict] = None
     users: Optional[List[str]] = []
     created_at: Optional[str] = None
     trial_ends_at: Optional[str] = None
@@ -181,6 +189,7 @@ class RestaurantCreate(BaseModel):
     price: float = 19.99
     currency: str = "GBP"
     business_info: Optional[dict] = {}
+    features: Optional[dict] = None
 
 
 class RestaurantUpdate(BaseModel):
@@ -188,6 +197,7 @@ class RestaurantUpdate(BaseModel):
     currency: Optional[str] = None
     owner_email: Optional[str] = None
     qr_ordering_enabled: Optional[bool] = None
+    features: Optional[dict] = None
 
 
 class SyncData(BaseModel):

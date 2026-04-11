@@ -48,6 +48,7 @@ from routers import cash_drawer, printers, tables, reservations
 from routers import subscriptions, notifications, staff, health, email
 from routers import qr_menu, kds, audit, payments
 from routers import docs as feature_docs
+from routers import shifts, attendance, timesheets, payroll, swap_requests
 
 # Include all routers into the api_router
 api_router.include_router(auth.router)
@@ -71,6 +72,12 @@ api_router.include_router(kds.router)
 api_router.include_router(audit.router)
 api_router.include_router(payments.router)
 api_router.include_router(feature_docs.router)
+# Workforce module routers (guarded by require_feature("workforce"))
+api_router.include_router(shifts.router)
+api_router.include_router(attendance.router)
+api_router.include_router(timesheets.router)
+api_router.include_router(payroll.router)
+api_router.include_router(swap_requests.router)
 
 # Include the main api_router in the app
 fastapi_app.include_router(api_router)

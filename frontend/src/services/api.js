@@ -53,6 +53,10 @@ export const authAPI = {
     }
     return response.data;
   },
+  getFeatures: async () => {
+    const response = await api.get('/auth/features');
+    return response.data;
+  },
   setPosPin: async (userId, pin) => {
     const response = await api.post('/auth/set-pos-pin', { user_id: userId, pin });
     return response.data;
@@ -329,6 +333,10 @@ export const restaurantAPI = {
     const response = await api.delete(`/restaurants/${restaurantId}/users/${userId}`);
     return response.data;
   },
+  updateFeatures: async (restaurantId, features) => {
+    const response = await api.put(`/restaurants/${restaurantId}/features`, features);
+    return response.data;
+  },
 };
 
 // Tables API
@@ -510,6 +518,83 @@ export const staffAPI = {
   },
   delete: async (id) => {
     const response = await api.delete(`/restaurant/staff/${id}`);
+    return response.data;
+  },
+};
+
+// Workforce Module APIs
+export const shiftAPI = {
+  getAll: async (startDate, endDate) => {
+    const response = await api.get(`/shifts?start_date=${startDate}&end_date=${endDate}`);
+    return response.data;
+  },
+  create: async (data) => {
+    const response = await api.post('/shifts', data);
+    return response.data;
+  },
+  update: async (id, data) => {
+    const response = await api.put(`/shifts/${id}`, data);
+    return response.data;
+  },
+  delete: async (id) => {
+    const response = await api.delete(`/shifts/${id}`);
+    return response.data;
+  },
+  copyWeek: async (sourceStart, targetStart) => {
+    const response = await api.post(`/shifts/copy-week?source_start=${sourceStart}&target_start=${targetStart}`);
+    return response.data;
+  },
+  publish: async (startDate, endDate) => {
+    const response = await api.post(`/shifts/publish?start_date=${startDate}&end_date=${endDate}`);
+    return response.data;
+  },
+};
+
+export const attendanceAPI = {
+  clock: async (pin, restaurantId) => {
+    const response = await api.post('/attendance/clock', { pin, restaurant_id: restaurantId });
+    return response.data;
+  },
+  getAll: async (startDate, endDate) => {
+    const response = await api.get(`/attendance?start_date=${startDate}&end_date=${endDate}`);
+    return response.data;
+  },
+  getLive: async () => {
+    const response = await api.get('/attendance/live');
+    return response.data;
+  },
+  resolveFlag: async (recordId, hoursWorked) => {
+    const response = await api.put(`/attendance/${recordId}/flag-resolve?hours_worked=${hoursWorked}`);
+    return response.data;
+  },
+};
+
+export const timesheetAPI = {
+  getSummary: async (startDate, endDate) => {
+    const response = await api.get(`/timesheets/summary?start_date=${startDate}&end_date=${endDate}`);
+    return response.data;
+  },
+  approve: async (staffId, startDate, endDate) => {
+    const response = await api.put(`/timesheets/approve?staff_id=${staffId}&start_date=${startDate}&end_date=${endDate}`);
+    return response.data;
+  },
+  unlock: async (staffId, startDate, endDate) => {
+    const response = await api.put(`/timesheets/unlock?staff_id=${staffId}&start_date=${startDate}&end_date=${endDate}`);
+    return response.data;
+  },
+  editHours: async (recordId, hoursWorked) => {
+    const response = await api.put(`/timesheets/edit-hours?record_id=${recordId}&hours_worked=${hoursWorked}`);
+    return response.data;
+  },
+};
+
+export const payrollAPI = {
+  getReport: async (startDate, endDate) => {
+    const response = await api.get(`/payroll/report?start_date=${startDate}&end_date=${endDate}`);
+    return response.data;
+  },
+  getEfficiency: async (startDate, endDate) => {
+    const response = await api.get(`/analytics/efficiency?start_date=${startDate}&end_date=${endDate}`);
     return response.data;
   },
 };

@@ -86,6 +86,7 @@ export const AuthProvider = ({ children }) => {
         username: response.username,
         role: response.role,
         restaurant_id: response.restaurant_id,
+        features: response.features || {},
       };
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
@@ -124,6 +125,7 @@ export const AuthProvider = ({ children }) => {
         username: response.username,
         role: response.role,
         restaurant_id: response.restaurant_id,
+        features: response.features || {},
       };
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
@@ -151,6 +153,14 @@ export const AuthProvider = ({ children }) => {
   const isRestaurantUser = user?.role === 'user';
   const canAccessRestaurants = isPlatformOwner; // Only platform owner
 
+  // Feature check helper - reads from user.features (embedded in JWT)
+  const hasFeature = (featureName) => {
+    if (isPlatformOwner) return true; // Platform owner sees everything
+    return user?.features?.[featureName] === true;
+  };
+
+  const features = user?.features || {};
+
   return (
     <AuthContext.Provider value={{ 
       user, 
@@ -162,7 +172,9 @@ export const AuthProvider = ({ children }) => {
       isRestaurantAdmin,
       isRestaurantUser,
       canAccessRestaurants,
-      isAdmin: isPlatformOwner || isRestaurantAdmin
+      isAdmin: isPlatformOwner || isRestaurantAdmin,
+      hasFeature,
+      features,
     }}>
       {children}
     </AuthContext.Provider>

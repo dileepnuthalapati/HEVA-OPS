@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from database import db
-from dependencies import verify_password, get_password_hash, create_access_token, get_current_user, require_admin
+from dependencies import verify_password, get_password_hash, create_access_token, get_current_user, require_admin, get_restaurant_features
 from models import User, UserCreate, UserLogin, Token, PasswordChange
 from rate_limiter import limiter
 from pydantic import BaseModel as PydanticBaseModel
@@ -30,7 +30,7 @@ async def register(request: Request, user_data: UserCreate):
     return User(**user_dict)
 
 
-@router.post("/auth/login", response_model=Token)
+@router.post("/auth/login")
 @limiter.limit("10/minute")
 async def login(request: Request, credentials: UserLogin):
     user = await db.users.find_one({"username": credentials.username})
@@ -41,18 +41,38 @@ async def login(request: Request, credentials: UserLogin):
     if not stored_password or not verify_password(credentials.password, stored_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    token = create_access_token({"sub": user["username"], "role": user.get("role", "user")})
-    return Token(
-        access_token=token,
-        role=user.get("role", "user"),
-        username=user["username"],
-        restaurant_id=user.get("restaurant_id")
-    )
+    # Get restaurant features for the JWT
+    features = {}
+    restaurant_id = user.get("restaurant_id")
+    if restaurant_id:
+        features = await get_restaurant_features(restaurant_id)
+
+    token = create_access_token({"sub": user["username"], "role": user.get("role", "user"), "features": features})
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "role": user.get("role", "user"),
+        "username": user["username"],
+        "restaurant_id": restaurant_id,
+        "features": features,
+    }
 
 
 @router.get("/auth/me", response_model=User)
 async def get_me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+@router.get("/auth/features")
+async def get_my_features(current_user: User = Depends(get_current_user)):
+    """Return the current restaurant's feature flags."""
+    if current_user.role == "platform_owner":
+        return {"features": {"pos": True, "kds": True, "qr_ordering": True, "workforce": True}}
+    if not current_user.restaurant_id:
+        return {"features": {}}
+    features = await get_restaurant_features(current_user.restaurant_id)
+    return {"features": features}
+
 
 
 @router.post("/auth/change-password")
@@ -128,7 +148,7 @@ class SetPinRequest(PydanticBaseModel):
     pin: str
 
 
-@router.post("/auth/pin-login", response_model=Token)
+@router.post("/auth/pin-login")
 @limiter.limit("20/minute")
 async def pin_login(request: Request, data: PinLoginRequest):
     """Staff logs in with 4-digit PIN. Searches all staff in the restaurant."""
@@ -141,15 +161,20 @@ async def pin_login(request: Request, data: PinLoginRequest):
         {"_id": 0}
     ).to_list(100)
 
+    # Get restaurant features
+    features = await get_restaurant_features(data.restaurant_id)
+
     for user in users:
         if verify_password(data.pin, user["pos_pin_hash"]):
-            token = create_access_token({"sub": user["username"], "role": user.get("role", "user")})
-            return Token(
-                access_token=token,
-                role=user.get("role", "user"),
-                username=user["username"],
-                restaurant_id=user.get("restaurant_id")
-            )
+            token = create_access_token({"sub": user["username"], "role": user.get("role", "user"), "features": features})
+            return {
+                "access_token": token,
+                "token_type": "bearer",
+                "role": user.get("role", "user"),
+                "username": user["username"],
+                "restaurant_id": user.get("restaurant_id"),
+                "features": features,
+            }
 
     raise HTTPException(status_code=401, detail="Invalid PIN")
 

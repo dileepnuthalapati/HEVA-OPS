@@ -2,12 +2,22 @@ import React, { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Sheet, SheetContent, SheetTrigger } from '../components/ui/sheet';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
+import { Button } from '../components/ui/button';
 import CommandSearch from './CommandSearch';
 import {
   LayoutDashboard, ShoppingCart, ChefHat, FileText, Settings, Table2,
   BarChart3, Wallet, LogOut, Menu, Search, Users, Building2, Globe,
-  Printer, ClipboardList, UtensilsCrossed
+  Printer, ClipboardList, UtensilsCrossed, Lock, Calendar, Clock, Receipt,
+  ArrowRightLeft
 } from 'lucide-react';
+
+const MODULE_META = {
+  pos: { label: 'POS', description: 'Point of Sale terminal, orders, payments, cash drawer, receipts and printer management.' },
+  kds: { label: 'KDS', description: 'Kitchen Display System — real-time order routing to kitchen screens.' },
+  qr_ordering: { label: 'QR Ordering', description: 'QR table ordering with a guest-facing digital menu.' },
+  workforce: { label: 'Workforce', description: 'Shift scheduling, clock in/out, timesheets, payroll and the Heva Ops staff mobile app.' },
+};
 
 const platformMenu = [
   { path: '/platform/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -17,43 +27,192 @@ const platformMenu = [
   { path: '/platform/settings', icon: Settings, label: 'Settings' },
 ];
 
-const adminMenu = [
-  { path: '/pos', icon: ShoppingCart, label: 'POS Terminal' },
-  { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/kds', icon: ChefHat, label: 'Kitchen (KDS)' },
-  { path: '/orders', icon: FileText, label: 'Orders' },
-  { path: '/reports', icon: BarChart3, label: 'Reports' },
-  { path: '/menu-management', icon: UtensilsCrossed, label: 'Menu' },
-  { path: '/tables', icon: Table2, label: 'Tables' },
-  { path: '/cash-drawer', icon: Wallet, label: 'Cash Drawer' },
-  { path: '/printers', icon: Printer, label: 'Printers' },
-  { path: '/audit', icon: ClipboardList, label: 'Audit Log' },
-  { path: '/settings', icon: Settings, label: 'Settings' },
+// Core items (always visible for restaurant users)
+const coreMenu = [
+  { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', section: 'core' },
+  { path: '/settings', icon: Settings, label: 'Settings', section: 'core' },
 ];
 
-const posStaffMenu = [
-  { path: '/pos', icon: ShoppingCart, label: 'POS' },
-  { path: '/kds', icon: ChefHat, label: 'Kitchen (KDS)' },
-  { path: '/orders', icon: FileText, label: 'Orders' },
-  { path: '/cash-drawer', icon: Wallet, label: 'Cash Drawer' },
+// Module-specific items
+const moduleItems = {
+  pos: [
+    { path: '/pos', icon: ShoppingCart, label: 'POS Terminal' },
+    { path: '/orders', icon: FileText, label: 'Orders' },
+    { path: '/menu-management', icon: UtensilsCrossed, label: 'Menu' },
+    { path: '/tables', icon: Table2, label: 'Tables' },
+    { path: '/cash-drawer', icon: Wallet, label: 'Cash Drawer' },
+    { path: '/printers', icon: Printer, label: 'Printers' },
+  ],
+  kds: [
+    { path: '/kds', icon: ChefHat, label: 'Kitchen (KDS)' },
+  ],
+  workforce: [
+    { path: '/workforce/shifts', icon: Calendar, label: 'Shift Scheduler' },
+    { path: '/workforce/attendance', icon: Clock, label: 'Attendance' },
+    { path: '/workforce/timesheets', icon: Receipt, label: 'Timesheets' },
+  ],
+};
+
+// Staff-specific items per module
+const staffModuleItems = {
+  pos: [
+    { path: '/pos', icon: ShoppingCart, label: 'POS' },
+    { path: '/orders', icon: FileText, label: 'Orders' },
+    { path: '/cash-drawer', icon: Wallet, label: 'Cash Drawer' },
+  ],
+  kds: [
+    { path: '/kds', icon: ChefHat, label: 'Kitchen (KDS)' },
+  ],
+};
+
+// Always-visible admin items
+const adminAlwaysItems = [
+  { path: '/reports', icon: BarChart3, label: 'Reports', section: 'core' },
+  { path: '/audit', icon: ClipboardList, label: 'Audit Log', section: 'core' },
 ];
+
+function UpgradeModal({ open, onClose, moduleName }) {
+  const meta = MODULE_META[moduleName] || {};
+  return (
+    <Dialog open={open} onOpenChange={onClose}>
+      <DialogContent className="max-w-md" data-testid="upgrade-modal">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Lock className="w-5 h-5 text-amber-500" />
+            Unlock {meta.label || moduleName}
+          </DialogTitle>
+          <DialogDescription className="pt-2 text-sm leading-relaxed">
+            {meta.description}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="mt-4 p-4 bg-gradient-to-br from-indigo-50 to-violet-50 rounded-xl border border-indigo-100">
+          <p className="text-sm text-slate-700 leading-relaxed">
+            {moduleName === 'workforce' 
+              ? 'Unlock Workforce to give your staff the Heva Ops mobile app for shift swaps, digital clock-in, and payroll tracking.'
+              : `Enable ${meta.label} to expand your restaurant operations.`
+            }
+          </p>
+          <p className="text-xs text-slate-500 mt-3">Contact your platform administrator to enable this module.</p>
+        </div>
+        <Button variant="outline" onClick={() => onClose(false)} className="mt-2 w-full" data-testid="upgrade-modal-close">
+          Got it
+        </Button>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function SidebarContent({ user, onLogout, onOpenSearch }) {
-  const menuItems = user?.role === 'platform_owner' ? platformMenu
-    : user?.role === 'admin' ? adminMenu
-    : posStaffMenu;
+  const { hasFeature } = useAuth();
+  const [upgradeModule, setUpgradeModule] = useState(null);
+
+  if (user?.role === 'platform_owner') {
+    return (
+      <SidebarShell user={user} onLogout={onLogout} onOpenSearch={onOpenSearch}>
+        {platformMenu.map(item => <SidebarLink key={item.path} item={item} />)}
+      </SidebarShell>
+    );
+  }
+
+  const isAdmin = user?.role === 'admin';
+
+  // Build the dynamic menu
+  const buildMenu = () => {
+    const items = [];
+
+    // Dashboard is always first
+    items.push({ path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', enabled: true });
+
+    // Staff Management (Core — always on)
+    if (isAdmin) {
+      items.push({ path: '/staff', icon: Users, label: 'Staff', enabled: true });
+    }
+
+    // Module sections
+    const modules = ['pos', 'kds', 'workforce'];
+    for (const mod of modules) {
+      const enabled = hasFeature(mod);
+      const modItems = isAdmin ? (moduleItems[mod] || []) : (staffModuleItems[mod] || []);
+      
+      if (modItems.length === 0 && !enabled) continue;
+
+      // If enabled, add all items normally
+      if (enabled) {
+        modItems.forEach(mi => items.push({ ...mi, enabled: true }));
+      } else if (isAdmin) {
+        // Disabled module — show a single locked teaser item
+        const firstItem = modItems[0] || { icon: Lock, label: MODULE_META[mod]?.label || mod };
+        items.push({
+          path: null,
+          icon: firstItem.icon,
+          label: MODULE_META[mod]?.label || mod,
+          enabled: false,
+          locked: true,
+          moduleKey: mod,
+        });
+      }
+    }
+
+    // Admin always-visible items
+    if (isAdmin) {
+      adminAlwaysItems.forEach(ai => items.push({ ...ai, enabled: true }));
+      items.push({ path: '/settings', icon: Settings, label: 'Settings', enabled: true });
+    }
+
+    return items;
+  };
+
+  const menuItems = buildMenu();
 
   return (
+    <>
+      <UpgradeModal open={!!upgradeModule} onClose={() => setUpgradeModule(null)} moduleName={upgradeModule || ''} />
+      <SidebarShell user={user} onLogout={onLogout} onOpenSearch={onOpenSearch}>
+        {menuItems.map((item, i) => {
+          if (item.locked) {
+            return (
+              <button
+                key={`locked-${item.moduleKey}`}
+                onClick={() => setUpgradeModule(item.moduleKey)}
+                className="sidebar-link w-full opacity-50 hover:opacity-75 transition-opacity"
+                data-testid={`nav-locked-${item.moduleKey}`}
+              >
+                <item.icon className="w-[18px] h-[18px] flex-shrink-0" strokeWidth={2} />
+                <span className="flex-1 text-left">{item.label}</span>
+                <Lock className="w-3.5 h-3.5 text-amber-400" />
+              </button>
+            );
+          }
+          return <SidebarLink key={item.path || i} item={item} />;
+        })}
+      </SidebarShell>
+    </>
+  );
+}
+
+function SidebarLink({ item }) {
+  const Icon = item.icon;
+  return (
+    <NavLink
+      to={item.path}
+      className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
+      data-testid={`nav-${item.label.toLowerCase().replace(/[\s()]/g, '-')}`}
+    >
+      <Icon className="w-[18px] h-[18px] flex-shrink-0" strokeWidth={2} />
+      <span>{item.label}</span>
+    </NavLink>
+  );
+}
+
+function SidebarShell({ user, onLogout, onOpenSearch, children }) {
+  return (
     <div className="flex flex-col h-full">
-      {/* Logo */}
       <div className="mb-6" data-testid="sidebar-logo">
         <h1 className="font-heading text-xl font-bold tracking-tight text-white">HevaPOS</h1>
         <p className="text-[11px] tracking-[0.15em] uppercase text-slate-400 mt-0.5 font-medium">
           {user?.role === 'platform_owner' ? 'Platform' : user?.role === 'admin' ? 'Restaurant' : 'Staff'}
         </p>
       </div>
-
-      {/* Search Trigger */}
       <button
         onClick={onOpenSearch}
         className="flex items-center gap-2.5 w-full px-3 py-2.5 mb-4 rounded-xl bg-slate-800/50 hover:bg-slate-700/50 text-slate-400 text-sm transition-all border border-slate-700/50"
@@ -65,26 +224,9 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
           Ctrl K
         </kbd>
       </button>
-
-      {/* Navigation */}
       <nav className="flex-1 space-y-0.5 overflow-y-auto scrollbar-thin" data-testid="sidebar-nav">
-        {menuItems.map(item => {
-          const Icon = item.icon;
-          return (
-            <NavLink
-              key={item.path}
-              to={item.path}
-              className={({ isActive }) => `sidebar-link ${isActive ? 'active' : ''}`}
-              data-testid={`nav-${item.label.toLowerCase().replace(/[\s()]/g, '-')}`}
-            >
-              <Icon className="w-[18px] h-[18px] flex-shrink-0" strokeWidth={2} />
-              <span>{item.label}</span>
-            </NavLink>
-          );
-        })}
+        {children}
       </nav>
-
-      {/* User + Logout */}
       <div className="mt-auto pt-4 border-t border-slate-700/50">
         <div className="flex items-center gap-3 px-2 mb-3">
           <div className="w-8 h-8 rounded-lg bg-indigo-600/30 flex items-center justify-center text-indigo-300 text-sm font-bold">
@@ -118,7 +260,6 @@ const Sidebar = () => {
     navigate('/login');
   };
 
-  // Global Ctrl+K shortcut
   React.useEffect(() => {
     const handler = (e) => {
       if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -133,13 +274,9 @@ const Sidebar = () => {
   return (
     <>
       <CommandSearch isOpen={searchOpen} onClose={() => setSearchOpen(false)} />
-
-      {/* Desktop Sidebar */}
       <aside className="sidebar-wrapper hidden md:flex flex-col" data-testid="desktop-sidebar">
         <SidebarContent user={user} onLogout={handleLogout} onOpenSearch={() => setSearchOpen(true)} />
       </aside>
-
-      {/* Mobile Menu */}
       <div className="md:hidden fixed top-0 left-0 right-0 z-50 glass" data-testid="mobile-header">
         <div className="flex items-center justify-between px-4 py-3">
           <Sheet>

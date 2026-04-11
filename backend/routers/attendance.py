@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from database import db
-from dependencies import verify_password, get_current_user, require_admin
+from dependencies import verify_password, get_current_user, require_admin, require_feature
 from models import User
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 from typing import Optional
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_feature("workforce"))])
 
 
 class ClockRequest(BaseModel):

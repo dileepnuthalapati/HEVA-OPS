@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from database import db
-from dependencies import get_current_user, require_platform_owner
+from dependencies import get_current_user, require_platform_owner, DEFAULT_FEATURES, validate_feature_dependencies
 from models import User, Restaurant, RestaurantCreate, RestaurantUpdate
 from typing import List
 from datetime import datetime, timezone, timedelta
@@ -21,10 +21,16 @@ async def create_restaurant(restaurant_data: RestaurantCreate, current_user: Use
         "price": restaurant_data.price,
         "currency": restaurant_data.currency,
         "business_info": restaurant_data.business_info or {},
+        "features": restaurant_data.features or DEFAULT_FEATURES.copy(),
         "users": [],
         "created_at": datetime.now(timezone.utc).isoformat(),
         "trial_ends_at": trial_ends.isoformat()
     }
+    # Validate feature dependencies
+    dep_error = validate_feature_dependencies(restaurant_dict["features"])
+    if dep_error:
+        raise HTTPException(status_code=400, detail=dep_error)
+
     await db.restaurants.insert_one(restaurant_dict)
 
     # Auto-seed default categories for the new restaurant
@@ -73,6 +79,12 @@ async def update_restaurant(restaurant_id: str, restaurant_data: RestaurantCreat
         "currency": restaurant_data.currency,
         "business_info": restaurant_data.business_info or restaurant.get("business_info", {}),
     }
+    if restaurant_data.features is not None:
+        dep_error = validate_feature_dependencies(restaurant_data.features)
+        if dep_error:
+            raise HTTPException(status_code=400, detail=dep_error)
+        update_dict["features"] = restaurant_data.features
+
     await db.restaurants.update_one({"id": restaurant_id}, {"$set": update_dict})
     updated = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0})
     return Restaurant(**updated)
@@ -122,6 +134,20 @@ async def update_restaurant_settings(settings: RestaurantUpdate, current_user: U
 
     updated = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0})
     return Restaurant(**updated)
+
+
+@router.put("/restaurants/{restaurant_id}/features")
+async def update_restaurant_features(restaurant_id: str, features: dict, current_user: User = Depends(require_platform_owner)):
+    """Platform Owner toggles modules for a restaurant."""
+    restaurant = await db.restaurants.find_one({"id": restaurant_id})
+    if not restaurant:
+        raise HTTPException(status_code=404, detail="Restaurant not found")
+    dep_error = validate_feature_dependencies(features)
+    if dep_error:
+        raise HTTPException(status_code=400, detail=dep_error)
+    await db.restaurants.update_one({"id": restaurant_id}, {"$set": {"features": features}})
+    return {"message": "Features updated", "features": features}
+
 
 
 @router.get("/restaurants")

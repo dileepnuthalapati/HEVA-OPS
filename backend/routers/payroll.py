@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from database import db
-from dependencies import get_current_user, require_admin
+from dependencies import get_current_user, require_admin, require_feature
 from models import User
 from datetime import datetime, timezone
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_feature("workforce"))])
 
 
 @router.get("/payroll/report")

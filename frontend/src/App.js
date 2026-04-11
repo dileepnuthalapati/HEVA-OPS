@@ -29,6 +29,11 @@ import TableManagement from './pages/TableManagement';
 import PrinterSettings from './pages/PrinterSettings';
 import AuditLog from './pages/AuditLog';
 
+// Pages - Workforce Module
+import ShiftScheduler from './pages/ShiftScheduler';
+import AttendancePage from './pages/AttendancePage';
+import TimesheetsPage from './pages/TimesheetsPage';
+
 // Pages - All Users
 import Login from './pages/Login';
 import POSScreen from './pages/POSScreen';
@@ -129,6 +134,12 @@ const AppRoutes = () => {
       <Route path="/printers" element={<ProtectedRoute restaurantAdminOnly><PrinterSettings /></ProtectedRoute>} />
       <Route path="/audit" element={<ProtectedRoute restaurantAdminOnly><AuditLog /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute restaurantAdminOnly><RestaurantSettings /></ProtectedRoute>} />
+      <Route path="/staff" element={<ProtectedRoute restaurantAdminOnly><RestaurantSettings /></ProtectedRoute>} />
+      
+      {/* Workforce Module Routes */}
+      <Route path="/workforce/shifts" element={<ProtectedRoute restaurantAdminOnly><ShiftScheduler /></ProtectedRoute>} />
+      <Route path="/workforce/attendance" element={<ProtectedRoute restaurantAdminOnly><AttendancePage /></ProtectedRoute>} />
+      <Route path="/workforce/timesheets" element={<ProtectedRoute restaurantAdminOnly><TimesheetsPage /></ProtectedRoute>} />
       
       {/* POS Staff & Restaurant Admin */}
       <Route path="/pos" element={<ProtectedRoute><POSScreen /></ProtectedRoute>} />
