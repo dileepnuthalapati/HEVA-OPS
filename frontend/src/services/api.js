@@ -259,6 +259,10 @@ export const reportAPI = {
     const response = await api.get('/reports/today');
     return response.data;
   },
+  getWeeklyTrend: async () => {
+    const response = await api.get('/reports/weekly-trend');
+    return response.data;
+  },
   generatePDF: async (startDate, endDate) => {
     const response = await api.post('/reports/generate', 
       { start_date: startDate, end_date: endDate },

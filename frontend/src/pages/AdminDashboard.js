@@ -5,12 +5,12 @@ import { reportAPI, restaurantAPI, subscriptionAPI, tableAPI } from '../services
 import api from '../services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Switch } from '../components/ui/switch';
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
+import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
 import { toast } from 'sonner';
 import { 
-  TrendingUp, ShoppingBag, Package, Coins, Calendar, 
+  TrendingUp, TrendingDown, ShoppingBag, Package, Coins, Calendar, 
   AlertTriangle, Clock, CreditCard, Banknote, QrCode,
-  MonitorSmartphone, UtensilsCrossed, Power, ChefHat
+  MonitorSmartphone, UtensilsCrossed, Power, ChefHat, ArrowUpRight, ArrowDownRight
 } from 'lucide-react';
 
 const getCurrencySymbol = (currency) => {
@@ -27,20 +27,23 @@ const AdminDashboard = () => {
   const [qrEnabled, setQrEnabled] = useState(true);
   const [togglingQR, setTogglingQR] = useState(false);
   const [kdsStats, setKdsStats] = useState(null);
+  const [weeklyTrend, setWeeklyTrend] = useState(null);
 
   const loadAll = useCallback(async () => {
     try {
-      const [statsData, restaurant, sub, kds] = await Promise.all([
+      const [statsData, restaurant, sub, kds, weekly] = await Promise.all([
         reportAPI.getTodayStats().catch(() => null),
         restaurantAPI.getMy().catch(() => null),
         subscriptionAPI.getMy().catch(() => null),
         api.get('/kds/stats').then(r => r.data).catch(() => null),
+        reportAPI.getWeeklyTrend().catch(() => null),
       ]);
       if (statsData) setStats(statsData);
       if (restaurant?.currency) setCurrency(restaurant.currency);
       if (restaurant) setQrEnabled(restaurant.qr_ordering_enabled !== false);
       if (sub) setSubscription(sub);
       if (kds) setKdsStats(kds);
+      if (weekly) setWeeklyTrend(weekly);
     } catch (error) {
       console.error('Dashboard load error:', error);
     } finally {
@@ -143,26 +146,113 @@ const AdminDashboard = () => {
                 </Card>
               )}
 
+              {/* ══════════════ Daily Revenue Widget ══════════════ */}
+              {(() => {
+                const todayTotal = stats?.total_sales || 0;
+                const cashTotal = stats?.cash_total || 0;
+                const cardTotal = stats?.card_total || 0;
+                const yesterdayData = weeklyTrend?.days?.[5]; // 2nd to last = yesterday
+                const yesterdayTotal = yesterdayData?.total || 0;
+                const pctChange = yesterdayTotal > 0 
+                  ? ((todayTotal - yesterdayTotal) / yesterdayTotal * 100).toFixed(1)
+                  : todayTotal > 0 ? 100 : 0;
+                const isUp = pctChange >= 0;
+                const cashPct = todayTotal > 0 ? (cashTotal / todayTotal * 100).toFixed(0) : 50;
+
+                return (
+                  <Card className="mb-6 bg-white border-slate-200/60 shadow-sm overflow-hidden" data-testid="daily-revenue-widget">
+                    <CardContent className="p-0">
+                      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1px_280px] xl:grid-cols-[1fr_1px_340px]">
+                        {/* Left: Total Revenue */}
+                        <div className="p-5 md:p-6">
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Today's Revenue</span>
+                            {pctChange != 0 && (
+                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${
+                                isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'
+                              }`} data-testid="revenue-pct-change">
+                                {isUp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                                {Math.abs(pctChange)}%
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-3xl md:text-4xl font-bold font-mono text-slate-900 mb-4" data-testid="revenue-total">
+                            {sym}{todayTotal.toFixed(2)}
+                          </div>
+
+                          {/* Cash vs Card Breakdown */}
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="flex items-center gap-2 text-slate-600 font-medium">
+                                <Banknote className="w-4 h-4 text-emerald-500" /> Cash
+                              </span>
+                              <span className="font-bold font-mono text-slate-800">{sym}{cashTotal.toFixed(2)}</span>
+                            </div>
+                            <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden flex">
+                              <div 
+                                className="h-full bg-emerald-500 rounded-l-full transition-all duration-500" 
+                                style={{ width: `${cashPct}%` }}
+                                data-testid="cash-bar"
+                              />
+                              <div 
+                                className="h-full bg-indigo-500 rounded-r-full transition-all duration-500" 
+                                style={{ width: `${100 - cashPct}%` }}
+                                data-testid="card-bar"
+                              />
+                            </div>
+                            <div className="flex items-center justify-between text-sm">
+                              <span className="flex items-center gap-2 text-slate-600 font-medium">
+                                <CreditCard className="w-4 h-4 text-indigo-500" /> Card
+                              </span>
+                              <span className="font-bold font-mono text-slate-800">{sym}{cardTotal.toFixed(2)}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Divider */}
+                        <div className="hidden lg:block bg-slate-100" />
+
+                        {/* Right: 7-Day Sparkline */}
+                        <div className="p-5 md:p-6 border-t lg:border-t-0 border-slate-100">
+                          <span className="text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400 mb-3 block">Last 7 Days</span>
+                          {weeklyTrend?.days ? (
+                            <div className="h-[120px]" data-testid="weekly-chart">
+                              <ResponsiveContainer width="100%" height="100%">
+                                <BarChart data={weeklyTrend.days} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+                                  <XAxis 
+                                    dataKey="label" 
+                                    tick={{ fontSize: 11, fill: '#94a3b8' }} 
+                                    tickLine={false}
+                                    axisLine={false}
+                                  />
+                                  <Tooltip
+                                    formatter={(value) => [`${sym}${value.toFixed(2)}`, 'Revenue']}
+                                    labelFormatter={(label, payload) => payload?.[0]?.payload?.date || label}
+                                    contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 12, padding: '6px 10px' }}
+                                  />
+                                  <Bar dataKey="total" radius={[4, 4, 0, 0]} maxBarSize={32}>
+                                    {weeklyTrend.days.map((entry, index) => (
+                                      <Cell 
+                                        key={index}
+                                        fill={index === weeklyTrend.days.length - 1 ? '#4F46E5' : '#cbd5e1'}
+                                      />
+                                    ))}
+                                  </Bar>
+                                </BarChart>
+                              </ResponsiveContainer>
+                            </div>
+                          ) : (
+                            <div className="h-[120px] flex items-center justify-center text-sm text-slate-400">Loading...</div>
+                          )}
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+
               {/* Key Metrics Grid */}
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
-                <Card className="bg-white border-slate-200/60 shadow-sm hover:shadow-md transition-shadow" data-testid="metric-total-sales">
-                  <CardContent className="p-4 md:p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Sales</span>
-                      <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center">
-                        <Coins className="w-4 h-4 text-emerald-600" />
-                      </div>
-                    </div>
-                    <div className="text-xl md:text-2xl font-bold font-mono text-slate-900">
-                      {sym}{stats?.total_sales?.toFixed(2) || '0.00'}
-                    </div>
-                    <div className="flex gap-3 mt-2.5 text-[11px] text-slate-400 font-medium">
-                      <span className="flex items-center gap-1"><Banknote className="w-3 h-3" /> {sym}{stats?.cash_total?.toFixed(2) || '0.00'}</span>
-                      <span className="flex items-center gap-1"><CreditCard className="w-3 h-3" /> {sym}{stats?.card_total?.toFixed(2) || '0.00'}</span>
-                    </div>
-                  </CardContent>
-                </Card>
-
                 <Card 
                   className="bg-white border-slate-200/60 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-indigo-300" 
                   data-testid="metric-total-orders" 
@@ -209,6 +299,23 @@ const AdminDashboard = () => {
                       {stats?.open_tables || 0}<span className="text-sm text-slate-400 font-medium ml-1">/ {stats?.total_tables || 0}</span>
                     </div>
                     <p className="text-[11px] text-slate-400 font-medium mt-2.5">Open / Total</p>
+                  </CardContent>
+                </Card>
+
+                <Card 
+                  className="bg-white border-slate-200/60 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-emerald-300" 
+                  data-testid="metric-completed"
+                  onClick={() => navigate('/reports')}
+                >
+                  <CardContent className="p-4 md:p-5">
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Completed</span>
+                      <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center">
+                        <Coins className="w-4 h-4 text-emerald-600" />
+                      </div>
+                    </div>
+                    <div className="text-xl md:text-2xl font-bold font-mono text-slate-900">{stats?.total_orders || 0}</div>
+                    <p className="text-[11px] text-slate-400 font-medium mt-2.5">View full reports</p>
                   </CardContent>
                 </Card>
               </div>
