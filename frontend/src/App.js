@@ -50,6 +50,7 @@ import TerminalPinScreen from './pages/TerminalPinScreen';
 // Pages - Public (No Auth)
 import GuestMenu from './pages/GuestMenu';
 import PaymentSuccess from './pages/PaymentSuccess';
+import StaffOnboarding from './pages/StaffOnboarding';
 
 // Styles
 import './App.css';
@@ -115,6 +116,7 @@ const AppRoutes = () => {
       {/* Public routes — no auth required */}
       <Route path="/menu/:restaurantId/:tableHash" element={<GuestMenu />} />
       <Route path="/payment-success" element={<PaymentSuccess />} />
+      <Route path="/onboarding/:token" element={<StaffOnboarding />} />
       
       {/* Terminal Kiosk: when not logged in, show PIN pad instead of login */}
       <Route path="/login" element={isTerminal ? <TerminalPinScreen /> : <Login />} />

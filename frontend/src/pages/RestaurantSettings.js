@@ -39,6 +39,7 @@ const RestaurantSettings = () => {
   const [editingStaff, setEditingStaff] = useState(null);
   const [staffForm, setStaffForm] = useState({ username: '', email: '', password: '', role: 'user', capabilities: [], pos_pin: '', position: '', hourly_rate: '', phone: '', employment_type: 'full_time', joining_date: '', tax_id: '' });
   const [staffSaving, setStaffSaving] = useState(false);
+  const [onboardingLink, setOnboardingLink] = useState(null); // { url, username }
 
   // PIN dialog
   const [pinDialog, setPinDialog] = useState({ open: false, staff: null });
@@ -168,11 +169,20 @@ const RestaurantSettings = () => {
       if (editingStaff) {
         await staffAPI.update(editingStaff.id, cleanedData);
         toast.success(`Staff "${staffForm.username}" updated`);
+        setShowStaffDialog(false);
       } else {
-        await staffAPI.create(cleanedData);
+        const result = await staffAPI.create(cleanedData);
+        setShowStaffDialog(false);
+        // Show onboarding link
+        if (result.onboarding_token) {
+          const baseUrl = window.location.origin;
+          setOnboardingLink({
+            url: `${baseUrl}/onboarding/${result.onboarding_token}`,
+            username: staffForm.username,
+          });
+        }
         toast.success(`Staff "${staffForm.username}" created`);
       }
-      setShowStaffDialog(false);
       loadStaff();
     } catch (error) {
       const detail = error.response?.data?.detail;
@@ -920,9 +930,44 @@ const RestaurantSettings = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Onboarding Link Dialog */}
+      <Dialog open={!!onboardingLink} onOpenChange={(open) => { if (!open) setOnboardingLink(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><CheckCircle className="w-5 h-5 text-emerald-600" /> Staff Created</DialogTitle>
+            <DialogDescription>Share this setup link with <span className="font-semibold">{onboardingLink?.username}</span></DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <p className="text-sm text-muted-foreground">
+              They'll use this link to set their own password and PIN — no need to share credentials manually.
+            </p>
+            <div className="flex gap-2">
+              <Input
+                readOnly
+                value={onboardingLink?.url || ''}
+                className="text-xs font-mono bg-muted"
+                data-testid="onboarding-link-input"
+                onClick={(e) => e.target.select()}
+              />
+              <Button
+                variant="outline"
+                onClick={() => {
+                  navigator.clipboard.writeText(onboardingLink?.url || '');
+                  toast.success('Link copied!');
+                }}
+                data-testid="copy-onboarding-link-btn"
+                className="shrink-0"
+              >
+                Copy
+              </Button>
+            </div>
+            <Button className="w-full" onClick={() => setOnboardingLink(null)} data-testid="close-onboarding-btn">Done</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
 export default RestaurantSettings;
-s;

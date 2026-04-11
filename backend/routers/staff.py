@@ -3,6 +3,7 @@ from database import db
 from dependencies import get_password_hash, verify_password, get_current_user, require_admin
 from models import User, StaffCreate, StaffUpdate, PasswordReset, PasswordChange
 from datetime import datetime, timezone
+import secrets
 
 router = APIRouter()
 
@@ -27,6 +28,10 @@ async def create_restaurant_staff(staff: StaffCreate, current_user: User = Depen
         existing_email = await db.users.find_one({"email": staff.email})
         if existing_email:
             raise HTTPException(status_code=400, detail="Email already in use")
+
+    # Generate onboarding token
+    onboarding_token = secrets.token_urlsafe(32)
+
     user_doc = {
         "id": f"user_{datetime.now(timezone.utc).timestamp()}",
         "username": staff.username,
@@ -41,13 +46,78 @@ async def create_restaurant_staff(staff: StaffCreate, current_user: User = Depen
         "employment_type": staff.employment_type or "full_time",
         "joining_date": staff.joining_date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
         "tax_id": staff.tax_id or "",
+        "onboarding_token": onboarding_token,
+        "onboarding_completed": False,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": current_user.username,
     }
     if staff.pos_pin and len(staff.pos_pin) == 4 and staff.pos_pin.isdigit():
         user_doc["pos_pin_hash"] = get_password_hash(staff.pos_pin)
     await db.users.insert_one(user_doc)
-    return {"message": f"Staff '{staff.username}' created", "id": user_doc["id"]}
+    return {
+        "message": f"Staff '{staff.username}' created",
+        "id": user_doc["id"],
+        "onboarding_token": onboarding_token,
+    }
+
+
+# --- Public onboarding endpoints (no auth required) ---
+
+@router.get("/onboarding/{token}")
+async def get_onboarding_info(token: str):
+    """Public: staff opens this link to see their setup page."""
+    user = await db.users.find_one(
+        {"onboarding_token": token},
+        {"_id": 0, "password_hash": 0, "pos_pin_hash": 0, "manager_pin_hash": 0}
+    )
+    if not user:
+        raise HTTPException(status_code=404, detail="Invalid or expired onboarding link")
+    if user.get("onboarding_completed"):
+        raise HTTPException(status_code=400, detail="Account already set up")
+
+    # Get business name
+    restaurant = await db.restaurants.find_one({"id": user.get("restaurant_id")}, {"_id": 0})
+    biz_name = restaurant.get("business_info", {}).get("name", restaurant.get("name", "")) if restaurant else ""
+
+    return {
+        "username": user.get("username"),
+        "email": user.get("email"),
+        "business_name": biz_name,
+        "position": user.get("position", ""),
+        "capabilities": user.get("capabilities", []),
+    }
+
+
+from pydantic import BaseModel as PydanticBaseModel
+from typing import Optional as Opt
+
+
+class OnboardingComplete(PydanticBaseModel):
+    password: str
+    pos_pin: Opt[str] = None
+
+
+@router.post("/onboarding/{token}/complete")
+async def complete_onboarding(token: str, data: OnboardingComplete):
+    """Public: staff sets their own password and PIN."""
+    user = await db.users.find_one({"onboarding_token": token}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="Invalid or expired onboarding link")
+    if user.get("onboarding_completed"):
+        raise HTTPException(status_code=400, detail="Account already set up")
+    if len(data.password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+
+    update = {
+        "password_hash": get_password_hash(data.password),
+        "onboarding_completed": True,
+        "onboarding_token": None,  # Invalidate the token
+    }
+    if data.pos_pin and len(data.pos_pin) == 4 and data.pos_pin.isdigit():
+        update["pos_pin_hash"] = get_password_hash(data.pos_pin)
+
+    await db.users.update_one({"id": user["id"]}, {"$set": update})
+    return {"message": "Account setup complete! You can now log in.", "username": user.get("username")}
 
 
 @router.put("/restaurant/staff/{user_id}/reset-password")
