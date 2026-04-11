@@ -1,35 +1,21 @@
-# HevaPOS - Test Credentials
+# HevaPOS Test Credentials
 
-## Login Accounts
-
-### SKAdmin (Production User)
-- Username: `SKAdmin`
-- Password: `saswata@123`
-- Role: admin
-- Restaurant: rest_demo_1
-- Navigates to: `/dashboard`
-
-### Platform Owner
+## Platform Owner
 - Username: `platform_owner`
 - Password: `admin123`
 - Navigates to: `/platform/dashboard`
 
-### Restaurant Admin
-- Username: `restaurant_admin`
-- Password: `admin123`
-- Restaurant ID: `rest_demo_1`
-- POS PIN: `2222`
+## Restaurant Admin (rest_demo_1)
+- Username: `SKAdmin`
+- Password: `saswata@123`
+- Restaurant: `rest_demo_1` (Pizza Palace Updated)
+- Features: `{pos: true, kds: true, qr_ordering: true, workforce: true}`
 - Navigates to: `/dashboard`
 
-### Staff User
+## Staff User (rest_demo_1)
 - Username: `user`
 - Password: `user123`
-- POS PIN: `1111`
 - Navigates to: `/pos`
 
-## Manager PIN
-- PIN: `1234` (for void authorization)
-
-## QR Menu Test URLs
-- /menu/rest_demo_1/1-TedTy (Table 1)
-- /menu/rest_demo_1/14-as7MV (Table 2)
+## Manager PIN (for void authorization)
+- PIN: `1234` (set on SKAdmin account)

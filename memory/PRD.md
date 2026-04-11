@@ -1,12 +1,46 @@
 # HevaPOS - Product Requirements Document
 
 ## Overview
-Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB), mobile-first frontend (React + Capacitor APK). Three roles: Platform Owner, Restaurant Admin, Staff. Revenue model: **0.3% commission on QR orders via Stripe Connect**.
+Multi-tenant **Modular SaaS** POS system for restaurants. Cloud backend (FastAPI + MongoDB), mobile-first frontend (React + Capacitor APK). Three roles: Platform Owner, Restaurant Admin, Staff. Revenue model: **0.3% commission on QR orders via Stripe Connect**.
 
-## Architecture
+## Modular Architecture (Apr 11, 2026)
+Every capability is an independently toggleable module per restaurant:
+
+| Layer | Details |
+|---|---|
+| **Core (Always On)** | Business Profile, Staff Management, PINs, Roles, Settings, Dashboard, Reports |
+| **POS Module** | POS Screen, Cart, Orders, Cash Drawer, Receipts, Printers |
+| **KDS Module** | Kitchen Display System (requires POS or QR) |
+| **QR Ordering** | QR codes, Guest menu, Table ordering (requires POS for menu) |
+| **Workforce** | Shifts/Rota, Clock In/Out, Timesheets, Payroll, Swap Requests |
+
+**Feature Flags:** `Restaurant.features = {pos: bool, kds: bool, qr_ordering: bool, workforce: bool}`
+**Enforcement:** `require_feature()` dependency on backend, `hasFeature()` on frontend
+**JWT Embedded:** Features included in login token — zero extra DB calls for access checks
+**Sidebar:** Enabled modules = normal nav, Disabled = greyed with lock icon + "Upgrade to Unlock" modal
+
+## Code Architecture
 ```
-/app/backend/routers/ (auth, platform, restaurants, menu, orders, reports, payments, cash_drawer, kds, qr_menu, audit, docs, tables, reservations, receipts, printers, staff, subscriptions, notifications, email, health)
-/app/frontend/src/ (pages, components, context, services)
+/app/backend/
+├── dependencies.py          # require_feature(), validate_feature_dependencies()
+├── models.py                # RestaurantFeatures, updated Restaurant model
+├── routers/
+│   ├── auth.py              # Login returns features in JWT
+│   ├── restaurants.py       # Feature toggle API (PUT /restaurants/{id}/features)
+│   ├── shifts.py            # Workforce: CRUD + Copy Week + Publish
+│   ├── attendance.py        # Workforce: Clock In/Out, Ghost shift detection
+│   ├── timesheets.py        # Workforce: Scheduled vs Actual, Approve/Lock
+│   ├── payroll.py           # Workforce: Gross Pay + Efficiency Ratio
+│   └── swap_requests.py     # Workforce: Shift swap workflow
+
+/app/frontend/src/
+├── context/AuthContext.js    # hasFeature(), features in user state
+├── components/Sidebar.js     # Dynamic sidebar with lock icons + upgrade modal
+├── pages/
+│   ├── ShiftScheduler.js     # Weekly shift grid
+│   ├── AttendancePage.js     # Live clock-ins + history
+│   ├── TimesheetsPage.js     # Timesheets + payroll summary
+│   └── RestaurantManagement.js # Module toggle checkboxes
 ```
 
 ## All Completed Features
@@ -36,14 +70,15 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 24. Double-tap prevention (touch-action:manipulation + useRef guards)
 25. Printer WiFi scan optimization (priority IPs, retry logic, 1.2s timeout)
 26. KDS table names + large quantity display (enriched from tables collection)
-27. **Daily Revenue Widget** (today's total, cash/card progress bar, 7-day sparkline, % change)
+27. Daily Revenue Widget (today's total, cash/card progress bar, 7-day sparkline)
+28. **Modular SaaS Architecture** (Feature flags per restaurant, dependency validation)
+29. **Workforce Module Phase 1** (Shift Scheduler, Attendance, Timesheets, Payroll APIs + Manager UI)
+30. **Dynamic Sidebar** (enabled = normal, disabled = lock icon + upgrade modal)
+31. **Cross-talk Logic** (Efficiency Ratio visible when POS + Workforce both active)
 
-## Daily Revenue Widget (April 11, 2026)
-- Big total revenue with % change from yesterday (green up/red down badge)
-- Cash vs Card visual progress bar (emerald=cash, indigo=card)
-- 7-day bar chart sparkline with today highlighted in indigo
-- Backend: `GET /api/reports/weekly-trend` returns 7 days of daily totals with cash/card split
-- Metric cards: Orders (POS/QR), Avg Order, Tables, Completed
+## Upcoming (P0)
+- Workforce Phase 2: Staff Companion PWA (Heva Ops) — My Shifts, Clock In/Out via PIN, Swap Requests
+- Guard existing POS/KDS/QR routers with their respective require_feature() guards
 
 ## Upcoming (P1)
 - Daily email summary for restaurant admins
