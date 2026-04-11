@@ -84,12 +84,20 @@ const ProtectedRoute = ({ children, adminOnly = false, platformOwnerOnly = false
     if (isPlatformOwner) {
       return <Navigate to="/platform/dashboard" replace />;
     }
+    // Staff: smart redirect based on features
+    const features = user.features || {};
+    if (features.pos) return <Navigate to="/pos" replace />;
+    if (features.workforce) return <Navigate to="/heva-ops/shifts" replace />;
     return <Navigate to="/pos" replace />;
   }
 
   // Admin routes (platform owner OR restaurant admin)
   if (adminOnly && user.role === 'user') {
-    return <Navigate to="/pos" replace />;
+    // Smart redirect: route to first available module
+    const features = user.features || {};
+    if (features.pos) return <Navigate to="/pos" replace />;
+    if (features.workforce) return <Navigate to="/heva-ops/shifts" replace />;
+    return <Navigate to="/dashboard" replace />;
   }
 
   return children;
@@ -114,7 +122,10 @@ const AppRoutes = () => {
             ) : isRestaurantAdmin ? (
               <Navigate to="/dashboard" replace />
             ) : (
-              <Navigate to="/pos" replace />
+              // Staff: route to first available module
+              (user.features?.pos ? <Navigate to="/pos" replace /> :
+               user.features?.workforce ? <Navigate to="/heva-ops/shifts" replace /> :
+               <Navigate to="/dashboard" replace />)
             )
           ) : (
             <Navigate to="/login" replace />
@@ -141,7 +152,7 @@ const AppRoutes = () => {
       <Route path="/printers" element={<ProtectedRoute restaurantAdminOnly><PrinterSettings /></ProtectedRoute>} />
       <Route path="/audit" element={<ProtectedRoute restaurantAdminOnly><AuditLog /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute restaurantAdminOnly><RestaurantSettings /></ProtectedRoute>} />
-      <Route path="/staff" element={<ProtectedRoute restaurantAdminOnly><RestaurantSettings /></ProtectedRoute>} />
+      {/* /staff route removed — user management is inside Settings */}
       
       {/* Workforce Module Routes */}
       <Route path="/workforce/shifts" element={<ProtectedRoute restaurantAdminOnly><ShiftScheduler /></ProtectedRoute>} />

@@ -16,10 +16,11 @@ export default function FloatingClockButton() {
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // Hide on POS screen and login
-  const isHiddenRoute = ['/pos', '/login', '/kds'].includes(location.pathname);
-  // Only show for restaurant users with workforce enabled
-  const shouldShow = user && user.role !== 'platform_owner' && hasFeature('workforce') && !isHiddenRoute;
+  // Only show on specific workforce-relevant pages (whitelist)
+  const workforcePages = ['/dashboard', '/settings', '/workforce/shifts', '/workforce/attendance', '/workforce/timesheets'];
+  const isAllowedRoute = workforcePages.some(p => location.pathname.startsWith(p));
+  // Only show for restaurant users with workforce enabled, on relevant pages
+  const shouldShow = user && user.role !== 'platform_owner' && hasFeature('workforce') && isAllowedRoute;
 
   // Check current clock-in status
   useEffect(() => {

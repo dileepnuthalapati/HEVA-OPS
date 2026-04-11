@@ -66,11 +66,8 @@ const staffModuleItems = {
   ],
 };
 
-// Always-visible admin items
-const adminAlwaysItems = [
-  { path: '/reports', icon: BarChart3, label: 'Reports', section: 'core' },
-  { path: '/audit', icon: ClipboardList, label: 'Audit Log', section: 'core' },
-];
+// Reports & Audit — shown only when relevant modules are active
+// (Reports = POS data, Audit = order events)
 
 function UpgradeModal({ open, onClose, moduleName }) {
   const meta = MODULE_META[moduleName] || {};
@@ -140,10 +137,7 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
     // Dashboard is always first
     items.push({ path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard', enabled: true });
 
-    // Staff Management (Core — always on)
-    if (isAdmin) {
-      items.push({ path: '/staff', icon: Users, label: 'Staff', enabled: true });
-    }
+    // Staff Management removed — it's now inside Settings → User Management tab
 
     // Module sections
     const modules = ['pos', 'kds', 'workforce'];
@@ -170,9 +164,12 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
       }
     }
 
-    // Admin always-visible items
+    // Reports & Audit: only when POS or KDS is active (they track orders)
     if (isAdmin) {
-      adminAlwaysItems.forEach(ai => items.push({ ...ai, enabled: true }));
+      if (hasFeature('pos') || hasFeature('kds') || hasFeature('qr_ordering')) {
+        items.push({ path: '/reports', icon: BarChart3, label: 'Reports', enabled: true });
+        items.push({ path: '/audit', icon: ClipboardList, label: 'Audit Log', enabled: true });
+      }
       items.push({ path: '/settings', icon: Settings, label: 'Settings', enabled: true });
     }
 
@@ -227,7 +224,7 @@ function SidebarShell({ user, onLogout, onOpenSearch, children }) {
       <div className="mb-6" data-testid="sidebar-logo">
         <h1 className="font-heading text-xl font-bold tracking-tight text-white">Heva One</h1>
         <p className="text-[11px] tracking-[0.15em] uppercase text-slate-400 mt-0.5 font-medium">
-          {user?.role === 'platform_owner' ? 'Platform' : user?.role === 'admin' ? 'Restaurant' : 'Staff'}
+          {user?.role === 'platform_owner' ? 'Platform' : user?.role === 'admin' ? 'Business' : 'Staff'}
         </p>
       </div>
       <button
