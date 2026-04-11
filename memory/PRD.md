@@ -1,67 +1,72 @@
 # Heva One - Product Requirements Document
 
 ## Overview
-Multi-tenant **Modular SaaS** business management system. Cloud backend (FastAPI + MongoDB), mobile-first frontend (React + Capacitor APK). Three roles: Platform Owner, Business Admin, Staff. Revenue model: **per-module monthly pricing + 0.3% commission on QR orders via Stripe Connect**.
+Multi-tenant **Modular SaaS** business management system. Cloud backend (FastAPI + MongoDB), mobile-first frontend (React + Capacitor APK). Revenue model: **per-module monthly pricing + 0.3% commission on QR orders via Stripe Connect**.
 
-## Modular Architecture (Apr 11, 2026)
+## Universal App Architecture (Apr 11, 2026)
+ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
+
+| Mode | Device | Boot Screen | Experience |
+|---|---|---|---|
+| **Terminal (Kiosk)** | Store tablet | PIN Pad | Staff enter PIN → POS or Clock-In toast |
+| **Personal** | Staff phone | Email + Password | Heva Ops workspace (shifts, clock-in, swaps) |
+
+**Device Registration:** Admin → Settings → Security → "Register as POS Terminal" → stores `device_mode` in localStorage → app boots to PIN Pad.
+**Unregister:** Admin gear icon on PIN pad → Manager PIN → clears registration.
+
+## Staff Capabilities System
+Each staff member has a `capabilities` array:
+- `pos.access` — Take orders on POS terminal
+- `kds.access` — View kitchen display
+- `workforce.clock_in` — Clock in/out of shifts
+- `workforce.manage_rota` — Create and edit shift schedules
+
+Capabilities shown in admin UI are **filtered by active business modules**. A workforce-only business only shows workforce capabilities.
+
+**Terminal PIN Routing:**
+- PIN → check capabilities → `pos.access` → POS screen
+- PIN → check capabilities → `workforce.clock_in` only → clock in toast → 3s auto-reset to PIN pad
+
+## Attendance Entry Source
+Every clock-in/out record includes `entry_source`:
+- `"mobile_app"` — via personal phone (Heva Ops or floating button) — 10m geofence enforced
+- `"pos_terminal"` — via shared terminal PIN pad — no geofence (device is at the business)
+
+## Modular Architecture
 Every capability is an independently toggleable module per business:
 
 | Layer | Details |
 |---|---|
-| **Core (Always On)** | Business Profile, Staff/User Management (inside Settings), PINs, Roles, Settings, Dashboard, Reports |
+| **Core (Always On)** | Business Profile, Staff/User Management, PINs, Roles, Settings, Dashboard |
 | **POS Module** | POS Screen, Cart, Orders, Cash Drawer, Receipts, Printers |
-| **KDS Module** | Kitchen Display System (requires POS or QR) |
-| **QR Ordering** | QR codes, Guest menu, Table ordering (requires POS for menu) |
+| **KDS Module** | Kitchen Display System |
+| **QR Ordering** | QR codes, Guest menu, Table ordering |
 | **Workforce** | Shifts/Rota, Clock In/Out, Timesheets, Payroll, Swap Requests |
-
-**Feature Flags:** `Restaurant.features = {pos: bool, kds: bool, qr_ordering: bool, workforce: bool}`
-**Backend Enforcement:** `require_feature()` and `require_any_feature()` dependencies on ALL module routers
-**JWT Embedded:** Features included in login token — zero extra DB calls
-**Sidebar:** Enabled = normal nav, Disabled = greyed with lock icon + "Upgrade to Unlock" modal showing module price
-**Module Pricing:** Platform Owner sets per-module monthly prices via Platform Settings
-
-## Two Frontends, One Backend
-| Frontend | Who | Where |
-|---|---|---|
-| **Heva One Manager** | Admin/Manager | Tablet/Desktop — Full admin UI |
-| **Heva Ops** (Staff Companion) | Staff | Mobile phone — `/heva-ops/*` — My Shifts, Clock In/Out, Swap Requests |
 
 ## Code Architecture
 ```
 /app/backend/
-├── dependencies.py          # require_feature(), require_any_feature(), validate_feature_dependencies()
-├── models.py                # RestaurantFeatures, ModulePricing
+├── dependencies.py          # require_feature(), validate_feature_dependencies()
+├── models.py                # StaffCreate with email + capabilities
 ├── routers/
-│   ├── auth.py              # Login returns features in JWT, PIN login with smart routing
-│   ├── restaurants.py       # Feature toggle API
-│   ├── platform.py          # Module pricing CRUD
-│   ├── orders.py            # Guarded: require_any_feature("pos", "qr_ordering")
-│   ├── menu.py              # Guarded: require_any_feature("pos", "qr_ordering")
-│   ├── tables.py            # Guarded: require_any_feature("pos", "qr_ordering")
-│   ├── cash_drawer.py       # Guarded: require_feature("pos")
-│   ├── receipts.py          # Guarded: require_feature("pos")
-│   ├── printers.py          # Guarded: require_feature("pos")
-│   ├── kds.py               # Guarded: require_feature("kds")
-│   ├── qr_menu.py           # Public endpoints check features inline
-│   ├── shifts.py            # Guarded: require_feature("workforce")
-│   ├── attendance.py        # Guarded: require_feature("workforce") + dashboard-stats endpoint
-│   ├── timesheets.py        # Guarded: require_feature("workforce")
-│   ├── payroll.py           # Guarded: require_feature("workforce")
-│   └── swap_requests.py     # Guarded: require_feature("workforce")
+│   ├── auth.py              # Email/username login, PIN login, verify-manager-pin
+│   ├── staff.py             # CRUD with email + capabilities
+│   ├── attendance.py        # Clock with entry_source, geofence bypass for terminal
+│   ├── shifts.py, timesheets.py, payroll.py, swap_requests.py
+│   ├── orders.py, menu.py, tables.py, cash_drawer.py, receipts.py, printers.py
+│   ├── kds.py, qr_menu.py, restaurants.py, platform.py
 
 /app/frontend/src/
-├── context/AuthContext.js    # hasFeature(), features in user state
-├── components/
-│   ├── Sidebar.js           # Dynamic sidebar: module-aware, no Staff item, conditional Reports/Audit
-│   ├── FloatingClockButton.js  # Whitelist: only on /dashboard, /settings, /workforce/*
+├── context/AuthContext.js    # hasFeature(), hasCapability(), isTerminalMode
 ├── pages/
-│   ├── Login.js             # PIN default, password fallback, smart routing by features
-│   ├── AdminDashboard.js    # Adaptive: Workforce widgets + POS widgets based on features
-│   ├── RestaurantSettings.js # "Settings" (renamed), tabs: Business, Stripe, Users, Security
-│   ├── HevaOpsLayout.js     # Staff companion shell
+│   ├── Login.js             # Personal Mode: email + password only
+│   ├── TerminalPinScreen.js # Kiosk Mode: PIN pad, auto-reset, admin unregister
+│   ├── AdminDashboard.js    # Adaptive: Workforce + POS widgets
+│   ├── RestaurantSettings.js # Settings: staff email+capabilities, terminal registration
+│   ├── HevaOpsLayout.js     # Staff companion mobile layout
 │   ├── StaffShifts.js, StaffClockIn.js, StaffSwapRequests.js
 │   ├── ShiftScheduler.js, AttendancePage.js, TimesheetsPage.js
-│   ├── PlatformSettings.js, RestaurantManagement.js
+│   ├── POSScreen.js         # Full-screen POS, 'Lock' button in terminal mode
 ```
 
 ## All Completed Features
@@ -69,47 +74,43 @@ Every capability is an independently toggleable module per business:
 2. ESC/POS Receipt Generation + Kitchen Ticket Printing
 3. QR Table Ordering (public guest menu, WebSocket push)
 4. Stripe Connect Pay-at-Table (hybrid 0.3% QR / 0% POS)
-5. Kitchen Display System (1080p, keyboard shortcuts, back button)
+5. Kitchen Display System (1080p, keyboard shortcuts)
 6. Void/Audit System (quick-tap reasons, Manager PIN)
 7. Revenue Analytics Dashboard + Kitchen Efficiency widget
 8. Menu Management (consolidated categories + products)
 9. Report PDF Export (server-generated reportlab)
-10. Staff Management UI (CRUD, password reset, POS PIN set/remove) — now inside Settings
-11. Security tab with Manager PIN setup UI
+10. Staff Management (CRUD, email, capabilities, password reset, POS PIN)
+11. Security tab with Manager PIN + Device Registration
 12. Offline authentication (cached credential fallback)
 13. Multi-currency business creation with auto-seeded categories
 14. Cash Drawer (staff + admin access, business-scoped)
 15. Table management with QR hash generation
 16. Order Sequencing daily reset (atomic counter, race-condition safe)
 17. Multi-tenancy security (strict restaurant_id scoping)
-18. Design System Overhaul (Phase 1-3: Modern Utility)
+18. Design System Overhaul (Modern Utility)
 19. Cmd+K Global Command Search
-20. Standalone QR Menu HTML (served by FastAPI)
-21. Standalone KDS Monitor HTML (PIN-protected, keyboard shortcuts)
-22. PDF download via window.open (works on Capacitor WebView)
-23. Quick POS PIN Login (4-digit PIN pad, auto-submit, role-based navigation)
-24. Double-tap prevention (touch-action:manipulation + useRef guards)
-25. Printer WiFi scan optimization (priority IPs, retry logic, 1.2s timeout)
-26. KDS table names + large quantity display (enriched from tables collection)
-27. Daily Revenue Widget (today's total, cash/card progress bar, 7-day sparkline)
-28. Modular SaaS Architecture (Feature flags, dependency validation, JWT embedding)
-29. Feature Guards on ALL Module Routers (POS, KDS, QR, Workforce)
-30. Workforce Module Phase 1 (Shift Scheduler, Attendance, Timesheets, Payroll APIs + Manager UI)
-31. Dynamic Sidebar (enabled = normal, disabled = lock icon + upgrade modal with pricing)
-32. Cross-talk Logic (Efficiency Ratio visible when POS + Workforce both active)
-33. **Heva Ops Staff Companion PWA** (My Shifts, Clock In/Out PIN pad, Shift Swap Requests)
-34. **Module Pricing System** (Platform Owner sets per-module monthly prices)
-35. **Module-Aware UX Overhaul (Apr 11, 2026)**:
-    - Removed redundant Staff sidebar item (moved to Settings → User Management)
-    - Settings page renamed from "Restaurant Settings" to "Settings"
-    - Audit Log + Reports hidden when no POS/KDS/QR modules active
-    - Smart login routing: PIN default, features-based redirect (workforce→heva-ops, pos→pos)
-    - Adaptive Dashboard: Workforce widgets (Team, On Shift, Scheduled, Hours) + POS widgets
-    - Floating Clock-In button whitelist (only on dashboard, settings, workforce pages)
-    - "Business" label in sidebar (not "Restaurant")
+20. Standalone QR Menu HTML + KDS Monitor HTML
+21. Quick POS PIN Login (4-digit, auto-submit)
+22. Daily Revenue Widget (sparkline, cash/card breakdown)
+23. Modular SaaS Architecture (Feature flags, dependency validation, JWT embedding)
+24. Feature Guards on ALL Module Routers
+25. Workforce Module (Shift Scheduler, Attendance, Timesheets, Payroll, Swaps)
+26. Dynamic Sidebar (enabled = normal, disabled = lock + upgrade modal)
+27. Heva Ops Staff Companion PWA (My Shifts, Clock In/Out, Swap Requests)
+28. Module Pricing System (Platform Owner sets per-module prices)
+29. Module-Aware UX (conditional Reports/Audit, adaptive Dashboard, smart routing)
+30. **Universal App Architecture — Split-Brain Routing (Apr 11, 2026)**
+    - Terminal Mode (Kiosk PIN Pad) for shared business tablets
+    - Personal Mode (Email + Password) for staff phones → Heva Ops
+    - Staff Capabilities system (pos.access, kds.access, workforce.clock_in, workforce.manage_rota)
+    - Device Registration in Settings > Security (Manager PIN protected)
+    - Attendance entry_source tracking (mobile_app vs pos_terminal)
+    - Geofencing bypassed for pos_terminal clock-ins (device is physically at business)
+    - POS "Lock" button in terminal mode (returns to PIN pad)
+    - Staff form: email (required) + capabilities checkboxes filtered by active modules
 
 ## Upcoming (P1)
-- Daily email summary for business admins
+- Automated daily email summary for business admins
 - Automated trial expiry email sequences (7d, 3d, 1d)
 
 ## Backlog (P2)
@@ -117,7 +118,7 @@ Every capability is an independently toggleable module per business:
 - Split monolithic server.py into modular routers
 - Deliverect / Middleware API Integration
 - iOS App Build Prep
-- Self-service module upgrade (business admin can enable modules and pay via Stripe)
+- Self-service module upgrade (Stripe-powered)
 
 ## Production Checklist
 - [ ] Replace sk_test_emergent with real Stripe Platform key
@@ -125,3 +126,4 @@ Every capability is an independently toggleable module per business:
 - [ ] Configure MongoDB Atlas connection string
 - [ ] Deploy backend to Railway
 - [ ] Build Android APK via Capacitor
+- [ ] Add real emails to existing staff accounts
