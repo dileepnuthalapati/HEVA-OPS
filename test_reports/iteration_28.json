@@ -1,0 +1,96 @@
+{
+  "summary": "Iteration 28 testing complete. All bug fixes verified: (1) Double-tap prevention working - useRef guard prevents duplicate orders on rapid clicks, (2) Order creation with table_id stores and returns table_name, (3) KDS public endpoint enriches orders with table_name from tables collection, (4) Atomic order counter ensures sequential unique order numbers even under concurrent load, (5) POS screen renders correctly at 1920x800 with 6 product columns and 400px cart sidebar, (6) Responsive layout verified: 2 cols mobile, 3 cols tablet, 6 cols desktop.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Console warning: Chart width/height -1 - recharts container sizing issue (non-blocking, visual only)"]},
+      {"screen": "POS", "issues": ["Console warning: IndexedDB getAll error for offline sync - non-blocking"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration28_bug_fixes.py",
+    "/app/test_reports/pytest/pytest_results_iteration28.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Double-tap prevention: POSScreen.js uses useRef (placingOrderRef) for synchronous guard - correctly prevents race conditions that useState would have",
+    "Atomic order counter: orders.py uses MongoDB find_one_and_update with $inc on order_counters collection - guarantees unique sequential numbers",
+    "Table name storage: Order creation fetches table name from tables collection and stores in order document",
+    "KDS enrichment: Both authenticated and public KDS endpoints enrich orders with table_name from tables collection",
+    "Printer check: Backend /api/printer/check endpoint provides TCP reachability check as browser fallback"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration28_bug_fixes.py"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 passed)",
+    "frontend": "100% (all UI tests passed)"
+  },
+  "test_credentials": {
+    "platform_owner": {"username": "platform_owner", "password": "admin123"},
+    "restaurant_admin": {"username": "restaurant_admin", "password": "admin123", "restaurant_id": "rest_demo_1"},
+    "staff_user": {"username": "user", "password": "user123"},
+    "manager_pin": "1234"
+  },
+  "seed_data_creation": "Used existing seed data",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 28 verified all bug fixes: (1) Double-tap prevention uses useRef for synchronous guard, (2) Orders store table_name when table_id provided, (3) KDS endpoints enrich table info, (4) Atomic counter prevents duplicate order numbers, (5) POS layout correct at 1920x800, (6) Responsive grid: 2/3/6 columns. Printer WiFi detection moved to native TCP - can't test from browser but backend fallback works.",
+  "test_results": {
+    "bug_1_double_tap_prevention": {
+      "status": "FIXED",
+      "evidence": "Rapid triple-click on Place Order button created only 1 order (pending count 51→52). Button became disabled after first click.",
+      "code_review": "POSScreen.js line 79: placingOrderRef = useRef(false), line 557-558: synchronous guard check"
+    },
+    "bug_2_table_name_storage": {
+      "status": "FIXED",
+      "evidence": "API test: POST /api/orders with table_id returns order with table_name field populated",
+      "api_test": "12/12 backend tests passed including TestOrderTableNameStorage"
+    },
+    "bug_3_kds_table_enrichment": {
+      "status": "FIXED",
+      "evidence": "KDS public endpoint returns orders with table_name enriched from tables collection",
+      "api_test": "GET /api/kds/public/orders/{restaurant_id}/{token} returns table_name for orders with table_id"
+    },
+    "bug_4_atomic_order_counter": {
+      "status": "FIXED",
+      "evidence": "Concurrent order creation test: 5 simultaneous orders created with unique sequential numbers",
+      "code_review": "orders.py line 11-22: get_next_order_number uses find_one_and_update with $inc"
+    },
+    "bug_5_pos_layout_1920x800": {
+      "status": "FIXED",
+      "evidence": "POS at 1920x800: 6 product columns (232px each), cart sidebar 400px, all products visible",
+      "screenshot": ".screenshots/pos_1920x800_layout.png"
+    },
+    "bug_6_responsive_layout": {
+      "status": "FIXED",
+      "evidence": "Mobile: 2 cols, Tablet: 3 cols, Desktop: 6 cols. Cart sidebar: hidden on mobile, 340px tablet, 400px desktop"
+    },
+    "kds_template_styling": {
+      "status": "VERIFIED",
+      "evidence": "kds_monitor.html: .item-qty 38px/20px (44px/24px on 1920px+), .table-badge blue bg with table_name display"
+    }
+  },
+  "features_verified": {
+    "order_creation_api": "VERIFIED - Creates orders with atomic counter",
+    "order_table_name": "VERIFIED - Stores and returns table_name",
+    "kds_orders_api": "VERIFIED - Returns orders with table info",
+    "kds_public_api": "VERIFIED - Token-authenticated, enriches table_name",
+    "kds_stats_api": "VERIFIED - Returns queue depth and avg prep time",
+    "printer_check_api": "VERIFIED - Backend TCP check endpoint exists",
+    "pos_responsive": "VERIFIED - Correct columns at all breakpoints",
+    "double_tap_guard": "VERIFIED - useRef prevents duplicate orders"
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "note": "All APIs are real. Printer WiFi detection uses native TCP on APK (untestable in browser), backend fallback tested."
+  },
+  "notes_on_untestable_features": {
+    "printer_wifi_native": "WiFi printer detection from tablet uses Capacitor TCP socket plugin - requires native APK, cannot test from browser. Backend /api/printer/check provides fallback for preview testing."
+  }
+}

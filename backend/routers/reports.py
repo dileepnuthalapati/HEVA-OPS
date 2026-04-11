@@ -366,3 +366,43 @@ async def get_today_stats(current_user: User = Depends(require_admin)):
         "open_tables": open_tables,
         "total_tables": total_tables,
     }
+
+
+@router.get("/reports/weekly-trend")
+async def get_weekly_trend(current_user: User = Depends(require_admin)):
+    """Returns daily revenue for the last 7 days (for sparkline + yesterday comparison)."""
+    now = datetime.now(timezone.utc)
+    days = []
+    for i in range(6, -1, -1):  # 6 days ago → today
+        d = now - timedelta(days=i)
+        day_str = d.strftime("%Y-%m-%d")
+        query = {
+            "created_at": {"$gte": f"{day_str}T00:00:00", "$lte": f"{day_str}T23:59:59"},
+            "status": "completed",
+        }
+        if current_user.restaurant_id:
+            query["restaurant_id"] = current_user.restaurant_id
+        orders = await db.orders.find(query, {"_id": 0, "total_amount": 1, "total": 1, "payment_method": 1, "payment_details": 1}).to_list(2000)
+        total = sum(o.get("total_amount", 0) or o.get("total", 0) for o in orders)
+        cash = 0
+        card = 0
+        for o in orders:
+            pm = o.get("payment_method", "cash")
+            amt = o.get("total_amount", 0) or o.get("total", 0)
+            if pm == "card":
+                card += amt
+            elif pm == "split":
+                pd = o.get("payment_details") or {}
+                cash += pd.get("cash", 0)
+                card += pd.get("card", 0)
+            else:
+                cash += amt
+        days.append({
+            "date": day_str,
+            "label": d.strftime("%a"),
+            "total": round(total, 2),
+            "cash": round(cash, 2),
+            "card": round(card, 2),
+            "orders": len(orders),
+        })
+    return {"days": days}

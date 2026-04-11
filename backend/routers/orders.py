@@ -43,13 +43,18 @@ async def create_order(order_data: OrderCreate, current_user: User = Depends(get
         "status": "pending",
         "created_by": current_user.username,
         "table_id": order_data.table_id,
+        "table_name": None,
         "restaurant_id": current_user.restaurant_id,
+        "source": "pos",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "completed_at": None,
         "cancelled_at": None,
     }
 
     if order_data.table_id:
+        table = await db.tables.find_one({"id": order_data.table_id}, {"_id": 0, "number": 1, "name": 1})
+        if table:
+            order_dict["table_name"] = table.get("name", f"Table {table['number']}")
         await db.tables.update_one(
             {"id": order_data.table_id},
             {"$set": {"current_order_id": order_id, "status": "occupied"}}

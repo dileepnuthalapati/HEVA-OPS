@@ -3,15 +3,6 @@
 ## Overview
 Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB), mobile-first frontend (React + Capacitor APK). Three roles: Platform Owner, Restaurant Admin, Staff. Revenue model: **0.3% commission on QR orders via Stripe Connect**.
 
-## Design System: "Modern Utility"
-- **Color Palette**: Slate & Indigo (Admin), High-contrast Light Mode (POS)
-- **Semantic Colors**: Emerald=success/payments, Indigo=navigation, Amber=warnings, Red=void/cancel
-- **Typography**: Manrope (body), Satoshi (headings), JetBrains Mono (prices/numbers)
-- **Buttons**: Rounded-2xl, haptic (scale-95 on press), shadow-lg on primary actions
-- **Layout**: Z-pattern POS (Pay button bottom-right), pill-shaped categories
-- **Effects**: Glassmorphism on login/modals, micro-animations, custom scrollbars
-- **Sidebar**: Dark gradient (#0F172A to #1E293B), text color #E2E8F0 with !important override
-
 ## Architecture
 ```
 /app/backend/routers/ (auth, platform, restaurants, menu, orders, reports, payments, cash_drawer, kds, qr_menu, audit, docs, tables, reservations, receipts, printers, staff, subscriptions, notifications, email, health)
@@ -27,42 +18,39 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 6. Void/Audit System (quick-tap reasons, Manager PIN)
 7. Revenue Analytics Dashboard + Kitchen Efficiency widget
 8. Menu Management (consolidated categories + products)
-9. Report PDF Export (server-generated reportlab, actual file download + View PDF in new tab)
-10. Staff Management UI (CRUD, password reset)
+9. Report PDF Export (server-generated reportlab)
+10. Staff Management UI (CRUD, password reset, POS PIN set/remove)
 11. Security tab with Manager PIN setup UI
 12. Offline authentication (cached credential fallback)
 13. Multi-currency restaurant creation with auto-seeded categories
 14. Cash Drawer (staff + admin access, restaurant-scoped)
 15. Table management with QR hash generation
-16. Order Sequencing daily reset (restaurant-scoped)
-17. Multi-tenancy security (strict restaurant_id scoping on all endpoints)
+16. Order Sequencing daily reset (atomic counter, race-condition safe)
+17. Multi-tenancy security (strict restaurant_id scoping)
 18. Design System Overhaul (Phase 1-3: Modern Utility)
 19. Cmd+K Global Command Search
-20. Sidebar routing fix (all 11 admin links navigate correctly)
-21. Sidebar text visibility fix (Tailwind !important override for #E2E8F0)
+20. Standalone QR Menu HTML (served by FastAPI)
+21. Standalone KDS Monitor HTML (PIN-protected, keyboard shortcuts)
+22. PDF download via window.open (works on Capacitor WebView)
+23. Quick POS PIN Login (4-digit PIN pad, auto-submit, role-based navigation)
+24. Double-tap prevention (touch-action:manipulation + useRef guards)
+25. Printer WiFi scan optimization (priority IPs, retry logic, 1.2s timeout)
+26. KDS table names + large quantity display (enriched from tables collection)
+27. **Daily Revenue Widget** (today's total, cash/card progress bar, 7-day sparkline, % change)
 
-## Bug Fixes (April 5, 2026 - Iteration 27)
-- Category model now includes restaurant_id in API response
-- New restaurant creation seeds 4 default categories with unique IDs (secrets.token_hex)
-- QR URLs use REACT_APP_BACKEND_URL (works on Capacitor APK, not just browser)
-- Reports page: Added "View PDF" button (opens in new tab) alongside Download PDF
-- PDF download improved with proper content-type validation and blob handling
-- Printer Settings: Removed duplicate Discover/Add buttons from empty state
-
-## Testing Status (Iteration 27 - April 5, 2026)
-- Backend: 100% (15/15 passed)
-- Frontend: 100% (all UI tests passed)
-- All 4 user-reported bugs: VERIFIED FIXED
+## Daily Revenue Widget (April 11, 2026)
+- Big total revenue with % change from yesterday (green up/red down badge)
+- Cash vs Card visual progress bar (emerald=cash, indigo=card)
+- 7-day bar chart sparkline with today highlighted in indigo
+- Backend: `GET /api/reports/weekly-trend` returns 7 days of daily totals with cash/card split
+- Metric cards: Orders (POS/QR), Avg Order, Tables, Completed
 
 ## Upcoming (P1)
-- Quick POS PIN Login for staff shift changes
 - Daily email summary for restaurant admins
 - Automated trial expiry email sequences (7d, 3d, 1d)
-- Daily revenue widget on Admin Dashboard
 
 ## Backlog (P2)
 - Print Void Receipt to Kitchen
-- Order number daily reset verification
 - Split monolithic server.py into modular routers
 - Deliverect / Middleware API Integration
 - iOS App Build Prep
@@ -73,4 +61,3 @@ Multi-tenant SaaS POS system for restaurants. Cloud backend (FastAPI + MongoDB),
 - [ ] Configure MongoDB Atlas connection string
 - [ ] Deploy backend to Railway
 - [ ] Build Android APK via Capacitor
-- [ ] QR codes will work once deployed to production URL

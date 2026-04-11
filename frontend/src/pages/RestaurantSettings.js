@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle } from 'lucide-react';
+import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash } from 'lucide-react';
 import api from '../services/api';
 
 const TABS = [
@@ -34,8 +34,13 @@ const RestaurantSettings = () => {
   const [staffLoading, setStaffLoading] = useState(false);
   const [showStaffDialog, setShowStaffDialog] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
-  const [staffForm, setStaffForm] = useState({ username: '', password: '', role: 'user' });
+  const [staffForm, setStaffForm] = useState({ username: '', password: '', role: 'user', pos_pin: '' });
   const [staffSaving, setStaffSaving] = useState(false);
+
+  // PIN dialog
+  const [pinDialog, setPinDialog] = useState({ open: false, staff: null });
+  const [pinValue, setPinValue] = useState('');
+  const [posPinSaving, setPosPinSaving] = useState(false);
 
   // Reset password dialog
   const [resetDialog, setResetDialog] = useState({ open: false, staff: null });
@@ -127,13 +132,13 @@ const RestaurantSettings = () => {
 
   const openAddStaff = () => {
     setEditingStaff(null);
-    setStaffForm({ username: '', password: '', role: 'user' });
+    setStaffForm({ username: '', password: '', role: 'user', pos_pin: '' });
     setShowStaffDialog(true);
   };
 
   const openEditStaff = (staff) => {
     setEditingStaff(staff);
-    setStaffForm({ username: staff.username, password: '', role: staff.role });
+    setStaffForm({ username: staff.username, password: '', role: staff.role, pos_pin: '' });
     setShowStaffDialog(true);
   };
 
@@ -165,6 +170,33 @@ const RestaurantSettings = () => {
       loadStaff();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to delete staff');
+    }
+  };
+
+  const handleSetPin = async () => {
+    if (!pinValue || pinValue.length !== 4 || !/^\d{4}$/.test(pinValue)) {
+      return toast.error('PIN must be exactly 4 digits');
+    }
+    setPosPinSaving(true);
+    try {
+      await authAPI.setPosPin(pinDialog.staff.id, pinValue);
+      toast.success(`POS PIN set for "${pinDialog.staff.username}"`);
+      setPinDialog({ open: false, staff: null });
+      setPinValue('');
+      loadStaff();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to set PIN');
+    } finally { setPosPinSaving(false); }
+  };
+
+  const handleRemovePin = async (staff) => {
+    if (!window.confirm(`Remove POS PIN for "${staff.username}"?`)) return;
+    try {
+      await authAPI.removePosPin(staff.id);
+      toast.success(`POS PIN removed for "${staff.username}"`);
+      loadStaff();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to remove PIN');
     }
   };
 
@@ -486,6 +518,10 @@ const RestaurantSettings = () => {
                           </div>
                         </div>
                         <div className="flex items-center gap-1.5 shrink-0">
+                          <Button size="sm" variant={member.has_pos_pin ? "default" : "outline"} data-testid={`set-pin-${member.id}`} onClick={() => member.has_pos_pin ? handleRemovePin(member) : (setPinDialog({ open: true, staff: member }), setPinValue(''))} title={member.has_pos_pin ? "Remove POS PIN" : "Set POS PIN"} className={`h-8 px-2 gap-1 text-xs ${member.has_pos_pin ? 'bg-emerald-600 hover:bg-red-500 text-white' : ''}`}>
+                            <Hash className="w-3.5 h-3.5" />
+                            {member.has_pos_pin ? 'PIN' : ''}
+                          </Button>
                           <Button size="sm" variant="outline" data-testid={`reset-pwd-${member.id}`} onClick={() => { setResetDialog({ open: true, staff: member }); setNewPassword(''); }} title="Reset Password" className="h-8 w-8 p-0">
                             <KeyRound className="w-3.5 h-3.5" />
                           </Button>
@@ -661,6 +697,38 @@ const RestaurantSettings = () => {
             <div className="flex gap-2">
               <Button data-testid="confirm-reset-pwd-btn" onClick={handleResetPassword} className="flex-1">Reset Password</Button>
               <Button variant="outline" onClick={() => setResetDialog({ open: false, staff: null })} className="flex-1">Cancel</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Set POS PIN Dialog */}
+      <Dialog open={pinDialog.open} onOpenChange={(open) => { if (!open) { setPinDialog({ open: false, staff: null }); setPinValue(''); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle data-testid="set-pin-dialog-title">Set POS PIN</DialogTitle>
+            <DialogDescription>Set a 4-digit Quick Login PIN for "{pinDialog.staff?.username}"</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 mt-2">
+            <div>
+              <Label>4-Digit PIN</Label>
+              <Input
+                data-testid="pos-pin-input"
+                type="text"
+                inputMode="numeric"
+                maxLength={4}
+                value={pinValue}
+                onChange={(e) => setPinValue(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                placeholder="e.g., 1234"
+                className="h-12 text-center text-2xl tracking-[0.5em] font-mono"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Staff will use this PIN to quickly login to POS</p>
+            </div>
+            <div className="flex gap-2">
+              <Button data-testid="confirm-set-pin-btn" onClick={handleSetPin} disabled={posPinSaving || pinValue.length !== 4} className="flex-1">
+                {posPinSaving ? 'Saving...' : 'Set PIN'}
+              </Button>
+              <Button variant="outline" onClick={() => { setPinDialog({ open: false, staff: null }); setPinValue(''); }} className="flex-1">Cancel</Button>
             </div>
           </div>
         </DialogContent>
