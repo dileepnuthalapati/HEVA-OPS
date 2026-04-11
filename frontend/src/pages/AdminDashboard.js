@@ -86,28 +86,25 @@ const AdminDashboard = () => {
       <Sidebar />
       <div className="flex-1 min-w-0 p-4 md:p-8 pt-16 md:pt-8">
         <div className="max-w-7xl mx-auto">
-          <div className="mb-6 md:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div className="mb-4 md:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 md:gap-3">
             <div>
-              <h1 className="font-heading text-2xl md:text-3xl font-bold tracking-tight text-slate-900 mb-1" data-testid="dashboard-heading">Dashboard</h1>
-              <p className="text-xs md:text-sm text-slate-400 flex items-center gap-2 font-medium">
-                <Calendar className="w-4 h-4 shrink-0" />
+              <h1 className="font-heading text-xl md:text-3xl font-bold tracking-tight text-slate-900 mb-0.5" data-testid="dashboard-heading">Dashboard</h1>
+              <p className="text-[10px] md:text-sm text-slate-400 flex items-center gap-1.5 font-medium">
+                <Calendar className="w-3.5 h-3.5 md:w-4 md:h-4 shrink-0" />
                 <span>{today}</span>
               </p>
             </div>
             {/* QR Ordering Kill Switch */}
             <div
-              className={`flex items-center gap-3 px-4 py-2.5 rounded-xl border transition-colors ${
+              className={`flex items-center gap-2 md:gap-3 px-3 md:px-4 py-2 md:py-2.5 rounded-xl border transition-colors ${
                 qrEnabled ? 'border-emerald-200 bg-emerald-50' : 'border-red-200 bg-red-50'
               }`}
               data-testid="qr-ordering-toggle"
             >
-              <QrCode className={`w-5 h-5 ${qrEnabled ? 'text-emerald-600' : 'text-red-500'}`} />
-              <div className="text-sm">
+              <QrCode className={`w-4 h-4 md:w-5 md:h-5 ${qrEnabled ? 'text-emerald-600' : 'text-red-500'}`} />
+              <div className="text-xs md:text-sm">
                 <p className={`font-semibold ${qrEnabled ? 'text-emerald-700' : 'text-red-700'}`}>
                   QR Ordering
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {qrEnabled ? 'Guests can order' : 'Disabled'}
                 </p>
               </div>
               <Switch
@@ -160,15 +157,16 @@ const AdminDashboard = () => {
                 const cashPct = todayTotal > 0 ? (cashTotal / todayTotal * 100).toFixed(0) : 50;
 
                 return (
-                  <Card className="mb-6 bg-white border-slate-200/60 shadow-sm overflow-hidden" data-testid="daily-revenue-widget">
+                  <Card className="mb-4 md:mb-6 bg-white border-slate-200/60 shadow-sm overflow-hidden" data-testid="daily-revenue-widget">
                     <CardContent className="p-0">
+                      {/* Mobile: stacked compact / Desktop: side-by-side */}
                       <div className="grid grid-cols-1 lg:grid-cols-[1fr_1px_280px] xl:grid-cols-[1fr_1px_340px]">
-                        {/* Left: Total Revenue */}
-                        <div className="p-5 md:p-6">
+                        {/* Revenue Info */}
+                        <div className="p-4 md:p-6">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Today's Revenue</span>
+                            <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Today's Revenue</span>
                             {pctChange != 0 && (
-                              <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold ${
+                              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] md:text-xs font-bold ${
                                 isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'
                               }`} data-testid="revenue-pct-change">
                                 {isUp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
@@ -176,55 +174,61 @@ const AdminDashboard = () => {
                               </span>
                             )}
                           </div>
-                          <div className="text-3xl md:text-4xl font-bold font-mono text-slate-900 mb-4" data-testid="revenue-total">
+                          <div className="text-2xl md:text-4xl font-bold font-mono text-slate-900 mb-3" data-testid="revenue-total">
                             {sym}{todayTotal.toFixed(2)}
                           </div>
 
-                          {/* Cash vs Card Breakdown */}
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="flex items-center gap-2 text-slate-600 font-medium">
-                                <Banknote className="w-4 h-4 text-emerald-500" /> Cash
+                          {/* Cash vs Card - compact on mobile */}
+                          <div className="space-y-1.5">
+                            <div className="flex items-center justify-between text-xs md:text-sm">
+                              <span className="flex items-center gap-1.5 text-slate-600 font-medium">
+                                <Banknote className="w-3.5 h-3.5 text-emerald-500" /> Cash
                               </span>
                               <span className="font-bold font-mono text-slate-800">{sym}{cashTotal.toFixed(2)}</span>
                             </div>
-                            <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden flex">
-                              <div 
-                                className="h-full bg-emerald-500 rounded-l-full transition-all duration-500" 
-                                style={{ width: `${cashPct}%` }}
-                                data-testid="cash-bar"
-                              />
-                              <div 
-                                className="h-full bg-indigo-500 rounded-r-full transition-all duration-500" 
-                                style={{ width: `${100 - cashPct}%` }}
-                                data-testid="card-bar"
-                              />
+                            <div className="w-full h-2.5 md:h-3 bg-slate-100 rounded-full overflow-hidden flex">
+                              <div className="h-full bg-emerald-500 rounded-l-full transition-all duration-500" style={{ width: `${cashPct}%` }} data-testid="cash-bar" />
+                              <div className="h-full bg-indigo-500 rounded-r-full transition-all duration-500" style={{ width: `${100 - cashPct}%` }} data-testid="card-bar" />
                             </div>
-                            <div className="flex items-center justify-between text-sm">
-                              <span className="flex items-center gap-2 text-slate-600 font-medium">
-                                <CreditCard className="w-4 h-4 text-indigo-500" /> Card
+                            <div className="flex items-center justify-between text-xs md:text-sm">
+                              <span className="flex items-center gap-1.5 text-slate-600 font-medium">
+                                <CreditCard className="w-3.5 h-3.5 text-indigo-500" /> Card
                               </span>
                               <span className="font-bold font-mono text-slate-800">{sym}{cardTotal.toFixed(2)}</span>
                             </div>
                           </div>
+
+                          {/* Mobile-only: inline mini sparkline below cash/card */}
+                          {weeklyTrend?.days && (
+                            <div className="lg:hidden mt-3 pt-3 border-t border-slate-100">
+                              <span className="text-[10px] font-bold tracking-[0.1em] uppercase text-slate-400 mb-1.5 block">Last 7 Days</span>
+                              <div className="h-[64px]" data-testid="weekly-chart-mobile">
+                                <ResponsiveContainer width="100%" height="100%">
+                                  <BarChart data={weeklyTrend.days} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+                                    <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
+                                    <Bar dataKey="total" radius={[3, 3, 0, 0]} maxBarSize={24}>
+                                      {weeklyTrend.days.map((entry, index) => (
+                                        <Cell key={index} fill={index === weeklyTrend.days.length - 1 ? '#4F46E5' : '#cbd5e1'} />
+                                      ))}
+                                    </Bar>
+                                  </BarChart>
+                                </ResponsiveContainer>
+                              </div>
+                            </div>
+                          )}
                         </div>
 
-                        {/* Divider */}
+                        {/* Divider - desktop only */}
                         <div className="hidden lg:block bg-slate-100" />
 
-                        {/* Right: 7-Day Sparkline */}
-                        <div className="p-5 md:p-6 border-t lg:border-t-0 border-slate-100">
+                        {/* Desktop: 7-Day Chart */}
+                        <div className="hidden lg:block p-5 md:p-6">
                           <span className="text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400 mb-3 block">Last 7 Days</span>
                           {weeklyTrend?.days ? (
                             <div className="h-[120px]" data-testid="weekly-chart">
                               <ResponsiveContainer width="100%" height="100%">
                                 <BarChart data={weeklyTrend.days} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-                                  <XAxis 
-                                    dataKey="label" 
-                                    tick={{ fontSize: 11, fill: '#94a3b8' }} 
-                                    tickLine={false}
-                                    axisLine={false}
-                                  />
+                                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
                                   <Tooltip
                                     formatter={(value) => [`${sym}${value.toFixed(2)}`, 'Revenue']}
                                     labelFormatter={(label, payload) => payload?.[0]?.payload?.date || label}
@@ -232,10 +236,7 @@ const AdminDashboard = () => {
                                   />
                                   <Bar dataKey="total" radius={[4, 4, 0, 0]} maxBarSize={32}>
                                     {weeklyTrend.days.map((entry, index) => (
-                                      <Cell 
-                                        key={index}
-                                        fill={index === weeklyTrend.days.length - 1 ? '#4F46E5' : '#cbd5e1'}
-                                      />
+                                      <Cell key={index} fill={index === weeklyTrend.days.length - 1 ? '#4F46E5' : '#cbd5e1'} />
                                     ))}
                                   </Bar>
                                 </BarChart>
@@ -252,53 +253,52 @@ const AdminDashboard = () => {
               })()}
 
               {/* Key Metrics Grid */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4 mb-4 md:mb-6">
                 <Card 
                   className="bg-white border-slate-200/60 shadow-sm hover:shadow-md transition-all cursor-pointer hover:border-indigo-300" 
                   data-testid="metric-total-orders" 
                   onClick={() => navigate('/orders')}
                 >
-                  <CardContent className="p-4 md:p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Orders</span>
-                      <div className="w-8 h-8 rounded-xl bg-indigo-50 flex items-center justify-center">
-                        <ShoppingBag className="w-4 h-4 text-indigo-600" />
+                  <CardContent className="p-3 md:p-5">
+                    <div className="flex items-center justify-between mb-2 md:mb-3">
+                      <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Orders</span>
+                      <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-indigo-50 flex items-center justify-center">
+                        <ShoppingBag className="w-3.5 h-3.5 md:w-4 md:h-4 text-indigo-600" />
                       </div>
                     </div>
-                    <div className="text-xl md:text-2xl font-bold font-mono text-slate-900">{stats?.total_orders || 0}</div>
-                    <div className="flex gap-3 mt-2.5 text-[11px] text-slate-400 font-medium">
-                      <span className="flex items-center gap-1"><MonitorSmartphone className="w-3 h-3" /> POS: {stats?.pos_orders || 0}</span>
-                      <span className="flex items-center gap-1"><QrCode className="w-3 h-3" /> QR: {stats?.qr_orders || 0}</span>
+                    <div className="text-lg md:text-2xl font-bold font-mono text-slate-900">{stats?.total_orders || 0}</div>
+                    <div className="flex gap-2 md:gap-3 mt-1.5 md:mt-2.5 text-[10px] md:text-[11px] text-slate-400 font-medium">
+                      <span className="flex items-center gap-0.5"><MonitorSmartphone className="w-3 h-3" /> {stats?.pos_orders || 0}</span>
+                      <span className="flex items-center gap-0.5"><QrCode className="w-3 h-3" /> {stats?.qr_orders || 0}</span>
                     </div>
                   </CardContent>
                 </Card>
 
                 <Card className="bg-white border-slate-200/60 shadow-sm hover:shadow-md transition-shadow" data-testid="metric-avg-order">
-                  <CardContent className="p-4 md:p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Avg Order</span>
-                      <div className="w-8 h-8 rounded-xl bg-amber-50 flex items-center justify-center">
-                        <TrendingUp className="w-4 h-4 text-amber-600" />
+                  <CardContent className="p-3 md:p-5">
+                    <div className="flex items-center justify-between mb-2 md:mb-3">
+                      <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Avg Order</span>
+                      <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-amber-50 flex items-center justify-center">
+                        <TrendingUp className="w-3.5 h-3.5 md:w-4 md:h-4 text-amber-600" />
                       </div>
                     </div>
-                    <div className="text-xl md:text-2xl font-bold font-mono text-slate-900">
+                    <div className="text-lg md:text-2xl font-bold font-mono text-slate-900">
                       {sym}{stats?.avg_order_value?.toFixed(2) || '0.00'}
                     </div>
                   </CardContent>
                 </Card>
 
                 <Card className="bg-white border-slate-200/60 shadow-sm hover:shadow-md transition-shadow" data-testid="metric-tables">
-                  <CardContent className="p-4 md:p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Tables</span>
-                      <div className="w-8 h-8 rounded-xl bg-violet-50 flex items-center justify-center">
-                        <UtensilsCrossed className="w-4 h-4 text-violet-600" />
+                  <CardContent className="p-3 md:p-5">
+                    <div className="flex items-center justify-between mb-2 md:mb-3">
+                      <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Tables</span>
+                      <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-violet-50 flex items-center justify-center">
+                        <UtensilsCrossed className="w-3.5 h-3.5 md:w-4 md:h-4 text-violet-600" />
                       </div>
                     </div>
-                    <div className="text-xl md:text-2xl font-bold font-mono text-slate-900">
-                      {stats?.open_tables || 0}<span className="text-sm text-slate-400 font-medium ml-1">/ {stats?.total_tables || 0}</span>
+                    <div className="text-lg md:text-2xl font-bold font-mono text-slate-900">
+                      {stats?.open_tables || 0}<span className="text-xs md:text-sm text-slate-400 font-medium ml-0.5">/ {stats?.total_tables || 0}</span>
                     </div>
-                    <p className="text-[11px] text-slate-400 font-medium mt-2.5">Open / Total</p>
                   </CardContent>
                 </Card>
 
@@ -307,15 +307,15 @@ const AdminDashboard = () => {
                   data-testid="metric-completed"
                   onClick={() => navigate('/reports')}
                 >
-                  <CardContent className="p-4 md:p-5">
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Completed</span>
-                      <div className="w-8 h-8 rounded-xl bg-emerald-50 flex items-center justify-center">
-                        <Coins className="w-4 h-4 text-emerald-600" />
+                  <CardContent className="p-3 md:p-5">
+                    <div className="flex items-center justify-between mb-2 md:mb-3">
+                      <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Completed</span>
+                      <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-emerald-50 flex items-center justify-center">
+                        <Coins className="w-3.5 h-3.5 md:w-4 md:h-4 text-emerald-600" />
                       </div>
                     </div>
-                    <div className="text-xl md:text-2xl font-bold font-mono text-slate-900">{stats?.total_orders || 0}</div>
-                    <p className="text-[11px] text-slate-400 font-medium mt-2.5">View full reports</p>
+                    <div className="text-lg md:text-2xl font-bold font-mono text-slate-900">{stats?.total_orders || 0}</div>
+                    <p className="text-[10px] md:text-[11px] text-slate-400 font-medium mt-1.5 md:mt-2.5">View reports</p>
                   </CardContent>
                 </Card>
               </div>
@@ -347,13 +347,12 @@ const AdminDashboard = () => {
               )}
 
               {/* Revenue Chart */}
-              <Card className="mb-6 bg-white border-slate-200/60 shadow-sm" data-testid="revenue-chart-card">
-                <CardHeader className="px-4 md:px-6 pb-2">
-                  <CardTitle className="text-sm md:text-base font-bold text-slate-900">Hourly Revenue</CardTitle>
-                  <CardDescription className="text-xs text-slate-400">Today's sales by hour</CardDescription>
+              <Card className="mb-4 md:mb-6 bg-white border-slate-200/60 shadow-sm" data-testid="revenue-chart-card">
+                <CardHeader className="px-4 md:px-6 py-3 md:pb-2">
+                  <CardTitle className="text-xs md:text-base font-bold text-slate-900">Hourly Revenue</CardTitle>
                 </CardHeader>
-                <CardContent className="px-2 md:px-4 pb-4">
-                  <div className="h-48 md:h-64">
+                <CardContent className="px-1 md:px-4 pb-3 md:pb-4">
+                  <div className="h-40 md:h-64">
                     <ResponsiveContainer width="100%" height="100%">
                       <AreaChart data={chartData} margin={{ top: 5, right: 10, left: 0, bottom: 0 }}>
                         <defs>
