@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from database import db
-from dependencies import get_current_user
+from dependencies import get_current_user, require_any_feature
 from models import User, Order, OrderCreate, OrderComplete, CancelOrderRequest, SyncData
 from typing import List
 from datetime import datetime, timezone, timedelta
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_any_feature("pos", "qr_ordering"))])
 
 
 async def get_next_order_number(restaurant_id: str) -> int:

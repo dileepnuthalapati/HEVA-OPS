@@ -108,3 +108,35 @@ async def delete_restaurant_user(restaurant_id: str, user_id: str, current_user:
         {"$pull": {"users": user.get("username")}}
     )
     return {"message": f"User '{user.get('username')}' removed from restaurant"}
+
+
+# ─── Module Pricing ──────────────────────────────────────
+
+DEFAULT_MODULE_PRICES = {
+    "pos": 19.99,
+    "kds": 9.99,
+    "qr_ordering": 14.99,
+    "workforce": 24.99,
+    "currency": "GBP",
+}
+
+
+@router.get("/platform/module-pricing")
+async def get_module_pricing(current_user: User = Depends(require_platform_owner)):
+    """Get global module pricing."""
+    pricing = await db.module_pricing.find_one({"type": "global"}, {"_id": 0})
+    if not pricing:
+        return DEFAULT_MODULE_PRICES
+    return {k: v for k, v in pricing.items() if k != "type"}
+
+
+@router.put("/platform/module-pricing")
+async def update_module_pricing(pricing: dict, current_user: User = Depends(require_platform_owner)):
+    """Update global module pricing."""
+    pricing["type"] = "global"
+    await db.module_pricing.update_one(
+        {"type": "global"},
+        {"$set": pricing},
+        upsert=True,
+    )
+    return {"message": "Module pricing updated", "pricing": {k: v for k, v in pricing.items() if k != "type"}}

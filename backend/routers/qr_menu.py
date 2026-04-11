@@ -10,7 +10,7 @@ Endpoints:
 """
 from fastapi import APIRouter, HTTPException, Depends, Request
 from database import db
-from dependencies import get_current_user, require_admin
+from dependencies import get_current_user, require_admin, require_feature, get_restaurant_features
 from models import User
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -41,7 +41,7 @@ class GuestOrderCreate(BaseModel):
 # --- Admin Endpoints (Auth Required) — MUST be before wildcard routes ---
 
 @router.get("/tables/hashes")
-async def get_table_hashes(current_user: User = Depends(require_admin)):
+async def get_table_hashes(current_user: User = Depends(require_feature("qr_ordering"))):
     """Admin: Get all tables with their QR hashes for the restaurant."""
     query = {}
     if current_user.restaurant_id:
@@ -100,7 +100,12 @@ async def get_guest_menu(request: Request, restaurant_id: str, table_hash: str):
     if not restaurant:
         raise HTTPException(status_code=404, detail="Restaurant not found")
 
-    # QR Kill Switch — admin can disable QR ordering
+    # Module feature check — QR ordering must be enabled
+    features = restaurant.get("features", {})
+    if not features.get("qr_ordering", False):
+        raise HTTPException(status_code=503, detail="QR ordering is not enabled for this restaurant")
+
+    # QR Kill Switch — admin can temporarily disable QR ordering
     if not restaurant.get("qr_ordering_enabled", True):
         raise HTTPException(status_code=503, detail="QR ordering is temporarily disabled by the restaurant")
 

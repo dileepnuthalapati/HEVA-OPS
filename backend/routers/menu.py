@@ -1,11 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException
 from database import db
-from dependencies import get_current_user, require_admin
+from dependencies import get_current_user, require_admin, require_any_feature
 from models import User, Category, CategoryCreate, Product, ProductCreate
 from typing import List
 from datetime import datetime, timezone
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_any_feature("pos", "qr_ordering"))])
 
 
 @router.post("/categories", response_model=Category)

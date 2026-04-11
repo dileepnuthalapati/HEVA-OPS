@@ -637,4 +637,15 @@ export const emailAPI = {
   },
 };
 
+export const modulePricingAPI = {
+  get: async () => {
+    const response = await api.get('/platform/module-pricing');
+    return response.data;
+  },
+  update: async (pricing) => {
+    const response = await api.put('/platform/module-pricing', pricing);
+    return response.data;
+  },
+};
+
 export default api;

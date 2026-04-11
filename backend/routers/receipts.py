@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from database import db
-from dependencies import get_current_user
+from dependencies import get_current_user, require_feature
 from models import User
 from datetime import datetime
 from reportlab.lib.pagesizes import A4
@@ -11,7 +11,7 @@ from reportlab.platypus import SimpleDocTemplate, Table as ReportLabTable, Table
 from io import BytesIO
 import base64
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_feature("pos"))])
 
 
 # ===== PDF Receipt Endpoints =====

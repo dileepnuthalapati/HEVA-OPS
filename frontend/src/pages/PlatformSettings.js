@@ -7,9 +7,9 @@ import { Label } from '../components/ui/label';
 import { Switch } from '../components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { authAPI, platformAdminAPI } from '../services/api';
+import { authAPI, platformAdminAPI, modulePricingAPI } from '../services/api';
 import { emailAPI } from '../services/api';
-import { Settings, Bell, Shield, CreditCard, Mail, Globe, Key, UserPlus, Trash2, Users, CheckCircle, XCircle } from 'lucide-react';
+import { Settings, Bell, Shield, CreditCard, Mail, Globe, Key, UserPlus, Trash2, Users, CheckCircle, XCircle, DollarSign, ShoppingCart, ChefHat, QrCode, Calendar } from 'lucide-react';
 
 const PlatformSettings = () => {
   const [settings, setSettings] = useState({
@@ -44,9 +44,14 @@ const PlatformSettings = () => {
   const [addingAdmin, setAddingAdmin] = useState(false);
   const [emailStatus, setEmailStatus] = useState(null);
 
+  // Module pricing state
+  const [modulePrices, setModulePrices] = useState({ pos: 19.99, kds: 9.99, qr_ordering: 14.99, workforce: 24.99, currency: 'GBP' });
+  const [savingPricing, setSavingPricing] = useState(false);
+
   useEffect(() => {
     loadAdmins();
     loadEmailStatus();
+    loadModulePricing();
   }, []);
 
   const loadEmailStatus = async () => {
@@ -54,6 +59,23 @@ const PlatformSettings = () => {
       const status = await emailAPI.getStatus();
       setEmailStatus(status);
     } catch { /* ignore */ }
+  };
+
+  const loadModulePricing = async () => {
+    try {
+      const data = await modulePricingAPI.get();
+      setModulePrices(data);
+    } catch { /* ignore */ }
+  };
+
+  const handleSaveModulePricing = async () => {
+    setSavingPricing(true);
+    try {
+      await modulePricingAPI.update(modulePrices);
+      toast.success('Module pricing updated!');
+    } catch (e) {
+      toast.error('Failed to save pricing');
+    } finally { setSavingPricing(false); }
   };
 
   const loadAdmins = async () => {
@@ -473,6 +495,53 @@ const PlatformSettings = () => {
               {saving ? 'Saving...' : 'Save Settings'}
             </Button>
           </div>
+
+          {/* Module Pricing */}
+          <Card className="mt-6" data-testid="module-pricing-card">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <DollarSign className="w-5 h-5" />
+                Module Pricing
+              </CardTitle>
+              <CardDescription>Set per-module monthly pricing for restaurants. Shown in the "Upgrade" modal when restaurants view locked modules.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {[
+                  { key: 'pos', label: 'POS', icon: ShoppingCart },
+                  { key: 'kds', label: 'KDS', icon: ChefHat },
+                  { key: 'qr_ordering', label: 'QR Ordering', icon: QrCode },
+                  { key: 'workforce', label: 'Workforce', icon: Calendar },
+                ].map(mod => {
+                  const Icon = mod.icon;
+                  return (
+                    <div key={mod.key} className="flex items-center gap-3 p-3 rounded-lg border bg-slate-50/50" data-testid={`pricing-${mod.key}`}>
+                      <Icon className="w-5 h-5 text-slate-600 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{mod.label}</p>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <span className="text-xs text-muted-foreground">{modulePrices.currency || 'GBP'}</span>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          value={modulePrices[mod.key] || ''}
+                          onChange={e => setModulePrices({ ...modulePrices, [mod.key]: parseFloat(e.target.value) || 0 })}
+                          className="w-24 h-8 text-right text-sm"
+                        />
+                        <span className="text-xs text-muted-foreground">/mo</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex justify-end mt-4">
+                <Button size="sm" onClick={handleSaveModulePricing} disabled={savingPricing} data-testid="save-module-pricing-btn">
+                  {savingPricing ? 'Saving...' : 'Save Pricing'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 

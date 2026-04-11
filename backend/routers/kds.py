@@ -15,11 +15,11 @@ Endpoints:
 """
 from fastapi import APIRouter, Depends, HTTPException
 from database import db
-from dependencies import get_current_user
+from dependencies import get_current_user, require_feature
 from models import User
 from datetime import datetime, timezone, timedelta
 
-router = APIRouter(prefix="/kds", tags=["Kitchen Display"])
+router = APIRouter(prefix="/kds", tags=["Kitchen Display"], dependencies=[Depends(require_feature("kds"))])
 
 
 @router.get("/orders")

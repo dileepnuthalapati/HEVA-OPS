@@ -96,7 +96,7 @@ async def clock_in_out(data: ClockRequest):
             "staff_name": matched_user.get("username"),
             "staff_id": staff_id,
             "clock_in": now.isoformat(),
-            "message": f"Clocked in. Have a great shift!",
+            "message": "Clocked in. Have a great shift!",
         }
 
 

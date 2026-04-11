@@ -130,6 +130,21 @@ def require_feature(feature_name: str):
     return _check
 
 
+def require_any_feature(*feature_names):
+    """FastAPI dependency factory: passes if ANY of the listed features is enabled."""
+    async def _check(current_user: User = Depends(get_current_user)):
+        if current_user.role == "platform_owner":
+            return current_user
+        if not current_user.restaurant_id:
+            raise HTTPException(status_code=400, detail="No restaurant associated")
+        features = await get_restaurant_features(current_user.restaurant_id)
+        if not any(features.get(f, False) for f in feature_names):
+            names = " or ".join(feature_names)
+            raise HTTPException(status_code=403, detail=f"Requires at least one of: {names}")
+        return current_user
+    return _check
+
+
 def validate_feature_dependencies(features: dict) -> str | None:
     """Validate module dependency tree. Returns error message or None."""
     for module, deps in MODULE_DEPENDENCIES.items():

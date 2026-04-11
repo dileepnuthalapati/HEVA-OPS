@@ -34,6 +34,12 @@ import ShiftScheduler from './pages/ShiftScheduler';
 import AttendancePage from './pages/AttendancePage';
 import TimesheetsPage from './pages/TimesheetsPage';
 
+// Pages - Heva Ops (Staff Companion)
+import HevaOpsLayout from './pages/HevaOpsLayout';
+import StaffShifts from './pages/StaffShifts';
+import StaffClockIn from './pages/StaffClockIn';
+import StaffSwapRequests from './pages/StaffSwapRequests';
+
 // Pages - All Users
 import Login from './pages/Login';
 import POSScreen from './pages/POSScreen';
@@ -145,6 +151,14 @@ const AppRoutes = () => {
       <Route path="/pos" element={<ProtectedRoute><POSScreen /></ProtectedRoute>} />
       <Route path="/kds" element={<ProtectedRoute><KitchenDisplay /></ProtectedRoute>} />
       <Route path="/orders" element={<ProtectedRoute><OrderHistory /></ProtectedRoute>} />
+      
+      {/* Heva Ops — Staff Companion (Workforce PWA) */}
+      <Route path="/heva-ops" element={<ProtectedRoute><HevaOpsLayout /></ProtectedRoute>}>
+        <Route index element={<Navigate to="/heva-ops/shifts" replace />} />
+        <Route path="shifts" element={<StaffShifts />} />
+        <Route path="clock" element={<StaffClockIn />} />
+        <Route path="swaps" element={<StaffSwapRequests />} />
+      </Route>
     </Routes>
   );
 };

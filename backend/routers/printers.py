@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from database import db
-from dependencies import get_current_user, require_admin
+from dependencies import get_current_user, require_admin, require_feature
 from models import User, Printer, PrinterCreate, PrinterUpdate, PrinterSendData, ScanRequest
 from typing import List, Optional
 from datetime import datetime, timezone
@@ -11,7 +11,7 @@ import base64
 import asyncio
 import concurrent.futures
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_feature("pos"))])
 
 
 @router.get("/printers", response_model=List[Printer])

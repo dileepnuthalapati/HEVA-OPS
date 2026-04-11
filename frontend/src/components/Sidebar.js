@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { modulePricingAPI } from '../services/api';
 import { Sheet, SheetContent, SheetTrigger } from '../components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Button } from '../components/ui/button';
@@ -73,6 +74,16 @@ const adminAlwaysItems = [
 
 function UpgradeModal({ open, onClose, moduleName }) {
   const meta = MODULE_META[moduleName] || {};
+  const [price, setPrice] = useState(null);
+
+  useEffect(() => {
+    if (open && moduleName) {
+      modulePricingAPI.get()
+        .then(p => setPrice(p[moduleName]))
+        .catch(() => {});
+    }
+  }, [open, moduleName]);
+
   return (
     <Dialog open={open} onOpenChange={onClose}>
       <DialogContent className="max-w-md" data-testid="upgrade-modal">
@@ -92,6 +103,12 @@ function UpgradeModal({ open, onClose, moduleName }) {
               : `Enable ${meta.label} to expand your restaurant operations.`
             }
           </p>
+          {price != null && (
+            <div className="mt-3 flex items-baseline gap-1">
+              <span className="text-2xl font-bold text-indigo-700">{price.toFixed(2)}</span>
+              <span className="text-sm text-slate-500">/month</span>
+            </div>
+          )}
           <p className="text-xs text-slate-500 mt-3">Contact your platform administrator to enable this module.</p>
         </div>
         <Button variant="outline" onClick={() => onClose(false)} className="mt-2 w-full" data-testid="upgrade-modal-close">

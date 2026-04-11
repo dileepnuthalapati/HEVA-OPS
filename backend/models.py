@@ -166,6 +166,15 @@ class RestaurantFeatures(BaseModel):
     workforce: bool = False
 
 
+class ModulePricing(BaseModel):
+    """Global default pricing for modules. Platform Owner configures once."""
+    pos: float = 19.99
+    kds: float = 9.99
+    qr_ordering: float = 14.99
+    workforce: float = 24.99
+    currency: str = "GBP"
+
+
 class Restaurant(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
