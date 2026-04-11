@@ -1,0 +1,104 @@
+{
+  "summary": "Iteration 32: Feature Guards, Heva Ops Staff Companion, Module Pricing - All tests passed. Backend: 19/19 tests passed (100%). Frontend: All UI tests passed (100%). Feature guards on POS/KDS/QR routers working correctly, Heva Ops Staff Companion PWA pages fully functional, Module Pricing UI visible and operational.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Chart width/height warnings in console - charts render with 0 dimensions initially (cosmetic, not blocking)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration32_feature_guards.py",
+    "/app/test_reports/pytest/pytest_results_iteration32.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Feature guards implementation is solid: require_feature() and require_any_feature() correctly return 403 when module is disabled",
+    "Platform owner correctly bypasses all feature guards",
+    "Heva Ops Staff Companion PWA has proper layout with header, bottom tab bar, and nested routes",
+    "Module Pricing card in Platform Settings correctly shows all 4 modules (POS, KDS, QR Ordering, Workforce) with editable prices",
+    "All data-testid attributes are properly implemented for testing"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration32_feature_guards.py"
+  ],
+  "success_rate": {
+    "backend": "100% (19/19 passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "platform_owner": {"username": "platform_owner", "password": "admin123", "navigates_to": "/platform/dashboard"},
+    "skadmin": {"username": "SKAdmin", "password": "saswata@123", "role": "admin", "restaurant_id": "rest_demo_1", "features": {"pos": true, "kds": true, "qr_ordering": true, "workforce": true}, "navigates_to": "/dashboard"},
+    "staff_user": {"username": "user", "password": "user123", "navigates_to": "/pos"}
+  },
+  "seed_data_creation": "No new seed data created",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 32 verified 3 new features: (1) Feature guards on POS/KDS/QR routers - all endpoints correctly check require_feature/require_any_feature, (2) Heva Ops Staff Companion PWA at /heva-ops/* with My Shifts, Clock In/Out PIN pad, and Swap Requests pages - all working with proper data-testid attributes, (3) Module Pricing in Platform Settings - card shows POS/KDS/QR/Workforce prices with Save Pricing button. rest_demo_1 has all features enabled: {pos:true, kds:true, qr_ordering:true, workforce:true}. All existing POS functionality still works.",
+  "features_verified": {
+    "feature_guards_pos_endpoints": {
+      "status": "VERIFIED",
+      "evidence": "Backend tests confirm /api/orders, /api/cash-drawer/*, /api/categories, /api/products, /api/printers, /api/tables all accessible with pos=true"
+    },
+    "feature_guards_kds_endpoints": {
+      "status": "VERIFIED",
+      "evidence": "Backend tests confirm /api/kds/orders and /api/kds/stats accessible with kds=true"
+    },
+    "feature_guards_qr_endpoints": {
+      "status": "VERIFIED",
+      "evidence": "Backend tests confirm /api/qr/tables/hashes accessible with qr_ordering=true, public menu checks qr_ordering feature flag"
+    },
+    "module_pricing_get": {
+      "status": "VERIFIED",
+      "evidence": "GET /api/platform/module-pricing returns default prices for platform_owner"
+    },
+    "module_pricing_update": {
+      "status": "VERIFIED",
+      "evidence": "PUT /api/platform/module-pricing updates prices successfully and persists changes"
+    },
+    "module_pricing_restricted": {
+      "status": "VERIFIED",
+      "evidence": "Module pricing returns 403 for non-platform-owner users"
+    },
+    "heva_ops_layout": {
+      "status": "VERIFIED",
+      "evidence": "HevaOpsLayout loads with header (data-testid=heva-ops-header), bottom tab bar (data-testid=heva-ops-tabs)"
+    },
+    "heva_ops_my_shifts": {
+      "status": "VERIFIED",
+      "evidence": "/heva-ops/shifts loads StaffShifts page with 2-week view (data-testid=staff-shifts-page)"
+    },
+    "heva_ops_clock_in_out": {
+      "status": "VERIFIED",
+      "evidence": "/heva-ops/clock loads with live clock (08:46:09), PIN pad (1-9, 0, DEL), status badge showing 'Clocked Out'"
+    },
+    "heva_ops_swap_requests": {
+      "status": "VERIFIED",
+      "evidence": "/heva-ops/swaps loads with Request Swap button (data-testid=request-swap-btn)"
+    },
+    "platform_settings_module_pricing_card": {
+      "status": "VERIFIED",
+      "evidence": "Module Pricing card visible with POS (25.99), KDS (12.99), QR Ordering (18.99), Workforce (29.99) inputs and Save Pricing button"
+    },
+    "pos_terminal_still_works": {
+      "status": "VERIFIED",
+      "evidence": "POS Terminal page loads correctly with product grid, categories, and order panel"
+    },
+    "sidebar_workforce_items": {
+      "status": "VERIFIED",
+      "evidence": "Sidebar shows Shift Scheduler, Attendance, Timesheets nav items for SKAdmin"
+    },
+    "platform_owner_bypasses_guards": {
+      "status": "VERIFIED",
+      "evidence": "Platform owner can access KDS and orders endpoints without restaurant assignment"
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Email sending via /api/email/*"]
+  }
+}

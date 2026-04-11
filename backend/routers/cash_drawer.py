@@ -1,10 +1,10 @@
 from fastapi import APIRouter, Depends, HTTPException
 from database import db
-from dependencies import get_current_user
+from dependencies import get_current_user, require_feature
 from models import User, CashDrawer, CashDrawerOpen, CashDrawerClose
 from datetime import datetime, timezone
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_feature("pos"))])
 
 
 @router.post("/cash-drawer/open", response_model=CashDrawer)

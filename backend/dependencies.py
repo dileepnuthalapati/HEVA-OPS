@@ -89,3 +89,67 @@ def require_platform_owner(current_user: User = Depends(get_current_user)):
     if current_user.role != "platform_owner":
         raise HTTPException(status_code=403, detail="Platform owner access required")
     return current_user
+
+
+# ─── Module Feature Guards ──────────────────────────────────────
+
+DEFAULT_FEATURES = {"pos": True, "kds": False, "qr_ordering": False, "workforce": False}
+
+# Dependency tree: module -> list of modules where at least one must be enabled
+MODULE_DEPENDENCIES = {
+    "kds": ["pos", "qr_ordering"],
+}
+
+
+async def get_restaurant_features(restaurant_id: str) -> dict:
+    """Fetch features for a restaurant, returning defaults if not set."""
+    restaurant = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0, "features": 1})
+    if not restaurant or not restaurant.get("features"):
+        return DEFAULT_FEATURES.copy()
+    merged = DEFAULT_FEATURES.copy()
+    merged.update(restaurant["features"])
+    return merged
+
+
+def has_feature(features: dict, feature_name: str) -> bool:
+    """Check if a feature is enabled in a features dict."""
+    return features.get(feature_name, False)
+
+
+def require_feature(feature_name: str):
+    """FastAPI dependency factory: returns 403 if the module is not enabled for the user's restaurant."""
+    async def _check(current_user: User = Depends(get_current_user)):
+        if current_user.role == "platform_owner":
+            return current_user
+        if not current_user.restaurant_id:
+            raise HTTPException(status_code=400, detail="No restaurant associated")
+        features = await get_restaurant_features(current_user.restaurant_id)
+        if not features.get(feature_name, False):
+            raise HTTPException(status_code=403, detail=f"Module '{feature_name}' is not enabled for this restaurant")
+        return current_user
+    return _check
+
+
+def require_any_feature(*feature_names):
+    """FastAPI dependency factory: passes if ANY of the listed features is enabled."""
+    async def _check(current_user: User = Depends(get_current_user)):
+        if current_user.role == "platform_owner":
+            return current_user
+        if not current_user.restaurant_id:
+            raise HTTPException(status_code=400, detail="No restaurant associated")
+        features = await get_restaurant_features(current_user.restaurant_id)
+        if not any(features.get(f, False) for f in feature_names):
+            names = " or ".join(feature_names)
+            raise HTTPException(status_code=403, detail=f"Requires at least one of: {names}")
+        return current_user
+    return _check
+
+
+def validate_feature_dependencies(features: dict) -> str | None:
+    """Validate module dependency tree. Returns error message or None."""
+    for module, deps in MODULE_DEPENDENCIES.items():
+        if features.get(module, False):
+            if not any(features.get(d, False) for d in deps):
+                dep_names = " or ".join(deps)
+                return f"'{module}' requires at least one of: {dep_names}"
+    return None

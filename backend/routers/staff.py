@@ -28,6 +28,12 @@ async def create_restaurant_staff(staff: StaffCreate, current_user: User = Depen
         "password_hash": get_password_hash(staff.password),
         "role": staff.role if staff.role in ["user", "admin"] else "user",
         "restaurant_id": current_user.restaurant_id,
+        "position": staff.position or "",
+        "hourly_rate": staff.hourly_rate or 0,
+        "phone": staff.phone or "",
+        "employment_type": staff.employment_type or "full_time",
+        "joining_date": staff.joining_date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+        "tax_id": staff.tax_id or "",
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": current_user.username,
     }
@@ -54,6 +60,18 @@ async def update_staff(user_id: str, staff: StaffUpdate, current_user: User = De
     update = {"username": staff.username, "role": staff.role}
     if staff.password:
         update["password_hash"] = get_password_hash(staff.password)
+    if staff.position is not None:
+        update["position"] = staff.position
+    if staff.hourly_rate is not None:
+        update["hourly_rate"] = staff.hourly_rate
+    if staff.phone is not None:
+        update["phone"] = staff.phone
+    if staff.employment_type is not None:
+        update["employment_type"] = staff.employment_type
+    if staff.joining_date is not None:
+        update["joining_date"] = staff.joining_date
+    if staff.tax_id is not None:
+        update["tax_id"] = staff.tax_id
     await db.users.update_one({"id": user_id}, {"$set": update})
     return {"message": f"Staff '{staff.username}' updated"}
 

@@ -7,6 +7,7 @@ import axios from "axios";
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { OfflineProvider } from './context/OfflineContext';
 import OfflineIndicator from './components/OfflineIndicator';
+import FloatingClockButton from './components/FloatingClockButton';
 
 // Pages - Platform Owner
 import PlatformDashboard from './pages/PlatformDashboard';
@@ -28,6 +29,17 @@ import RestaurantSettings from './pages/RestaurantSettings';
 import TableManagement from './pages/TableManagement';
 import PrinterSettings from './pages/PrinterSettings';
 import AuditLog from './pages/AuditLog';
+
+// Pages - Workforce Module
+import ShiftScheduler from './pages/ShiftScheduler';
+import AttendancePage from './pages/AttendancePage';
+import TimesheetsPage from './pages/TimesheetsPage';
+
+// Pages - Heva Ops (Staff Companion)
+import HevaOpsLayout from './pages/HevaOpsLayout';
+import StaffShifts from './pages/StaffShifts';
+import StaffClockIn from './pages/StaffClockIn';
+import StaffSwapRequests from './pages/StaffSwapRequests';
 
 // Pages - All Users
 import Login from './pages/Login';
@@ -129,11 +141,25 @@ const AppRoutes = () => {
       <Route path="/printers" element={<ProtectedRoute restaurantAdminOnly><PrinterSettings /></ProtectedRoute>} />
       <Route path="/audit" element={<ProtectedRoute restaurantAdminOnly><AuditLog /></ProtectedRoute>} />
       <Route path="/settings" element={<ProtectedRoute restaurantAdminOnly><RestaurantSettings /></ProtectedRoute>} />
+      <Route path="/staff" element={<ProtectedRoute restaurantAdminOnly><RestaurantSettings /></ProtectedRoute>} />
+      
+      {/* Workforce Module Routes */}
+      <Route path="/workforce/shifts" element={<ProtectedRoute restaurantAdminOnly><ShiftScheduler /></ProtectedRoute>} />
+      <Route path="/workforce/attendance" element={<ProtectedRoute restaurantAdminOnly><AttendancePage /></ProtectedRoute>} />
+      <Route path="/workforce/timesheets" element={<ProtectedRoute restaurantAdminOnly><TimesheetsPage /></ProtectedRoute>} />
       
       {/* POS Staff & Restaurant Admin */}
       <Route path="/pos" element={<ProtectedRoute><POSScreen /></ProtectedRoute>} />
       <Route path="/kds" element={<ProtectedRoute><KitchenDisplay /></ProtectedRoute>} />
       <Route path="/orders" element={<ProtectedRoute><OrderHistory /></ProtectedRoute>} />
+      
+      {/* Heva Ops — Staff Companion (Workforce PWA) */}
+      <Route path="/heva-ops" element={<ProtectedRoute><HevaOpsLayout /></ProtectedRoute>}>
+        <Route index element={<Navigate to="/heva-ops/shifts" replace />} />
+        <Route path="shifts" element={<StaffShifts />} />
+        <Route path="clock" element={<StaffClockIn />} />
+        <Route path="swaps" element={<StaffSwapRequests />} />
+      </Route>
     </Routes>
   );
 };
@@ -147,6 +173,7 @@ function App() {
         <BrowserRouter>
           <div className="App">
             <OfflineIndicator />
+            <FloatingClockButton />
             <AppRoutes />
             <Toaster position="bottom-right" duration={2000} closeButton toastOptions={{ style: { fontSize: '13px' } }} />
           </div>

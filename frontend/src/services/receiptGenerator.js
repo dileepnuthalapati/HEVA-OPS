@@ -256,7 +256,7 @@ export function generateCustomerReceipt(order, businessInfo = {}, tableInfo = nu
     // Footer
     CMD.ALIGN_CENTER,
     businessInfo.receipt_footer ? `${businessInfo.receipt_footer}\n` : 'Thank you for your visit!\n',
-    '\nPowered by HevaPOS\n',
+    '\nPowered by Heva One\n',
     CMD.FEED_5,
     CMD.CUT,
   );

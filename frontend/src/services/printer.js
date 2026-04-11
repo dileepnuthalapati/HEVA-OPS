@@ -339,7 +339,7 @@ class ThermalPrinterService {
 
   async _printWebBluetooth(bytes) {
     if (!navigator.bluetooth) {
-      throw new Error('Bluetooth not available in browser. Use the HevaPOS Android app.');
+      throw new Error('Bluetooth not available in browser. Use the Heva One Android app.');
     }
 
     const device = await navigator.bluetooth.requestDevice({
@@ -521,7 +521,7 @@ class ThermalPrinterService {
 
   async scanBLEDevices(onDeviceFound, durationMs = 5000) {
     await this.initBLE();
-    if (!this.isNative) throw new Error('BLE scanning requires the HevaPOS Android app.');
+    if (!this.isNative) throw new Error('BLE scanning requires the Heva One Android app.');
 
     const isEnabled = await BleClient.isEnabled();
     if (!isEnabled) {

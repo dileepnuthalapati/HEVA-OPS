@@ -31,7 +31,7 @@ async def generate_feature_guide(current_user: User = Depends(require_admin)):
 
     # Cover
     story.append(Spacer(1, 80))
-    story.append(Paragraph("HevaPOS", title_style))
+    story.append(Paragraph("Heva One", title_style))
     story.append(Paragraph("Enterprise Cloud POS for Restaurants", subtitle_style))
     story.append(Spacer(1, 20))
 
@@ -222,12 +222,12 @@ async def generate_feature_guide(current_user: User = Depends(require_admin)):
         story.append(Paragraph(f"\u2022 {line}", bullet_style))
 
     story.append(Spacer(1, 30))
-    story.append(Paragraph("Contact your HevaPOS representative for a live demo.", ParagraphStyle('Footer', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#94a3b8'), alignment=1)))
+    story.append(Paragraph("Contact your Heva One representative for a live demo.", ParagraphStyle('Footer', parent=styles['Normal'], fontSize=10, textColor=colors.HexColor('#94a3b8'), alignment=1)))
 
     doc.build(story)
     buffer.seek(0)
     return StreamingResponse(
         buffer,
         media_type="application/pdf",
-        headers={"Content-Disposition": "attachment; filename=HevaPOS_Feature_Guide.pdf"}
+        headers={"Content-Disposition": "attachment; filename=Heva_One_Feature_Guide.pdf"}
     )

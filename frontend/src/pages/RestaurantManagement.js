@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs';
 import { toast } from 'sonner';
-import { Plus, Store, Building2, Mail, Phone, MapPin, DollarSign, User, Users, Trash2, Key, Edit, Send, Loader2 } from 'lucide-react';
+import { Plus, Store, Building2, Mail, Phone, MapPin, DollarSign, User, Users, Trash2, Key, Edit, Send, Loader2, ShoppingCart, ChefHat, QrCode, Calendar } from 'lucide-react';
 
 const CURRENCY_OPTIONS = [
   { value: 'GBP', label: '£ GBP - British Pound', symbol: '£' },
@@ -20,6 +20,15 @@ const CURRENCY_OPTIONS = [
   { value: 'AUD', label: '$ AUD - Australian Dollar', symbol: '$' },
   { value: 'CAD', label: '$ CAD - Canadian Dollar', symbol: '$' },
 ];
+
+const MODULE_OPTIONS = [
+  { key: 'pos', label: 'POS', icon: ShoppingCart, description: 'Point of Sale, orders, payments' },
+  { key: 'kds', label: 'KDS', icon: ChefHat, description: 'Kitchen Display System', deps: ['pos', 'qr_ordering'] },
+  { key: 'qr_ordering', label: 'QR Ordering', icon: QrCode, description: 'QR table ordering & guest menu', deps: ['pos'] },
+  { key: 'workforce', label: 'Workforce', icon: Calendar, description: 'Shifts, attendance, timesheets, payroll' },
+];
+
+const DEFAULT_FEATURES = { pos: true, kds: false, qr_ordering: false, workforce: false };
 
 const RestaurantManagement = () => {
   const [restaurants, setRestaurants] = useState([]);
@@ -32,6 +41,7 @@ const RestaurantManagement = () => {
   const [editingRestaurant, setEditingRestaurant] = useState(null);
   const [formData, setFormData] = useState({
     name: '',
+    business_type: 'restaurant',
     address_line1: '',
     address_line2: '',
     city: '',
@@ -46,6 +56,8 @@ const RestaurantManagement = () => {
     // Admin user for the restaurant
     admin_username: '',
     admin_password: '',
+    // Module features
+    features: { ...DEFAULT_FEATURES },
   });
   const [newUserData, setNewUserData] = useState({
     username: '',
@@ -82,6 +94,7 @@ const RestaurantManagement = () => {
           currency: formData.currency,
           business_info: {
             name: formData.name,
+            business_type: formData.business_type,
             address_line1: formData.address_line1,
             address_line2: formData.address_line2,
             city: formData.city,
@@ -92,6 +105,7 @@ const RestaurantManagement = () => {
             vat_number: formData.vat_number,
             receipt_footer: formData.receipt_footer,
           },
+          features: formData.features,
         });
         toast.success('Restaurant updated successfully!');
       } else {
@@ -103,6 +117,7 @@ const RestaurantManagement = () => {
           currency: formData.currency,
           business_info: {
             name: formData.name,
+            business_type: formData.business_type,
             address_line1: formData.address_line1,
             address_line2: formData.address_line2,
             city: formData.city,
@@ -113,6 +128,7 @@ const RestaurantManagement = () => {
             vat_number: formData.vat_number,
             receipt_footer: formData.receipt_footer,
           },
+          features: formData.features,
         });
         
         // Create admin user for the restaurant if provided
@@ -158,6 +174,7 @@ const RestaurantManagement = () => {
     setEditingRestaurant(restaurant);
     setFormData({
       name: restaurant.business_info?.name || '',
+      business_type: restaurant.business_info?.business_type || 'restaurant',
       address_line1: restaurant.business_info?.address_line1 || '',
       address_line2: restaurant.business_info?.address_line2 || '',
       city: restaurant.business_info?.city || '',
@@ -171,6 +188,7 @@ const RestaurantManagement = () => {
       currency: restaurant.currency || 'GBP',
       admin_username: '',
       admin_password: '',
+      features: restaurant.features || { ...DEFAULT_FEATURES },
     });
     setShowAddDialog(true);
   };
@@ -235,6 +253,7 @@ const RestaurantManagement = () => {
   const resetForm = () => {
     setFormData({
       name: '',
+      business_type: 'restaurant',
       address_line1: '',
       address_line2: '',
       city: '',
@@ -248,6 +267,7 @@ const RestaurantManagement = () => {
       currency: 'GBP',
       admin_username: '',
       admin_password: '',
+      features: { ...DEFAULT_FEATURES },
     });
   };
 
@@ -282,8 +302,8 @@ const RestaurantManagement = () => {
         <div className="max-w-7xl mx-auto">
           <div className="flex items-center justify-between mb-8">
             <div>
-              <h1 className="text-2xl md:text-4xl font-bold tracking-tight mb-1 md:mb-2">Restaurant Management</h1>
-              <p className="text-muted-foreground">Manage all your HevaPOS customers</p>
+              <h1 className="text-2xl md:text-4xl font-bold tracking-tight mb-1 md:mb-2">Business Management</h1>
+              <p className="text-muted-foreground">Manage all your Heva One businesses</p>
             </div>
             <Dialog open={showAddDialog} onOpenChange={(open) => {
               setShowAddDialog(open);
@@ -298,26 +318,44 @@ const RestaurantManagement = () => {
                   resetForm();
                 }}>
                   <Plus className="w-4 h-4 mr-2" />
-                  Add Restaurant
+                  Add Business
                 </Button>
               </DialogTrigger>
               <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
-                  <DialogTitle>{editingRestaurant ? 'Edit Restaurant' : 'Add New Restaurant'}</DialogTitle>
+                  <DialogTitle>{editingRestaurant ? 'Edit Business' : 'Add New Business'}</DialogTitle>
                   <DialogDescription>
-                    {editingRestaurant ? 'Update restaurant details' : 'Create a new restaurant account with custom pricing'}
+                    {editingRestaurant ? 'Update business details' : 'Onboard a new business with their modules and pricing'}
                   </DialogDescription>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4 mt-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="col-span-2">
-                      <Label htmlFor="name">Restaurant Name *</Label>
+                      <Label htmlFor="name">Business Name *</Label>
                       <Input
                         id="name"
                         value={formData.name}
                         onChange={(e) => handleChange('name', e.target.value)}
                         required
                       />
+                    </div>
+
+                    <div className="col-span-2">
+                      <Label htmlFor="business_type">Business Type *</Label>
+                      <Select value={formData.business_type || 'restaurant'} onValueChange={(v) => handleChange('business_type', v)}>
+                        <SelectTrigger id="business_type"><SelectValue placeholder="Select type" /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="restaurant">Restaurant</SelectItem>
+                          <SelectItem value="cafe">Cafe / Coffee Shop</SelectItem>
+                          <SelectItem value="bar">Bar / Pub</SelectItem>
+                          <SelectItem value="takeaway">Takeaway / Fast Food</SelectItem>
+                          <SelectItem value="retail">Retail Store</SelectItem>
+                          <SelectItem value="salon">Salon / Spa</SelectItem>
+                          <SelectItem value="gym">Gym / Fitness</SelectItem>
+                          <SelectItem value="hotel">Hotel / Hospitality</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
+                        </SelectContent>
+                      </Select>
                     </div>
                     
                     <div className="col-span-2">
@@ -410,6 +448,48 @@ const RestaurantManagement = () => {
                           placeholder="19.99"
                           required
                         />
+                      </div>
+                    </div>
+
+                    <div className="col-span-2 border-t pt-4 mt-2">
+                      <h3 className="font-semibold mb-1 flex items-center gap-2">
+                        Enabled Modules
+                      </h3>
+                      <p className="text-xs text-muted-foreground mb-3">Select which modules this restaurant has access to</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {MODULE_OPTIONS.map(mod => {
+                          const Icon = mod.icon;
+                          const checked = formData.features?.[mod.key] || false;
+                          return (
+                            <label
+                              key={mod.key}
+                              className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
+                                checked ? 'border-indigo-300 bg-indigo-50' : 'border-slate-200 hover:border-slate-300'
+                              }`}
+                              data-testid={`module-toggle-${mod.key}`}
+                            >
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={(e) => {
+                                  const newFeatures = { ...formData.features, [mod.key]: e.target.checked };
+                                  // Dependency validation on KDS
+                                  if (mod.key === 'kds' && e.target.checked && !newFeatures.pos && !newFeatures.qr_ordering) {
+                                    toast.error('KDS requires POS or QR Ordering');
+                                    return;
+                                  }
+                                  setFormData({ ...formData, features: newFeatures });
+                                }}
+                                className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                              />
+                              <Icon className="w-4 h-4 text-slate-600 flex-shrink-0" />
+                              <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium">{mod.label}</div>
+                                <div className="text-[10px] text-muted-foreground">{mod.description}</div>
+                              </div>
+                            </label>
+                          );
+                        })}
                       </div>
                     </div>
 
@@ -630,6 +710,20 @@ const RestaurantManagement = () => {
                           <div className="text-xs pt-1">
                             Created: {new Date(restaurant.created_at).toLocaleDateString()}
                           </div>
+                          {restaurant.features && (
+                            <div className="flex flex-wrap gap-1 pt-1.5">
+                              {restaurant.business_info?.business_type && restaurant.business_info.business_type !== 'restaurant' && (
+                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-medium capitalize">
+                                  {restaurant.business_info.business_type.replace('_', ' ')}
+                                </span>
+                              )}
+                              {Object.entries(restaurant.features).filter(([,v]) => v).map(([key]) => (
+                                <span key={key} className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-700 font-medium uppercase">
+                                  {key.replace('_', ' ')}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <div className="text-right">

@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
 from database import db
-from dependencies import get_current_user, require_admin
+from dependencies import get_current_user, require_admin, require_any_feature
 from models import User, Table, TableCreate, TableUpdate, TableMerge, TableSplitBill
 from typing import List
 from datetime import datetime, timezone
 import secrets
 
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(require_any_feature("pos", "qr_ordering"))])
 
 
 @router.get("/tables", response_model=List[Table])

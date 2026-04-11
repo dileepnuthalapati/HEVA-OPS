@@ -159,6 +159,22 @@ class CashDrawerClose(BaseModel):
     notes: Optional[str] = None
 
 
+class RestaurantFeatures(BaseModel):
+    pos: bool = True
+    kds: bool = False
+    qr_ordering: bool = False
+    workforce: bool = False
+
+
+class ModulePricing(BaseModel):
+    """Global default pricing for modules. Platform Owner configures once."""
+    pos: float = 19.99
+    kds: float = 9.99
+    qr_ordering: float = 14.99
+    workforce: float = 24.99
+    currency: str = "GBP"
+
+
 class Restaurant(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str
@@ -168,6 +184,7 @@ class Restaurant(BaseModel):
     price: Optional[float] = 0
     currency: str = "GBP"
     business_info: Optional[dict] = {}
+    features: Optional[dict] = None
     users: Optional[List[str]] = []
     created_at: Optional[str] = None
     trial_ends_at: Optional[str] = None
@@ -181,6 +198,7 @@ class RestaurantCreate(BaseModel):
     price: float = 19.99
     currency: str = "GBP"
     business_info: Optional[dict] = {}
+    features: Optional[dict] = None
 
 
 class RestaurantUpdate(BaseModel):
@@ -188,6 +206,7 @@ class RestaurantUpdate(BaseModel):
     currency: Optional[str] = None
     owner_email: Optional[str] = None
     qr_ordering_enabled: Optional[bool] = None
+    features: Optional[dict] = None
 
 
 class SyncData(BaseModel):
@@ -342,6 +361,12 @@ class StaffCreate(BaseModel):
     password: str
     role: str = "user"
     pos_pin: Optional[str] = None
+    position: Optional[str] = None
+    hourly_rate: Optional[float] = None
+    phone: Optional[str] = None
+    employment_type: Optional[str] = None  # full_time, part_time, casual
+    joining_date: Optional[str] = None
+    tax_id: Optional[str] = None
 
 
 class StaffUpdate(BaseModel):
@@ -349,6 +374,12 @@ class StaffUpdate(BaseModel):
     password: Optional[str] = None
     role: str = "user"
     pos_pin: Optional[str] = None
+    position: Optional[str] = None
+    hourly_rate: Optional[float] = None
+    phone: Optional[str] = None
+    employment_type: Optional[str] = None
+    joining_date: Optional[str] = None
+    tax_id: Optional[str] = None
 
 
 class PasswordReset(BaseModel):
