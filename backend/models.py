@@ -342,6 +342,8 @@ class StaffCreate(BaseModel):
     password: str
     role: str = "user"
     pos_pin: Optional[str] = None
+    position: Optional[str] = None
+    hourly_rate: Optional[float] = None
 
 
 class StaffUpdate(BaseModel):
@@ -349,6 +351,8 @@ class StaffUpdate(BaseModel):
     password: Optional[str] = None
     role: str = "user"
     pos_pin: Optional[str] = None
+    position: Optional[str] = None
+    hourly_rate: Optional[float] = None
 
 
 class PasswordReset(BaseModel):

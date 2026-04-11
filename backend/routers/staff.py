@@ -28,6 +28,8 @@ async def create_restaurant_staff(staff: StaffCreate, current_user: User = Depen
         "password_hash": get_password_hash(staff.password),
         "role": staff.role if staff.role in ["user", "admin"] else "user",
         "restaurant_id": current_user.restaurant_id,
+        "position": staff.position or "",
+        "hourly_rate": staff.hourly_rate or 0,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "created_by": current_user.username,
     }
@@ -54,6 +56,10 @@ async def update_staff(user_id: str, staff: StaffUpdate, current_user: User = De
     update = {"username": staff.username, "role": staff.role}
     if staff.password:
         update["password_hash"] = get_password_hash(staff.password)
+    if staff.position is not None:
+        update["position"] = staff.position
+    if staff.hourly_rate is not None:
+        update["hourly_rate"] = staff.hourly_rate
     await db.users.update_one({"id": user_id}, {"$set": update})
     return {"message": f"Staff '{staff.username}' updated"}
 
