@@ -1,14 +1,14 @@
-# HevaPOS - Product Requirements Document
+# Heva One - Product Requirements Document
 
 ## Overview
-Multi-tenant **Modular SaaS** POS system for restaurants. Cloud backend (FastAPI + MongoDB), mobile-first frontend (React + Capacitor APK). Three roles: Platform Owner, Restaurant Admin, Staff. Revenue model: **per-module monthly pricing + 0.3% commission on QR orders via Stripe Connect**.
+Multi-tenant **Modular SaaS** business management system. Cloud backend (FastAPI + MongoDB), mobile-first frontend (React + Capacitor APK). Three roles: Platform Owner, Business Admin, Staff. Revenue model: **per-module monthly pricing + 0.3% commission on QR orders via Stripe Connect**.
 
 ## Modular Architecture (Apr 11, 2026)
-Every capability is an independently toggleable module per restaurant:
+Every capability is an independently toggleable module per business:
 
 | Layer | Details |
 |---|---|
-| **Core (Always On)** | Business Profile, Staff Management, PINs, Roles, Settings, Dashboard, Reports |
+| **Core (Always On)** | Business Profile, Staff/User Management (inside Settings), PINs, Roles, Settings, Dashboard, Reports |
 | **POS Module** | POS Screen, Cart, Orders, Cash Drawer, Receipts, Printers |
 | **KDS Module** | Kitchen Display System (requires POS or QR) |
 | **QR Ordering** | QR codes, Guest menu, Table ordering (requires POS for menu) |
@@ -18,12 +18,12 @@ Every capability is an independently toggleable module per restaurant:
 **Backend Enforcement:** `require_feature()` and `require_any_feature()` dependencies on ALL module routers
 **JWT Embedded:** Features included in login token — zero extra DB calls
 **Sidebar:** Enabled = normal nav, Disabled = greyed with lock icon + "Upgrade to Unlock" modal showing module price
-**Module Pricing:** Platform Owner sets per-module monthly prices via Platform Settings → shown in upgrade modal
+**Module Pricing:** Platform Owner sets per-module monthly prices via Platform Settings
 
 ## Two Frontends, One Backend
 | Frontend | Who | Where |
 |---|---|---|
-| **HevaPOS Manager** | Admin/Manager | Tablet/Desktop — Full admin UI |
+| **Heva One Manager** | Admin/Manager | Tablet/Desktop — Full admin UI |
 | **Heva Ops** (Staff Companion) | Staff | Mobile phone — `/heva-ops/*` — My Shifts, Clock In/Out, Swap Requests |
 
 ## Code Architecture
@@ -32,9 +32,9 @@ Every capability is an independently toggleable module per restaurant:
 ├── dependencies.py          # require_feature(), require_any_feature(), validate_feature_dependencies()
 ├── models.py                # RestaurantFeatures, ModulePricing
 ├── routers/
-│   ├── auth.py              # Login returns features in JWT
-│   ├── restaurants.py       # Feature toggle API (PUT /restaurants/{id}/features)
-│   ├── platform.py          # Module pricing CRUD (GET/PUT /platform/module-pricing)
+│   ├── auth.py              # Login returns features in JWT, PIN login with smart routing
+│   ├── restaurants.py       # Feature toggle API
+│   ├── platform.py          # Module pricing CRUD
 │   ├── orders.py            # Guarded: require_any_feature("pos", "qr_ordering")
 │   ├── menu.py              # Guarded: require_any_feature("pos", "qr_ordering")
 │   ├── tables.py            # Guarded: require_any_feature("pos", "qr_ordering")
@@ -42,26 +42,26 @@ Every capability is an independently toggleable module per restaurant:
 │   ├── receipts.py          # Guarded: require_feature("pos")
 │   ├── printers.py          # Guarded: require_feature("pos")
 │   ├── kds.py               # Guarded: require_feature("kds")
-│   ├── qr_menu.py           # Public endpoints check features.qr_ordering inline
+│   ├── qr_menu.py           # Public endpoints check features inline
 │   ├── shifts.py            # Guarded: require_feature("workforce")
-│   ├── attendance.py        # Guarded: require_feature("workforce")
+│   ├── attendance.py        # Guarded: require_feature("workforce") + dashboard-stats endpoint
 │   ├── timesheets.py        # Guarded: require_feature("workforce")
 │   ├── payroll.py           # Guarded: require_feature("workforce")
 │   └── swap_requests.py     # Guarded: require_feature("workforce")
 
 /app/frontend/src/
 ├── context/AuthContext.js    # hasFeature(), features in user state
-├── components/Sidebar.js     # Dynamic sidebar with lock icons, upgrade modal with pricing
+├── components/
+│   ├── Sidebar.js           # Dynamic sidebar: module-aware, no Staff item, conditional Reports/Audit
+│   ├── FloatingClockButton.js  # Whitelist: only on /dashboard, /settings, /workforce/*
 ├── pages/
-│   ├── HevaOpsLayout.js      # Staff companion shell (header + bottom tabs)
-│   ├── StaffShifts.js        # My Shifts (2-week view)
-│   ├── StaffClockIn.js       # Clock In/Out (live clock, PIN pad, auto-submit)
-│   ├── StaffSwapRequests.js  # Request/view shift swaps
-│   ├── ShiftScheduler.js     # Manager: weekly shift grid
-│   ├── AttendancePage.js     # Manager: live clock-ins + history
-│   ├── TimesheetsPage.js     # Manager: timesheets + payroll summary
-│   ├── PlatformSettings.js   # Module Pricing card (Platform Owner)
-│   └── RestaurantManagement.js # Module toggle checkboxes (Platform Owner)
+│   ├── Login.js             # PIN default, password fallback, smart routing by features
+│   ├── AdminDashboard.js    # Adaptive: Workforce widgets + POS widgets based on features
+│   ├── RestaurantSettings.js # "Settings" (renamed), tabs: Business, Stripe, Users, Security
+│   ├── HevaOpsLayout.js     # Staff companion shell
+│   ├── StaffShifts.js, StaffClockIn.js, StaffSwapRequests.js
+│   ├── ShiftScheduler.js, AttendancePage.js, TimesheetsPage.js
+│   ├── PlatformSettings.js, RestaurantManagement.js
 ```
 
 ## All Completed Features
@@ -74,11 +74,11 @@ Every capability is an independently toggleable module per restaurant:
 7. Revenue Analytics Dashboard + Kitchen Efficiency widget
 8. Menu Management (consolidated categories + products)
 9. Report PDF Export (server-generated reportlab)
-10. Staff Management UI (CRUD, password reset, POS PIN set/remove)
+10. Staff Management UI (CRUD, password reset, POS PIN set/remove) — now inside Settings
 11. Security tab with Manager PIN setup UI
 12. Offline authentication (cached credential fallback)
-13. Multi-currency restaurant creation with auto-seeded categories
-14. Cash Drawer (staff + admin access, restaurant-scoped)
+13. Multi-currency business creation with auto-seeded categories
+14. Cash Drawer (staff + admin access, business-scoped)
 15. Table management with QR hash generation
 16. Order Sequencing daily reset (atomic counter, race-condition safe)
 17. Multi-tenancy security (strict restaurant_id scoping)
@@ -98,10 +98,18 @@ Every capability is an independently toggleable module per restaurant:
 31. Dynamic Sidebar (enabled = normal, disabled = lock icon + upgrade modal with pricing)
 32. Cross-talk Logic (Efficiency Ratio visible when POS + Workforce both active)
 33. **Heva Ops Staff Companion PWA** (My Shifts, Clock In/Out PIN pad, Shift Swap Requests)
-34. **Module Pricing System** (Platform Owner sets per-module monthly prices, shown in upgrade modals)
+34. **Module Pricing System** (Platform Owner sets per-module monthly prices)
+35. **Module-Aware UX Overhaul (Apr 11, 2026)**:
+    - Removed redundant Staff sidebar item (moved to Settings → User Management)
+    - Settings page renamed from "Restaurant Settings" to "Settings"
+    - Audit Log + Reports hidden when no POS/KDS/QR modules active
+    - Smart login routing: PIN default, features-based redirect (workforce→heva-ops, pos→pos)
+    - Adaptive Dashboard: Workforce widgets (Team, On Shift, Scheduled, Hours) + POS widgets
+    - Floating Clock-In button whitelist (only on dashboard, settings, workforce pages)
+    - "Business" label in sidebar (not "Restaurant")
 
 ## Upcoming (P1)
-- Daily email summary for restaurant admins
+- Daily email summary for business admins
 - Automated trial expiry email sequences (7d, 3d, 1d)
 
 ## Backlog (P2)
@@ -109,7 +117,7 @@ Every capability is an independently toggleable module per restaurant:
 - Split monolithic server.py into modular routers
 - Deliverect / Middleware API Integration
 - iOS App Build Prep
-- Self-service module upgrade (restaurant admin can enable modules and pay via Stripe)
+- Self-service module upgrade (business admin can enable modules and pay via Stripe)
 
 ## Production Checklist
 - [ ] Replace sk_test_emergent with real Stripe Platform key
