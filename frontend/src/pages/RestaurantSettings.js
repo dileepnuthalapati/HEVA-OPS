@@ -13,9 +13,9 @@ import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, Cr
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
-const TABS = [
+const ALL_TABS = [
   { id: 'business', label: 'Business Info', icon: Store },
-  { id: 'stripe', label: 'Stripe Payments', icon: CreditCard },
+  { id: 'stripe', label: 'Stripe Payments', icon: CreditCard, requiresFeature: 'qr_ordering' },
   { id: 'staff', label: 'User Management', icon: Users },
   { id: 'security', label: 'Security', icon: KeyRound },
 ];
@@ -340,7 +340,7 @@ const RestaurantSettings = () => {
 
           {/* Tabs */}
           <div className="flex gap-1 mb-6 p-1 bg-muted rounded-lg overflow-x-auto" data-testid="settings-tabs">
-            {TABS.map((tab) => {
+            {ALL_TABS.filter(tab => !tab.requiresFeature || hasFeature(tab.requiresFeature)).map((tab) => {
               const Icon = tab.icon;
               return (
                 <button
@@ -381,7 +381,7 @@ const RestaurantSettings = () => {
               <Card data-testid="restaurant-settings-form">
                 <CardHeader>
                   <CardTitle className="text-2xl font-semibold">Business Information</CardTitle>
-                  <CardDescription>This information will appear on all customer receipts</CardDescription>
+                  <CardDescription>{hasFeature('pos') ? 'This information will appear on all customer receipts' : 'Your business details for staff and operations'}</CardDescription>
                 </CardHeader>
                 <CardContent>
                   <form onSubmit={handleSubmit} className="space-y-6">
@@ -439,16 +439,20 @@ const RestaurantSettings = () => {
                         <Label htmlFor="website" className="text-sm font-semibold">Website <span className="text-muted-foreground text-xs">(optional)</span></Label>
                         <Input id="website" data-testid="website-input" value={formData.website} onChange={(e) => handleChange('website', e.target.value)} placeholder="www.restaurant.co.uk" className="h-12" />
                       </div>
+                      {hasFeature('pos') && (
                       <div>
                         <Label htmlFor="vat_number" className="text-sm font-semibold">VAT/Tax Number <span className="text-muted-foreground text-xs">(optional)</span></Label>
                         <Input id="vat_number" data-testid="vat-number-input" value={formData.vat_number} onChange={(e) => handleChange('vat_number', e.target.value)} placeholder="GB123456789" className="h-12" />
                       </div>
+                      )}
                     </div>
+                    {hasFeature('pos') && (
                     <div>
                       <Label htmlFor="receipt_footer" className="text-sm font-semibold">Receipt Footer Message <span className="text-muted-foreground text-xs">(optional)</span></Label>
                       <Textarea id="receipt_footer" data-testid="receipt-footer-input" value={formData.receipt_footer} onChange={(e) => handleChange('receipt_footer', e.target.value)} placeholder="Thank you for visiting! Come again soon!" rows={3} />
                       <p className="text-xs text-muted-foreground mt-2">This message will appear at the bottom of customer receipts</p>
                     </div>
+                    )}
                     <div className="pt-4">
                       <Button type="submit" data-testid="save-settings-button" disabled={saving} className="w-full md:w-auto h-12 px-8">
                         <Save className="w-4 h-4 mr-2" /> {saving ? 'Saving...' : 'Save Settings'}
@@ -458,7 +462,8 @@ const RestaurantSettings = () => {
                 </CardContent>
               </Card>
 
-              {/* Receipt Preview */}
+              {/* Receipt Preview — POS only */}
+              {hasFeature('pos') && (
               <Card className="mt-6">
                 <CardHeader>
                   <CardTitle className="text-xl font-semibold">Receipt Preview</CardTitle>
@@ -487,6 +492,7 @@ const RestaurantSettings = () => {
                   </div>
                 </CardContent>
               </Card>
+              )}
             </>
           )}
 
@@ -745,7 +751,8 @@ const RestaurantSettings = () => {
                 </CardContent>
               </Card>
 
-              {/* Manager PIN Card */}
+              {/* Manager PIN Card — POS only */}
+              {hasFeature('pos') && (
               <Card data-testid="manager-pin-card">
                 <CardHeader>
                   <CardTitle className="text-xl font-semibold flex items-center gap-2"><KeyRound className="w-5 h-5" /> Manager PIN</CardTitle>
@@ -794,6 +801,7 @@ const RestaurantSettings = () => {
                   </form>
                 </CardContent>
               </Card>
+              )}
             </div>
           )}
         </div>

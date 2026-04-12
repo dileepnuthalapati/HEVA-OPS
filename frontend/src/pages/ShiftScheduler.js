@@ -43,6 +43,7 @@ export default function ShiftScheduler() {
   const [editingShift, setEditingShift] = useState(null);
   const [copyMode, setCopyMode] = useState(false);
   const [form, setForm] = useState({ staff_id: '', date: '', start_time: '09:00', end_time: '17:00', position: '', note: '' });
+  const [saving, setSaving] = useState(false);
 
   const weekDates = getWeekDates(weekOffset);
   const startDate = weekDates[0];
@@ -68,6 +69,8 @@ export default function ShiftScheduler() {
 
   const handleAddShift = async (e) => {
     e.preventDefault();
+    if (saving) return;
+    setSaving(true);
     try {
       if (editingShift) {
         await shiftAPI.update(editingShift.id, { start_time: form.start_time, end_time: form.end_time, position: form.position, note: form.note });
@@ -81,6 +84,8 @@ export default function ShiftScheduler() {
       loadData();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to save shift');
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -114,9 +119,9 @@ export default function ShiftScheduler() {
     }
   };
 
-  const openAdd = (date) => {
+  const openAdd = (date, staffId) => {
     setEditingShift(null);
-    setForm({ staff_id: staffList[0]?.id || '', date, start_time: '09:00', end_time: '17:00', position: '', note: '' });
+    setForm({ staff_id: staffId || staffList[0]?.id || '', date, start_time: '09:00', end_time: '17:00', position: '', note: '' });
     setShowAddDialog(true);
   };
 
@@ -231,7 +236,7 @@ export default function ShiftScheduler() {
                               {user?.role === 'admin' && (
                                 <button
                                   className="w-full h-7 rounded-lg border border-dashed border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-slate-400 hover:text-indigo-500 transition-all flex items-center justify-center"
-                                  onClick={() => openAdd(date)}
+                                  onClick={() => openAdd(date, sid)}
                                   data-testid={`add-shift-${date}`}
                                 >
                                   <Plus className="w-3.5 h-3.5" />
@@ -286,8 +291,8 @@ export default function ShiftScheduler() {
                   <Label>Note</Label>
                   <Input value={form.note} onChange={e => setForm({ ...form, note: e.target.value })} placeholder="Optional note" />
                 </div>
-                <Button type="submit" className="w-full" data-testid="save-shift-btn">
-                  {editingShift ? 'Update Shift' : 'Add Shift'}
+                <Button type="submit" className="w-full" disabled={saving} data-testid="save-shift-btn">
+                  {saving ? 'Saving...' : editingShift ? 'Update Shift' : 'Add Shift'}
                 </Button>
               </form>
             </DialogContent>
