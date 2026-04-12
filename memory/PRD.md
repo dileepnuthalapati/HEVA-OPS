@@ -56,6 +56,7 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 27. **Three-Way Handshake Swap (Apr 12, 2026)** — Staff A requests → eligible colleagues notified → Staff B accepts → Manager approves → shift auto-reassigns on rota
 28. **Drop Shift Escalation (Apr 12, 2026)** — Staff drops with mandatory reason (Emergency/Sickness/Unresolved Swap) → Manager opens to marketplace OR directly reassigns → Sickness auto-logs to attendance/leave
 29. **Open Shift Marketplace (Apr 12, 2026)** — Blast notification to all staff → first to claim gets the shift (no manager approval needed) → admin notified of claim
+30. **5 Bug Fixes (Apr 12, 2026)** — Swap visibility for admin colleagues (can_accept flag), duplicate shifts on copy (clears target week), week start day preference (Mon/Sun/Sat), cancel/delete swap requests, sick leave ghost in "Currently on Shift" (record_type + is_operational fields, "On Floor" vs "Unavailable" counts)
 
 ## Upcoming
 - iOS App Build Prep (Capacitor config for iOS deployment)
