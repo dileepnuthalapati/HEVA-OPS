@@ -50,6 +50,7 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 21. **Smart Attendance Handling (Apr 12, 2026)** — 14-hour smart buffer (no more midnight auto-close), staff self-correction flow for ghost shifts, manager Pending Approvals dashboard widget, full audit trail (auto_close_time, staff_claimed_time, manager_approved_time)
 22. **Shift Nudge Notifications (Apr 12, 2026)** — In-app notification bell in Heva Ops, background task checks every 30min for shifts >10h, creates "Still on shift?" nudge, staff can dismiss via dropdown
 23. **Dashboard Cleanup (Apr 12, 2026)** — Removed outdated 7-day POS bar chart widget, simplified Today's Revenue card
+24. **Native Push Notification Infrastructure (Apr 12, 2026)** — Firebase Admin SDK integration with graceful dry-run mode, device token registration/unregistration API, push sending on long shift nudges and ghost shifts, Capacitor push registration on login/teardown on logout. Awaiting Firebase credentials to go live.
 
 ## Upcoming
 - iOS App Build Prep (Capacitor config for iOS deployment)
@@ -72,3 +73,5 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 - [ ] Set up Railway cron for daily email dispatch
 - [ ] Add real emails to all staff accounts
 - [ ] Build iOS via Capacitor (upcoming)
+- [ ] Add Firebase credentials (FIREBASE_CREDENTIALS_PATH) to enable native push notifications
+- [ ] Upload APNs key in Firebase console for iOS push
