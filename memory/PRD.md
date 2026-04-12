@@ -50,7 +50,12 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 21. **Smart Attendance Handling (Apr 12, 2026)** — 14-hour smart buffer (no more midnight auto-close), staff self-correction flow for ghost shifts, manager Pending Approvals dashboard widget, full audit trail (auto_close_time, staff_claimed_time, manager_approved_time)
 22. **Shift Nudge Notifications (Apr 12, 2026)** — In-app notification bell in Heva Ops, background task checks every 30min for shifts >10h, creates "Still on shift?" nudge, staff can dismiss via dropdown
 23. **Dashboard Cleanup (Apr 12, 2026)** — Removed outdated 7-day POS bar chart widget, simplified Today's Revenue card
-24. **Native Push Notification Infrastructure (Apr 12, 2026)** — Firebase Admin SDK integration with graceful dry-run mode, device token registration/unregistration API, push sending on long shift nudges and ghost shifts, Capacitor push registration on login/teardown on logout. Awaiting Firebase credentials to go live.
+24. **Native Push Notification Infrastructure (Apr 12, 2026)** — Firebase Admin SDK integration with graceful dry-run mode, device token registration/unregistration API, push sending on long shift nudges and ghost shifts, Capacitor push registration on login/teardown on logout. Firebase credentials LIVE.
+25. **Staff Welcome Email (Apr 12, 2026)** — Auto-sends onboarding email via Resend when staff is created with email
+26. **Shift Management Bug Fixes (Apr 12, 2026)** — Auto-select staff in shift dialog, double-tap prevention, Stripe tab hidden for workforce-only businesses
+27. **Three-Way Handshake Swap (Apr 12, 2026)** — Staff A requests → eligible colleagues notified → Staff B accepts → Manager approves → shift auto-reassigns on rota
+28. **Drop Shift Escalation (Apr 12, 2026)** — Staff drops with mandatory reason (Emergency/Sickness/Unresolved Swap) → Manager opens to marketplace OR directly reassigns → Sickness auto-logs to attendance/leave
+29. **Open Shift Marketplace (Apr 12, 2026)** — Blast notification to all staff → first to claim gets the shift (no manager approval needed) → admin notified of claim
 
 ## Upcoming
 - iOS App Build Prep (Capacitor config for iOS deployment)
