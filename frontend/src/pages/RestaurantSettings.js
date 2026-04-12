@@ -13,9 +13,9 @@ import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, Cr
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
-const TABS = [
+const ALL_TABS = [
   { id: 'business', label: 'Business Info', icon: Store },
-  { id: 'stripe', label: 'Stripe Payments', icon: CreditCard },
+  { id: 'stripe', label: 'Stripe Payments', icon: CreditCard, requiresFeature: 'qr_ordering' },
   { id: 'staff', label: 'User Management', icon: Users },
   { id: 'security', label: 'Security', icon: KeyRound },
 ];
@@ -340,7 +340,7 @@ const RestaurantSettings = () => {
 
           {/* Tabs */}
           <div className="flex gap-1 mb-6 p-1 bg-muted rounded-lg overflow-x-auto" data-testid="settings-tabs">
-            {TABS.map((tab) => {
+            {ALL_TABS.filter(tab => !tab.requiresFeature || hasFeature(tab.requiresFeature)).map((tab) => {
               const Icon = tab.icon;
               return (
                 <button

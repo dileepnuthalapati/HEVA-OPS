@@ -12,7 +12,7 @@ import {
   TrendingUp, ShoppingBag, Coins, Calendar,
   AlertTriangle, Clock, CreditCard, Banknote, QrCode,
   MonitorSmartphone, UtensilsCrossed, ChefHat,
-  Users, UserCheck, Timer, CalendarClock, CheckCircle, Bell
+  Users, UserCheck, Timer, CalendarClock, CheckCircle, ArrowRightLeft, X
 } from 'lucide-react';
 
 const getCurrencySymbol = (currency) => {
@@ -33,6 +33,8 @@ const AdminDashboard = () => {
   const [workforceStats, setWorkforceStats] = useState(null);
   const [pendingAdjustments, setPendingAdjustments] = useState([]);
   const [approvingId, setApprovingId] = useState(null);
+  const [swapRequests, setSwapRequests] = useState([]);
+  const [swapActionId, setSwapActionId] = useState(null);
 
   const hasPOS = hasFeature('pos');
   const hasWorkforce = hasFeature('workforce');
@@ -54,6 +56,7 @@ const AdminDashboard = () => {
       if (hasWorkforce) {
         promises.push(attendanceAPI.getDashboardStats().catch(() => null));
         promises.push(attendanceAPI.getPendingAdjustments().catch(() => []));
+        promises.push(api.get('/swap-requests').then(r => r.data).catch(() => []));
       }
 
       const results = await Promise.all(promises);
@@ -70,8 +73,10 @@ const AdminDashboard = () => {
       if (hasWorkforce) {
         const wfStats = results[idx++];
         const pendAdj = results[idx++];
+        const swaps = results[idx++];
         if (wfStats) setWorkforceStats(wfStats);
         if (pendAdj) setPendingAdjustments(pendAdj);
+        if (swaps) setSwapRequests(swaps);
       }
 
       if (restaurant?.currency) setCurrency(restaurant.currency);
@@ -116,6 +121,19 @@ const AdminDashboard = () => {
       toast.error(e.response?.data?.detail || 'Failed to approve');
     } finally {
       setApprovingId(null);
+    }
+  };
+
+  const handleSwapAction = async (requestId, action) => {
+    setSwapActionId(requestId);
+    try {
+      await api.put(`/swap-requests/${requestId}/${action}`);
+      toast.success(action === 'approve' ? 'Swap approved — shift is now open' : 'Swap request rejected');
+      setSwapRequests(prev => prev.filter(r => r.id !== requestId));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || `Failed to ${action}`);
+    } finally {
+      setSwapActionId(null);
     }
   };
 
@@ -356,6 +374,54 @@ const AdminDashboard = () => {
                               </div>
                             );
                           })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Swap Requests — staff requesting shift changes */}
+                  {swapRequests.length > 0 && (
+                    <Card className="mb-4 md:mb-6 bg-white border-indigo-200/60 shadow-sm" data-testid="wf-swap-requests">
+                      <CardHeader className="px-4 md:px-6 py-3 md:pb-2">
+                        <CardTitle className="text-xs md:text-base font-bold text-indigo-800 flex items-center gap-2">
+                          <ArrowRightLeft className="w-4 h-4 text-indigo-600" />
+                          Swap Requests
+                          <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">{swapRequests.length}</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-4 md:px-6 pb-4">
+                        <div className="space-y-2">
+                          {swapRequests.map((sr) => (
+                            <div key={sr.id} className="p-3 rounded-lg border border-indigo-200/60 bg-indigo-50/30" data-testid={`swap-req-${sr.id}`}>
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-semibold text-slate-800">{sr.requester_name || 'Staff'}</div>
+                                  <div className="text-xs text-slate-500 mt-0.5">
+                                    {sr.shift_date} &middot; {sr.shift_start} → {sr.shift_end}
+                                  </div>
+                                  {sr.reason && <div className="text-xs text-indigo-600 mt-1">"{sr.reason}"</div>}
+                                </div>
+                                <div className="flex gap-1.5 shrink-0">
+                                  <button
+                                    onClick={() => handleSwapAction(sr.id, 'approve')}
+                                    disabled={swapActionId === sr.id}
+                                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
+                                    data-testid={`approve-swap-${sr.id}`}
+                                  >
+                                    {swapActionId === sr.id ? '...' : 'Approve'}
+                                  </button>
+                                  <button
+                                    onClick={() => handleSwapAction(sr.id, 'reject')}
+                                    disabled={swapActionId === sr.id}
+                                    className="px-2 py-1.5 rounded-lg bg-slate-200 hover:bg-red-100 text-slate-600 hover:text-red-600 text-xs font-bold transition-colors disabled:opacity-50"
+                                    data-testid={`reject-swap-${sr.id}`}
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </CardContent>
                     </Card>
