@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
-import { reportAPI, restaurantAPI, subscriptionAPI, attendanceAPI } from '../services/api';
+import { reportAPI, restaurantAPI, subscriptionAPI, attendanceAPI, staffAPI } from '../services/api';
 import api from '../services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Switch } from '../components/ui/switch';
@@ -35,6 +35,11 @@ const AdminDashboard = () => {
   const [approvingId, setApprovingId] = useState(null);
   const [swapRequests, setSwapRequests] = useState([]);
   const [swapActionId, setSwapActionId] = useState(null);
+  const [dropRequests, setDropRequests] = useState([]);
+  const [dropActionId, setDropActionId] = useState(null);
+  const [staffList, setStaffList] = useState([]);
+  const [showReassignDialog, setShowReassignDialog] = useState(null);
+  const [reassignTarget, setReassignTarget] = useState('');
 
   const hasPOS = hasFeature('pos');
   const hasWorkforce = hasFeature('workforce');
@@ -57,6 +62,8 @@ const AdminDashboard = () => {
         promises.push(attendanceAPI.getDashboardStats().catch(() => null));
         promises.push(attendanceAPI.getPendingAdjustments().catch(() => []));
         promises.push(api.get('/swap-requests').then(r => r.data).catch(() => []));
+        promises.push(api.get('/drop-requests').then(r => r.data).catch(() => []));
+        promises.push(staffAPI.getAll().catch(() => []));
       }
 
       const results = await Promise.all(promises);
@@ -77,6 +84,10 @@ const AdminDashboard = () => {
         if (wfStats) setWorkforceStats(wfStats);
         if (pendAdj) setPendingAdjustments(pendAdj);
         if (swaps) setSwapRequests(swaps);
+        const drops = results[idx++];
+        const staff = results[idx++];
+        if (drops) setDropRequests(drops);
+        if (staff) setStaffList(staff);
       }
 
       if (restaurant?.currency) setCurrency(restaurant.currency);
@@ -128,12 +139,33 @@ const AdminDashboard = () => {
     setSwapActionId(requestId);
     try {
       await api.put(`/swap-requests/${requestId}/${action}`);
-      toast.success(action === 'approve' ? 'Swap approved — shift is now open' : 'Swap request rejected');
+      toast.success(action === 'approve' ? 'Swap approved — rota updated' : 'Swap request rejected');
       setSwapRequests(prev => prev.filter(r => r.id !== requestId));
     } catch (e) {
       toast.error(e.response?.data?.detail || `Failed to ${action}`);
     } finally {
       setSwapActionId(null);
+    }
+  };
+
+  const handleDropAction = async (dropId, action) => {
+    setDropActionId(dropId);
+    try {
+      if (action === 'open') {
+        await api.put(`/drop-requests/${dropId}/approve-open`);
+        toast.success('Shift opened for marketplace. All staff notified.');
+      } else if (action === 'reassign') {
+        if (!reassignTarget) { toast.error('Select a staff member'); setDropActionId(null); return; }
+        await api.put(`/drop-requests/${dropId}/reassign`, { target_staff_id: reassignTarget });
+        toast.success('Shift reassigned');
+        setShowReassignDialog(null);
+        setReassignTarget('');
+      }
+      setDropRequests(prev => prev.filter(r => r.id !== dropId));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setDropActionId(null);
     }
   };
 
@@ -432,6 +464,84 @@ const AdminDashboard = () => {
                                   )}
                                 </div>
                               </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Drop Requests — high-priority manager alerts */}
+                  {dropRequests.length > 0 && (
+                    <Card className="mb-4 md:mb-6 bg-white border-red-200/60 shadow-sm" data-testid="wf-drop-requests">
+                      <CardHeader className="px-4 md:px-6 py-3 md:pb-2">
+                        <CardTitle className="text-xs md:text-base font-bold text-red-800 flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-red-600" />
+                          Shift Drops
+                          <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">{dropRequests.length}</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-4 md:px-6 pb-4">
+                        <div className="space-y-2">
+                          {dropRequests.map((dr) => (
+                            <div key={dr.id} className="p-3 rounded-lg border border-red-200/60 bg-red-50/30" data-testid={`drop-req-${dr.id}`}>
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-semibold text-slate-800">{dr.requester_name}</div>
+                                  <div className="text-xs text-slate-500 mt-0.5">
+                                    {dr.shift_date} &middot; {dr.shift_start} → {dr.shift_end}
+                                  </div>
+                                  <div className="text-xs text-red-600 font-medium mt-1">{dr.reason_label}</div>
+                                  {dr.note && <div className="text-xs text-slate-400 mt-0.5">"{dr.note}"</div>}
+                                </div>
+                                <div className="flex gap-1.5 shrink-0">
+                                  <button
+                                    onClick={() => handleDropAction(dr.id, 'open')}
+                                    disabled={dropActionId === dr.id}
+                                    className="px-2.5 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition-colors disabled:opacity-50"
+                                    data-testid={`open-drop-${dr.id}`}
+                                  >
+                                    {dropActionId === dr.id ? '...' : 'Open'}
+                                  </button>
+                                  <button
+                                    onClick={() => { setShowReassignDialog(dr.id); setReassignTarget(''); }}
+                                    disabled={dropActionId === dr.id}
+                                    className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
+                                    data-testid={`reassign-drop-${dr.id}`}
+                                  >
+                                    Reassign
+                                  </button>
+                                </div>
+                              </div>
+                              {/* Inline reassign picker */}
+                              {showReassignDialog === dr.id && (
+                                <div className="mt-2 p-2 rounded-lg bg-white border border-slate-200 flex gap-2 items-end">
+                                  <div className="flex-1">
+                                    <select
+                                      value={reassignTarget}
+                                      onChange={(e) => setReassignTarget(e.target.value)}
+                                      className="w-full text-xs border rounded-lg px-2 py-1.5"
+                                      data-testid={`reassign-select-${dr.id}`}
+                                    >
+                                      <option value="">Select staff...</option>
+                                      {staffList.filter(s => s.id !== dr.requester_id).map(s => (
+                                        <option key={s.id} value={s.id}>{s.username}{s.position ? ` (${s.position})` : ''}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <button
+                                    onClick={() => handleDropAction(dr.id, 'reassign')}
+                                    disabled={!reassignTarget || dropActionId === dr.id}
+                                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold disabled:opacity-50"
+                                    data-testid={`confirm-reassign-${dr.id}`}
+                                  >
+                                    Confirm
+                                  </button>
+                                  <button onClick={() => setShowReassignDialog(null)} className="px-2 py-1.5 text-slate-400 hover:text-slate-600">
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
                             </div>
                           ))}
                         </div>
