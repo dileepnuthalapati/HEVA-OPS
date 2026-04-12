@@ -111,4 +111,17 @@ async def check_long_shifts(current_user: User = Depends(get_current_user)):
         await db.notifications.insert_one(notification)
         created += 1
 
+        # Also send native push if device tokens exist
+        try:
+            from services.push import send_push_multi
+            device_docs = await db.devices.find(
+                {"staff_id": staff_id, "is_active": True}, {"_id": 0, "token": 1}
+            ).to_list(10)
+            tokens = [d["token"] for d in device_docs if d.get("token")]
+            if tokens:
+                send_push_multi(tokens, notification["title"], notification["message"],
+                                {"type": "long_shift_nudge", "record_id": record_id})
+        except Exception:
+            pass
+
     return {"message": f"Checked {len(long_shifts)} long shifts, created {created} new notifications."}

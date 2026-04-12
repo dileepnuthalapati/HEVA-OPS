@@ -49,6 +49,7 @@ from routers import subscriptions, notifications, staff, health, email
 from routers import qr_menu, kds, audit, payments
 from routers import docs as feature_docs
 from routers import shifts, attendance, timesheets, payroll, swap_requests
+from routers import devices
 
 # Include all routers into the api_router
 api_router.include_router(auth.router)
@@ -78,6 +79,7 @@ api_router.include_router(attendance.router)
 api_router.include_router(timesheets.router)
 api_router.include_router(payroll.router)
 api_router.include_router(swap_requests.router)
+api_router.include_router(devices.router)
 
 # Include the main api_router in the app
 fastapi_app.include_router(api_router)
@@ -164,6 +166,18 @@ async def _long_shift_checker():
                     "created_at": now.isoformat(),
                 }
                 await db.notifications.insert_one(notification)
+                # Send push notification if device tokens are available
+                try:
+                    from services.push import send_push_multi
+                    device_docs = await db.devices.find(
+                        {"staff_id": staff_id, "is_active": True}, {"_id": 0, "token": 1}
+                    ).to_list(10)
+                    tokens = [d["token"] for d in device_docs if d.get("token")]
+                    if tokens:
+                        send_push_multi(tokens, "Still on shift?", notification["message"],
+                                        {"type": "long_shift_nudge", "record_id": record_id})
+                except Exception as push_err:
+                    print(f"[Long shift checker] Push error: {push_err}")
         except Exception as e:
             print(f"[Long shift checker] Error: {e}")
 
