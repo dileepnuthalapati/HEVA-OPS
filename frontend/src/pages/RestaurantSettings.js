@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash, Monitor, Smartphone } from 'lucide-react';
+import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash, Monitor, Smartphone, MapPin, Loader2 } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -65,6 +65,24 @@ const RestaurantSettings = () => {
   const [pinForm, setPinForm] = useState({ password: '', pin: '', confirmPin: '' });
   const [pinSaving, setPinSaving] = useState(false);
   const [showPinFields, setShowPinFields] = useState({ password: false, pin: false, confirm: false });
+
+  // Geolocation for lat/lng
+  const [geoLoading, setGeoLoading] = useState(false);
+  const handleUseMyLocation = () => {
+    setGeoLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setFormData(prev => ({ ...prev, latitude: parseFloat(pos.coords.latitude.toFixed(6)), longitude: parseFloat(pos.coords.longitude.toFixed(6)) }));
+        toast.success('Location captured! Remember to save settings.');
+        setGeoLoading(false);
+      },
+      (err) => {
+        toast.error('Could not get location. Please enable GPS or enter coordinates manually.');
+        setGeoLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   useEffect(() => { loadRestaurant(); }, []);
   useEffect(() => { if (activeTab === 'staff') loadStaff(); }, [activeTab]);
@@ -397,6 +415,13 @@ const RestaurantSettings = () => {
                       <div>
                         <Label htmlFor="longitude" className="text-sm font-semibold">Longitude <span className="text-muted-foreground text-xs">(for geofence clock-in)</span></Label>
                         <Input id="longitude" data-testid="longitude-input" type="number" step="any" value={formData.longitude || ''} onChange={(e) => handleChange('longitude', parseFloat(e.target.value) || null)} placeholder="-0.1278" className="h-12" />
+                      </div>
+                      <div className="md:col-span-2">
+                        <Button type="button" variant="outline" data-testid="use-my-location-btn" onClick={handleUseMyLocation} disabled={geoLoading} className="h-10 gap-2 text-sm">
+                          {geoLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
+                          {geoLoading ? 'Getting location...' : 'Use My Current Location'}
+                        </Button>
+                        <p className="text-xs text-muted-foreground mt-1">Open this page on-site to auto-fill your business coordinates. Staff must clock in within 10m of this location.</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

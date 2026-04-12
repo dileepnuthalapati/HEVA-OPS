@@ -3,25 +3,21 @@ import { attendanceAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
-import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
-import { Clock, LogIn, LogOut, CheckCircle } from 'lucide-react';
+import { LogIn, LogOut, MapPin, Loader2 } from 'lucide-react';
 
 export default function StaffClockIn() {
   const { user } = useAuth();
-  const [pin, setPin] = useState('');
-  const [status, setStatus] = useState(null); // 'clocked_in' | 'clocked_out' | null
+  const [status, setStatus] = useState(null);
   const [lastAction, setLastAction] = useState(null);
   const [loading, setLoading] = useState(false);
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Live clock
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // Check current status
   useEffect(() => {
     const checkStatus = async () => {
       try {
@@ -37,21 +33,9 @@ export default function StaffClockIn() {
     checkStatus();
   }, [user]);
 
-  const handlePinKey = (digit) => {
-    if (pin.length >= 4) return;
-    const newPin = pin + digit;
-    setPin(newPin);
-
-    // Auto-submit on 4 digits
-    if (newPin.length === 4) {
-      handleClock(newPin);
-    }
-  };
-
-  const handleClock = async (clockPin) => {
+  const handleClock = async () => {
     setLoading(true);
     try {
-      // Capture GPS — required for mobile clock-in
       let lat = null, lng = null;
       try {
         const pos = await new Promise((resolve, reject) =>
@@ -61,13 +45,12 @@ export default function StaffClockIn() {
         lng = pos.coords.longitude;
       } catch (gpsErr) {
         toast.error('Location access required. Please enable GPS and allow location permission.');
-        setPin('');
         setLoading(false);
         return;
       }
 
-      const res = await attendanceAPI.clock(clockPin, user?.restaurant_id, lat, lng, 'mobile_app');
-      const action = res.action || (status === 'clocked_in' ? 'clock_out' : 'clock_in');
+      const res = await attendanceAPI.clockMe(lat, lng);
+      const action = res.action;
 
       if (action === 'clock_in') {
         setStatus('clocked_in');
@@ -81,13 +64,13 @@ export default function StaffClockIn() {
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Clock action failed');
     } finally {
-      setPin('');
       setLoading(false);
     }
   };
 
   const timeStr = currentTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const dateStr = currentTime.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  const isClockedIn = status === 'clocked_in';
 
   return (
     <div className="p-4 max-w-sm mx-auto flex flex-col items-center" data-testid="staff-clock-page">
@@ -99,11 +82,11 @@ export default function StaffClockIn() {
 
       {/* Status Badge */}
       <div className={`mb-6 px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 ${
-        status === 'clocked_in'
+        isClockedIn
           ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
           : 'bg-slate-100 text-slate-600 border border-slate-200'
       }`} data-testid="clock-status">
-        {status === 'clocked_in' ? (
+        {isClockedIn ? (
           <>
             <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             Currently Clocked In
@@ -116,61 +99,40 @@ export default function StaffClockIn() {
         )}
       </div>
 
-      {/* PIN Pad */}
-      <Card className="p-5 w-full max-w-xs" data-testid="clock-pin-pad">
-        <p className="text-center text-xs text-muted-foreground font-medium mb-3">
-          Enter your 4-digit PIN to {status === 'clocked_in' ? 'clock out' : 'clock in'}
+      {/* One-Tap Clock Button */}
+      <Card className="p-6 w-full max-w-xs" data-testid="clock-action-card">
+        <p className="text-center text-xs text-muted-foreground font-medium mb-4">
+          <MapPin className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" />
+          GPS location will be captured automatically
         </p>
 
-        {/* PIN Display */}
-        <div className="flex justify-center gap-3 mb-5">
-          {[0, 1, 2, 3].map(i => (
-            <div
-              key={i}
-              className={`w-10 h-10 rounded-lg border-2 flex items-center justify-center text-lg font-bold transition-all ${
-                pin.length > i
-                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                  : 'border-slate-200 bg-slate-50'
-              }`}
-            >
-              {pin.length > i ? '*' : ''}
-            </div>
-          ))}
-        </div>
-
-        {/* Number Pad */}
-        <div className="grid grid-cols-3 gap-2">
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(d => (
-            <button
-              key={d}
-              onClick={() => handlePinKey(String(d))}
-              disabled={loading}
-              className="h-12 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-lg font-semibold transition-all"
-              data-testid={`pin-key-${d}`}
-            >
-              {d}
-            </button>
-          ))}
-          <div />
-          <button
-            onClick={() => handlePinKey('0')}
-            disabled={loading}
-            className="h-12 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-lg font-semibold transition-all"
-            data-testid="pin-key-0"
-          >
-            0
-          </button>
-          <button
-            onClick={() => setPin(pin.slice(0, -1))}
-            className="h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-sm font-medium text-slate-500"
-            data-testid="pin-backspace"
-          >
-            DEL
-          </button>
-        </div>
+        <Button
+          onClick={handleClock}
+          disabled={loading || status === null}
+          data-testid="clock-action-btn"
+          className={`w-full h-16 text-lg font-bold rounded-2xl transition-all ${
+            isClockedIn
+              ? 'bg-red-500 hover:bg-red-600 text-white'
+              : 'bg-emerald-600 hover:bg-emerald-700 text-white'
+          }`}
+        >
+          {loading ? (
+            <Loader2 className="w-6 h-6 animate-spin" />
+          ) : isClockedIn ? (
+            <>
+              <LogOut className="w-5 h-5 mr-2" />
+              Clock Out
+            </>
+          ) : (
+            <>
+              <LogIn className="w-5 h-5 mr-2" />
+              Clock In
+            </>
+          )}
+        </Button>
 
         {loading && (
-          <p className="text-center text-xs text-indigo-600 mt-3 animate-pulse">Processing...</p>
+          <p className="text-center text-xs text-indigo-600 mt-3 animate-pulse">Getting your location...</p>
         )}
       </Card>
 

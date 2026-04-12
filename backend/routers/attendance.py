@@ -144,6 +144,109 @@ async def clock_in_out(data: ClockRequest):
         }
 
 
+class ClockMeRequest(BaseModel):
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+@router.post("/attendance/clock-me")
+async def clock_me(data: ClockMeRequest, current_user: User = Depends(require_feature("workforce"))):
+    """Authenticated clock in/out — no PIN needed (personal device only)."""
+    staff = await db.users.find_one(
+        {"username": current_user.username, "restaurant_id": current_user.restaurant_id},
+        {"_id": 0}
+    )
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff record not found")
+
+    staff_id = staff.get("id")
+    entry_source = "mobile_app"
+    latitude = data.latitude
+    longitude = data.longitude
+
+    # Geofence enforcement
+    restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0})
+    if restaurant:
+        biz = restaurant.get("business_info", {})
+        biz_lat = biz.get("latitude")
+        biz_lng = biz.get("longitude")
+        if biz_lat is not None and biz_lng is not None:
+            if latitude is None or longitude is None:
+                raise HTTPException(status_code=400, detail="Location required for clock in/out. Please enable GPS.")
+            distance = haversine_distance(biz_lat, biz_lng, latitude, longitude)
+            if distance > GEOFENCE_RADIUS_METERS:
+                raise HTTPException(status_code=403, detail=f"You are {int(distance)}m away. Clock in/out is only allowed within {GEOFENCE_RADIUS_METERS}m.")
+
+    now = datetime.now(timezone.utc)
+    today_str = now.strftime("%Y-%m-%d")
+
+    # Check for open record
+    open_record = await db.attendance.find_one(
+        {"staff_id": staff_id, "restaurant_id": current_user.restaurant_id, "clock_out": None},
+        {"_id": 0}
+    )
+
+    # Ghost shift detection
+    if open_record and open_record.get("date") != today_str:
+        await db.attendance.update_one(
+            {"id": open_record["id"]},
+            {"$set": {
+                "clock_out": open_record["clock_in"][:10] + "T23:59:59+00:00",
+                "flagged": True,
+                "flag_reason": "Auto-closed: forgot to clock out",
+            }}
+        )
+        open_record = None
+
+    if open_record:
+        hours_worked = (now - datetime.fromisoformat(open_record["clock_in"])).total_seconds() / 3600
+        await db.attendance.update_one(
+            {"id": open_record["id"]},
+            {"$set": {
+                "clock_out": now.isoformat(),
+                "hours_worked": round(hours_worked, 2),
+                "clock_out_lat": latitude,
+                "clock_out_lng": longitude,
+            }}
+        )
+        return {
+            "action": "clock_out",
+            "staff_name": staff.get("username"),
+            "staff_id": staff_id,
+            "clock_out": now.isoformat(),
+            "hours_worked": round(hours_worked, 2),
+            "entry_source": entry_source,
+            "message": f"Clocked out. Worked {hours_worked:.1f} hours today.",
+        }
+    else:
+        record = {
+            "id": f"att_{now.timestamp()}",
+            "restaurant_id": current_user.restaurant_id,
+            "staff_id": staff_id,
+            "staff_name": staff.get("username", ""),
+            "date": today_str,
+            "clock_in": now.isoformat(),
+            "clock_out": None,
+            "hours_worked": None,
+            "flagged": False,
+            "flag_reason": None,
+            "approved": False,
+            "entry_source": entry_source,
+            "clock_in_lat": latitude,
+            "clock_in_lng": longitude,
+            "created_at": now.isoformat(),
+        }
+        await db.attendance.insert_one(record)
+        return {
+            "action": "clock_in",
+            "staff_name": staff.get("username"),
+            "staff_id": staff_id,
+            "clock_in": now.isoformat(),
+            "entry_source": entry_source,
+            "message": "Clocked in. Have a great shift!",
+        }
+
+
 @router.get("/attendance")
 async def get_attendance(start_date: str, end_date: str, current_user: User = Depends(require_feature("workforce"))):
     """Get attendance records. Managers see all, staff see only their own."""

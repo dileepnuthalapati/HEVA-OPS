@@ -583,6 +583,13 @@ export const attendanceAPI = {
     const response = await api.get('/attendance/dashboard-stats');
     return response.data;
   },
+  clockMe: async (latitude, longitude) => {
+    const body = {};
+    if (latitude != null) body.latitude = latitude;
+    if (longitude != null) body.longitude = longitude;
+    const response = await api.post('/attendance/clock-me', body);
+    return response.data;
+  },
   getMySummary: async () => {
     const response = await api.get('/attendance/my-summary');
     return response.data;
