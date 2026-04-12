@@ -1,0 +1,105 @@
+{
+  "summary": "Iteration 40: Long Shift Notifications & Admin Dashboard Changes - All tests passed. Backend 16/16 tests passed (100%). Frontend all features verified. 7-day POS chart removed, Today's Revenue widget with Cash/Card breakdown working, notification bell with badge and dropdown in Heva Ops header working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration40_notifications.py",
+    "/app/test_reports/pytest/pytest_results_iteration40.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "notifications.py: LONG_SHIFT_THRESHOLD_HOURS=10 constant defines nudge threshold",
+    "notifications.py Lines 60-114: check-long-shifts endpoint finds open attendance >10h, creates nudge, skips duplicates via ref_id check",
+    "notifications.py Lines 24-45: get_my_notifications filters by staff_id for non-admin users, excludes read notifications",
+    "notifications.py Lines 48-57: dismiss endpoint sets read=True and read_at timestamp",
+    "server.py Lines 128-168: _long_shift_checker background task runs every 30 minutes (1800s)",
+    "AdminDashboard.js: Removed weeklyTrend state and 7-day bar chart widget",
+    "AdminDashboard.js Lines 369-408: Daily Revenue widget with Cash/Card breakdown bars",
+    "HevaOpsLayout.js Lines 55-102: Notification bell with badge and dropdown, polls every 60s"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration40_notifications.py"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16 passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "platform_owner": {"username": "platform_owner", "password": "admin123"},
+    "skadmin": {"username": "SKAdmin", "password": "saswata@123", "restaurant_id": "rest_demo_1", "manager_pin": "1234"},
+    "staff_user": {"username": "user", "password": "user123", "pos_pin": "1111", "staff_id": "restaurant_user_1"}
+  },
+  "seed_data_creation": "Created test long shift records (12h old open attendance) for testing, cleaned up after tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 40 verified: (1) POST /api/notifications/check-long-shifts creates 'Still on shift?' nudge for attendance records >10h open, skips duplicates via ref_id. (2) GET /api/notifications/my returns staff's unread notifications filtered by staff_id. (3) PUT /api/notifications/{id}/dismiss marks notification as read. (4) Admin dashboard no longer has 7-day weekly chart - only Today's Revenue widget with Cash/Card breakdown. (5) Heva Ops header has notification bell with red badge showing unread count. (6) Clicking bell shows dropdown with notification list. (7) Background task in server.py runs every 30 minutes to auto-check long shifts.",
+  "features_verified": {
+    "check_long_shifts_creates_notification": {
+      "status": "VERIFIED",
+      "evidence": "POST /api/notifications/check-long-shifts creates nudge for >10h shifts with title 'Still on shift?'"
+    },
+    "check_long_shifts_skips_duplicates": {
+      "status": "VERIFIED",
+      "evidence": "Second call to check-long-shifts reports 'created 0 new notifications'"
+    },
+    "get_my_notifications_returns_staff_notifications": {
+      "status": "VERIFIED",
+      "evidence": "GET /api/notifications/my returns staff's unread notifications filtered by staff_id"
+    },
+    "dismiss_notification_marks_as_read": {
+      "status": "VERIFIED",
+      "evidence": "PUT /api/notifications/{id}/dismiss sets read=True and read_at timestamp"
+    },
+    "dismissed_notification_not_in_list": {
+      "status": "VERIFIED",
+      "evidence": "Dismissed notifications don't appear in GET /api/notifications/my"
+    },
+    "dashboard_stats_works": {
+      "status": "VERIFIED",
+      "evidence": "GET /api/attendance/dashboard-stats returns total_staff, clocked_in_count, scheduled_shifts, total_hours_today"
+    },
+    "admin_dashboard_no_weekly_chart": {
+      "status": "VERIFIED",
+      "evidence": "data-testid='weekly-chart' and 'weekly-chart-mobile' not found on dashboard"
+    },
+    "admin_dashboard_revenue_widget": {
+      "status": "VERIFIED",
+      "evidence": "data-testid='daily-revenue-widget' exists with revenue-total, cash-bar, card-bar"
+    },
+    "admin_dashboard_pos_metrics": {
+      "status": "VERIFIED",
+      "evidence": "metric-total-orders, metric-avg-order, metric-tables, metric-completed all render"
+    },
+    "heva_ops_notification_bell": {
+      "status": "VERIFIED",
+      "evidence": "data-testid='notification-bell' exists in Heva Ops header"
+    },
+    "heva_ops_notification_dropdown": {
+      "status": "VERIFIED",
+      "evidence": "Clicking bell shows data-testid='notif-dropdown' with notification list"
+    },
+    "heva_ops_notification_badge": {
+      "status": "VERIFIED",
+      "evidence": "data-testid='notif-badge' shows red badge with unread count when notifications exist"
+    },
+    "admin_login_works": {
+      "status": "VERIFIED",
+      "evidence": "POST /api/auth/login with SKAdmin credentials returns access_token, role=admin"
+    },
+    "staff_login_works": {
+      "status": "VERIFIED",
+      "evidence": "POST /api/auth/login with user credentials returns access_token, role=user"
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

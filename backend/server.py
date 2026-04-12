@@ -120,6 +120,52 @@ logger = logging.getLogger(__name__)
 async def startup_event():
     from indexes import ensure_indexes
     await ensure_indexes()
+    # Start background task for long shift notifications
+    import asyncio
+    asyncio.create_task(_long_shift_checker())
+
+
+async def _long_shift_checker():
+    """Background task: every 30 minutes, check for staff clocked in >10h and create nudge notifications."""
+    import asyncio
+    from datetime import datetime, timezone, timedelta
+    while True:
+        await asyncio.sleep(1800)  # 30 minutes
+        try:
+            now = datetime.now(timezone.utc)
+            threshold = now - timedelta(hours=10)
+            # Find all restaurants with open long shifts
+            long_shifts = await db.attendance.find(
+                {"clock_out": None, "clock_in": {"$lte": threshold.isoformat()}},
+                {"_id": 0}
+            ).to_list(500)
+            for record in long_shifts:
+                staff_id = record["staff_id"]
+                record_id = record["id"]
+                existing = await db.notifications.find_one(
+                    {"staff_id": staff_id, "ref_id": record_id, "type": "long_shift_nudge"}
+                )
+                if existing:
+                    continue
+                clock_in = datetime.fromisoformat(record["clock_in"])
+                elapsed = round((now - clock_in).total_seconds() / 3600, 1)
+                restaurant = await db.restaurants.find_one({"id": record["restaurant_id"]}, {"_id": 0})
+                biz_name = restaurant.get("business_info", {}).get("name", "") if restaurant else ""
+                notification = {
+                    "id": f"notif_{now.timestamp()}_{staff_id}",
+                    "restaurant_id": record["restaurant_id"],
+                    "staff_id": staff_id,
+                    "staff_name": record.get("staff_name", ""),
+                    "type": "long_shift_nudge",
+                    "ref_id": record_id,
+                    "title": "Still on shift?",
+                    "message": f"You've been clocked in for {elapsed}h at {biz_name}. Don't forget to clock out!",
+                    "read": False,
+                    "created_at": now.isoformat(),
+                }
+                await db.notifications.insert_one(notification)
+        except Exception as e:
+            print(f"[Long shift checker] Error: {e}")
 
 
 @fastapi_app.on_event("shutdown")
