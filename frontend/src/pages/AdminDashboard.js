@@ -395,29 +395,41 @@ const AdminDashboard = () => {
                             <div key={sr.id} className="p-3 rounded-lg border border-indigo-200/60 bg-indigo-50/30" data-testid={`swap-req-${sr.id}`}>
                               <div className="flex items-start justify-between gap-2">
                                 <div className="min-w-0">
-                                  <div className="text-sm font-semibold text-slate-800">{sr.requester_name || 'Staff'}</div>
+                                  <div className="text-sm font-semibold text-slate-800">
+                                    {sr.requester_name || 'Staff'}
+                                    {sr.acceptor_name && <span className="text-indigo-600"> ↔ {sr.acceptor_name}</span>}
+                                  </div>
                                   <div className="text-xs text-slate-500 mt-0.5">
                                     {sr.shift_date} &middot; {sr.shift_start} → {sr.shift_end}
                                   </div>
                                   {sr.reason && <div className="text-xs text-indigo-600 mt-1">"{sr.reason}"</div>}
+                                  <span className={`inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                                    sr.status === 'pending_approval' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
+                                  }`}>
+                                    {sr.status === 'pending_approval' ? 'Ready for approval' : 'Waiting for colleague'}
+                                  </span>
                                 </div>
                                 <div className="flex gap-1.5 shrink-0">
-                                  <button
-                                    onClick={() => handleSwapAction(sr.id, 'approve')}
-                                    disabled={swapActionId === sr.id}
-                                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
-                                    data-testid={`approve-swap-${sr.id}`}
-                                  >
-                                    {swapActionId === sr.id ? '...' : 'Approve'}
-                                  </button>
-                                  <button
-                                    onClick={() => handleSwapAction(sr.id, 'reject')}
-                                    disabled={swapActionId === sr.id}
-                                    className="px-2 py-1.5 rounded-lg bg-slate-200 hover:bg-red-100 text-slate-600 hover:text-red-600 text-xs font-bold transition-colors disabled:opacity-50"
-                                    data-testid={`reject-swap-${sr.id}`}
-                                  >
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
+                                  {sr.status === 'pending_approval' && (
+                                    <>
+                                      <button
+                                        onClick={() => handleSwapAction(sr.id, 'approve')}
+                                        disabled={swapActionId === sr.id}
+                                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
+                                        data-testid={`approve-swap-${sr.id}`}
+                                      >
+                                        {swapActionId === sr.id ? '...' : 'Approve'}
+                                      </button>
+                                      <button
+                                        onClick={() => handleSwapAction(sr.id, 'reject')}
+                                        disabled={swapActionId === sr.id}
+                                        className="px-2 py-1.5 rounded-lg bg-slate-200 hover:bg-red-100 text-slate-600 hover:text-red-600 text-xs font-bold transition-colors disabled:opacity-50"
+                                        data-testid={`reject-swap-${sr.id}`}
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </>
+                                  )}
                                 </div>
                               </div>
                             </div>
