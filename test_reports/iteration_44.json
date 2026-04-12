@@ -1,0 +1,110 @@
+{
+  "summary": "Iteration 44: All 5 bug fixes verified. Backend: 12/12 tests passed (100%). Frontend: All UI components verified - Staff Swaps cancel button, Week Starts On dropdown, Admin Dashboard 'On floor now' text, Shift Scheduler week view.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Admin Dashboard", "issues": ["Minor: Recharts console warning about chart dimensions (-1x-1) - cosmetic only, same as iteration 43"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration44_bug_fixes.py",
+    "/app/test_reports/pytest/pytest_results_iteration44.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "swap_requests.py: can_accept flag correctly set for admin when staff_id is in target_staff_ids",
+    "swap_requests.py: DELETE /api/swap-requests/{id} endpoint properly cancels waiting_acceptance and pending_approval requests",
+    "swap_requests.py: DELETE endpoint correctly rejects cancel for already-approved requests (status 400)",
+    "shifts.py: copy_week now deletes target week shifts before copying - no duplicates on repeated copy",
+    "attendance.py: All clock_out=None queries now include is_operational: {'$ne': False} filter",
+    "attendance.py: dashboard-stats returns unavailable_count field",
+    "attendance.py: Sick leave creates attendance with record_type='leave' and is_operational=false",
+    "RestaurantSettings.js: week_start_day dropdown with Monday/Sunday/Saturday options",
+    "ShiftScheduler.js: getWeekDates uses weekStartDay from restaurant settings",
+    "AdminDashboard.js: 'On floor now' text in On Shift card, unavailable count shown when > 0",
+    "StaffSwapRequests.js: Cancel (X) button on pending swap requests with handleCancelSwap"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration44_bug_fixes.py"
+  ],
+  "success_rate": {
+    "backend": "100% (12/12 passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "platform_owner": {"username": "platform_owner", "password": "admin123"},
+    "skadmin": {"username": "SKAdmin", "password": "saswata@123", "restaurant_id": "rest_demo_1", "manager_pin": "1234", "staff_id": "skadmin_1"},
+    "staff_user": {"username": "user", "password": "user123", "pos_pin": "1111", "staff_id": "restaurant_user_1"}
+  },
+  "seed_data_creation": "Test shifts and swap requests created and cleaned up during pytest runs",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 44 verified 5 bug fixes: (1) Swap requests can_accept flag for admin when in target_staff_ids - VERIFIED. (2) DELETE /api/swap-requests/{id} cancels waiting_acceptance requests - VERIFIED. (3) DELETE rejects cancel for approved requests - VERIFIED. (4) Copy week clears target week before copying (no duplicates) - VERIFIED. (5) Attendance live/my-status/dashboard-stats exclude is_operational=false records - VERIFIED. (6) Sick leave creates non-operational attendance - VERIFIED. (7) Week Starts On dropdown in Settings with Mon/Sun/Sat options - VERIFIED. (8) Shift Scheduler respects week_start_day - VERIFIED. (9) Admin Dashboard shows 'On floor now' + unavailable count - VERIFIED. (10) Staff Swaps page has cancel button on pending requests - VERIFIED.",
+  "features_verified": {
+    "swap_can_accept_for_admin": {
+      "status": "VERIFIED",
+      "evidence": "GET /api/swap-requests as admin returns can_accept=true when staff_id in target_staff_ids"
+    },
+    "swap_cancel_waiting_acceptance": {
+      "status": "VERIFIED",
+      "evidence": "DELETE /api/swap-requests/{id} returns 200 and message 'Swap request cancelled'"
+    },
+    "swap_cancel_approved_rejected": {
+      "status": "VERIFIED",
+      "evidence": "DELETE /api/swap-requests/{id} returns 400 for approved requests"
+    },
+    "copy_week_no_duplicates": {
+      "status": "VERIFIED",
+      "evidence": "Copying week twice results in same shift count (target cleared before copy)"
+    },
+    "live_attendance_excludes_non_operational": {
+      "status": "VERIFIED",
+      "evidence": "GET /api/attendance/live returns only is_operational != false records"
+    },
+    "my_status_excludes_sick_leave": {
+      "status": "VERIFIED",
+      "evidence": "GET /api/attendance/my-status uses is_operational filter"
+    },
+    "dashboard_stats_unavailable_count": {
+      "status": "VERIFIED",
+      "evidence": "GET /api/attendance/dashboard-stats returns unavailable_count field"
+    },
+    "sick_leave_non_operational_attendance": {
+      "status": "VERIFIED",
+      "evidence": "POST /api/shifts/drop with reason_code=sickness creates attendance with is_operational=false"
+    },
+    "week_start_day_setting": {
+      "status": "VERIFIED",
+      "evidence": "Settings page has Week Starts On dropdown with Monday/Sunday/Saturday options"
+    },
+    "shift_scheduler_week_view": {
+      "status": "VERIFIED",
+      "evidence": "Shift Scheduler shows week starting from configured day (Mon by default)"
+    },
+    "admin_dashboard_on_floor_now": {
+      "status": "VERIFIED",
+      "evidence": "On Shift card shows 'On floor now' text"
+    },
+    "staff_swaps_cancel_button": {
+      "status": "VERIFIED",
+      "evidence": "Staff Swaps page shows X (cancel) button on pending swap requests"
+    },
+    "login_admin_works": {
+      "status": "VERIFIED",
+      "evidence": "SKAdmin login returns access_token with role=admin"
+    },
+    "login_staff_works": {
+      "status": "VERIFIED",
+      "evidence": "user login returns access_token"
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Firebase push notifications (live credentials, but test device tokens are fake)"]
+  }
+}

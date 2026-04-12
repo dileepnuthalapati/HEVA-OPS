@@ -109,7 +109,15 @@ async def copy_week(source_start: str, target_start: str, current_user: User = D
 
     source_date = datetime.strptime(source_start, "%Y-%m-%d")
     target_date = datetime.strptime(target_start, "%Y-%m-%d")
+    target_end = (target_date + timedelta(days=6)).strftime("%Y-%m-%d")
     day_offset = (target_date - source_date).days
+
+    # Clear existing shifts in target week to prevent duplicates
+    await db.shifts.delete_many({
+        "restaurant_id": current_user.restaurant_id,
+        "date": {"$gte": target_start, "$lte": target_end},
+    })
+
     created = 0
 
     for s in source_shifts:

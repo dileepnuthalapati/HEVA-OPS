@@ -273,7 +273,10 @@ const AdminDashboard = () => {
                           </div>
                         </div>
                         <div className="text-lg md:text-2xl font-bold font-mono text-emerald-700">{workforceStats.clocked_in_count}</div>
-                        <p className="text-[10px] md:text-[11px] text-slate-400 font-medium mt-1">Clocked in now</p>
+                        <p className="text-[10px] md:text-[11px] text-slate-400 font-medium mt-1">On floor now</p>
+                        {workforceStats.unavailable_count > 0 && (
+                          <p className="text-[10px] text-amber-500 font-medium mt-0.5">{workforceStats.unavailable_count} unavailable</p>
+                        )}
                       </CardContent>
                     </Card>
 

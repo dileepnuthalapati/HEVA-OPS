@@ -116,7 +116,7 @@ async def clock_in_out(data: ClockRequest):
     now = datetime.now(timezone.utc)
 
     open_record = await db.attendance.find_one(
-        {"staff_id": staff_id, "restaurant_id": data.restaurant_id, "clock_out": None},
+        {"staff_id": staff_id, "restaurant_id": data.restaurant_id, "clock_out": None, "is_operational": {"$ne": False}},
         {"_id": 0}
     )
 
@@ -176,6 +176,8 @@ async def clock_in_out(data: ClockRequest):
             "entry_source": data.entry_source,
             "clock_in_lat": data.latitude,
             "clock_in_lng": data.longitude,
+            "record_type": "shift",
+            "is_operational": True,
             "created_at": now.isoformat(),
         }
         await db.attendance.insert_one(record)
@@ -214,7 +216,7 @@ async def clock_me(data: ClockMeRequest, current_user: User = Depends(require_fe
     now = datetime.now(timezone.utc)
 
     open_record = await db.attendance.find_one(
-        {"staff_id": staff_id, "restaurant_id": current_user.restaurant_id, "clock_out": None},
+        {"staff_id": staff_id, "restaurant_id": current_user.restaurant_id, "clock_out": None, "is_operational": {"$ne": False}},
         {"_id": 0}
     )
 
@@ -265,6 +267,8 @@ async def clock_me(data: ClockMeRequest, current_user: User = Depends(require_fe
             "entry_source": "mobile_app",
             "clock_in_lat": latitude,
             "clock_in_lng": longitude,
+            "record_type": "shift",
+            "is_operational": True,
             "created_at": now.isoformat(),
         }
         await db.attendance.insert_one(record)
@@ -347,7 +351,7 @@ async def get_my_clock_status(current_user: User = Depends(require_feature("work
         return {"clocked_in": False}
 
     open_record = await db.attendance.find_one(
-        {"staff_id": staff["id"], "restaurant_id": current_user.restaurant_id, "clock_out": None},
+        {"staff_id": staff["id"], "restaurant_id": current_user.restaurant_id, "clock_out": None, "is_operational": {"$ne": False}},
         {"_id": 0}
     )
     if not open_record:
@@ -451,7 +455,7 @@ async def get_attendance(start_date: str, end_date: str, current_user: User = De
 async def get_live_attendance(current_user: User = Depends(require_admin)):
     """Get who is currently clocked in (admin only)."""
     records = await db.attendance.find(
-        {"restaurant_id": current_user.restaurant_id, "clock_out": None},
+        {"restaurant_id": current_user.restaurant_id, "clock_out": None, "is_operational": {"$ne": False}},
         {"_id": 0}
     ).to_list(100)
     return records
@@ -537,9 +541,14 @@ async def workforce_dashboard_stats(current_user: User = Depends(require_feature
     ).to_list(200)
 
     clocked_in = await db.attendance.find(
-        {"restaurant_id": current_user.restaurant_id, "clock_out": None},
+        {"restaurant_id": current_user.restaurant_id, "clock_out": None, "is_operational": {"$ne": False}},
         {"_id": 0}
     ).to_list(100)
+
+    # Unavailable count (sick leave, dropped shifts today)
+    unavailable = await db.attendance.count_documents(
+        {"restaurant_id": current_user.restaurant_id, "date": today_str, "is_operational": False}
+    )
 
     completed_today = await db.attendance.find(
         {"restaurant_id": current_user.restaurant_id, "date": today_str, "clock_out": {"$ne": None}},
@@ -562,6 +571,7 @@ async def workforce_dashboard_stats(current_user: User = Depends(require_feature
         "scheduled_shifts": len(shifts_today),
         "clocked_in_count": len(clocked_in),
         "clocked_in_staff": [{"name": r.get("staff_name", ""), "since": r.get("clock_in")} for r in clocked_in],
+        "unavailable_count": unavailable,
         "completed_sessions": len(completed_today),
         "total_hours_today": round(total_hours, 1),
         "total_staff": staff_count,
