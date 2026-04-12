@@ -590,6 +590,21 @@ export const attendanceAPI = {
     const response = await api.post('/attendance/clock-me', body);
     return response.data;
   },
+  resolveGhost: async (recordId, claimedClockOut) => {
+    const response = await api.post('/attendance/resolve-ghost', { record_id: recordId, claimed_clock_out: claimedClockOut });
+    return response.data;
+  },
+  getPendingAdjustments: async () => {
+    const response = await api.get('/attendance/pending-adjustments');
+    return response.data;
+  },
+  approveAdjustment: async (recordId, approvedClockOut, approvedHours) => {
+    const body = {};
+    if (approvedClockOut) body.approved_clock_out = approvedClockOut;
+    if (approvedHours != null) body.approved_hours = approvedHours;
+    const response = await api.put(`/attendance/${recordId}/approve-adjustment`, body);
+    return response.data;
+  },
   getMySummary: async () => {
     const response = await api.get('/attendance/my-summary');
     return response.data;

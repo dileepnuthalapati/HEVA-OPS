@@ -5,6 +5,7 @@ from models import User
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 from typing import Optional
+import math
 
 router = APIRouter()
 
@@ -14,10 +15,29 @@ class ClockRequest(BaseModel):
     restaurant_id: str
     latitude: Optional[float] = None
     longitude: Optional[float] = None
-    entry_source: Optional[str] = "mobile_app"  # "mobile_app" or "pos_terminal"
+    entry_source: Optional[str] = "mobile_app"
 
 
-import math
+class ClockMeRequest(BaseModel):
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+
+
+class ResolveGhostRequest(BaseModel):
+    record_id: str
+    claimed_clock_out: str  # ISO datetime string the staff claims they finished
+
+
+class ApproveAdjustmentRequest(BaseModel):
+    approved_clock_out: Optional[str] = None  # Manager can override the time
+    approved_hours: Optional[float] = None
+
+
+# ── Constants ──
+
+GEOFENCE_RADIUS_METERS = 10
+MAX_SHIFT_HOURS = 14  # Smart buffer: auto-flag after 14 hours
+
 
 def haversine_distance(lat1, lon1, lat2, lon2):
     """Calculate distance in meters between two GPS coordinates."""
@@ -29,8 +49,40 @@ def haversine_distance(lat1, lon1, lat2, lon2):
     return R * 2 * math.atan2(math.sqrt(a), math.sqrt(1-a))
 
 
-GEOFENCE_RADIUS_METERS = 10
+def _check_geofence(entry_source, biz_info, latitude, longitude):
+    """Raises HTTPException if geofence violated. Skips for pos_terminal."""
+    if entry_source == "pos_terminal":
+        return
+    biz_lat = biz_info.get("latitude")
+    biz_lng = biz_info.get("longitude")
+    if biz_lat is None or biz_lng is None:
+        return
+    if latitude is None or longitude is None:
+        raise HTTPException(status_code=400, detail="Location required for clock in/out. Please enable GPS.")
+    distance = haversine_distance(biz_lat, biz_lng, latitude, longitude)
+    if distance > GEOFENCE_RADIUS_METERS:
+        raise HTTPException(status_code=403, detail=f"You are {int(distance)}m away. Clock in/out is only allowed within {GEOFENCE_RADIUS_METERS}m.")
 
+
+def _detect_ghost_shift(open_record):
+    """Returns ghost shift info if the open record has exceeded MAX_SHIFT_HOURS. None otherwise."""
+    if not open_record:
+        return None
+    clock_in = datetime.fromisoformat(open_record["clock_in"])
+    now = datetime.now(timezone.utc)
+    elapsed_hours = (now - clock_in).total_seconds() / 3600
+    if elapsed_hours > MAX_SHIFT_HOURS:
+        return {
+            "record_id": open_record["id"],
+            "clock_in": open_record["clock_in"],
+            "date": open_record.get("date"),
+            "staff_name": open_record.get("staff_name", ""),
+            "elapsed_hours": round(elapsed_hours, 1),
+        }
+    return None
+
+
+# ── PIN-based clock (Terminal/Kiosk mode) ──
 
 @router.post("/attendance/clock")
 async def clock_in_out(data: ClockRequest):
@@ -38,7 +90,6 @@ async def clock_in_out(data: ClockRequest):
     if not data.pin or len(data.pin) != 4 or not data.pin.isdigit():
         raise HTTPException(status_code=400, detail="PIN must be exactly 4 digits")
 
-    # Check workforce feature and get restaurant data
     restaurant = await db.restaurants.find_one({"id": data.restaurant_id}, {"_id": 0})
     if not restaurant:
         raise HTTPException(status_code=404, detail="Restaurant not found")
@@ -46,16 +97,7 @@ async def clock_in_out(data: ClockRequest):
     if features is not None and not features.get("workforce", False):
         raise HTTPException(status_code=403, detail="Workforce module not enabled for this restaurant")
 
-    # Geofence enforcement: skip for pos_terminal, enforce for mobile_app
-    biz = restaurant.get("business_info", {})
-    biz_lat = biz.get("latitude")
-    biz_lng = biz.get("longitude")
-    if data.entry_source != "pos_terminal" and biz_lat is not None and biz_lng is not None:
-        if data.latitude is None or data.longitude is None:
-            raise HTTPException(status_code=400, detail="Location required for clock in/out. Please enable GPS.")
-        distance = haversine_distance(biz_lat, biz_lng, data.latitude, data.longitude)
-        if distance > GEOFENCE_RADIUS_METERS:
-            raise HTTPException(status_code=403, detail=f"You are {int(distance)}m away. Clock in/out is only allowed within {GEOFENCE_RADIUS_METERS}m.")
+    _check_geofence(data.entry_source, restaurant.get("business_info", {}), data.latitude, data.longitude)
 
     users = await db.users.find(
         {"restaurant_id": data.restaurant_id, "pos_pin_hash": {"$exists": True, "$ne": None}},
@@ -67,34 +109,37 @@ async def clock_in_out(data: ClockRequest):
         if verify_password(data.pin, u["pos_pin_hash"]):
             matched_user = u
             break
-
     if not matched_user:
         raise HTTPException(status_code=401, detail="Invalid PIN")
 
     staff_id = matched_user["id"]
     now = datetime.now(timezone.utc)
-    today_str = now.strftime("%Y-%m-%d")
 
-    # Check for open attendance record (clocked in but not out)
     open_record = await db.attendance.find_one(
         {"staff_id": staff_id, "restaurant_id": data.restaurant_id, "clock_out": None},
         {"_id": 0}
     )
 
-    # Ghost shift detection: open record from before today
-    if open_record and open_record.get("date") != today_str:
+    # Ghost shift detection — 14-hour smart buffer
+    ghost = _detect_ghost_shift(open_record)
+    if ghost:
+        # On terminal, we can't show a correction UI, so auto-flag it
+        auto_close_time = (datetime.fromisoformat(open_record["clock_in"]) + timedelta(hours=MAX_SHIFT_HOURS)).isoformat()
         await db.attendance.update_one(
             {"id": open_record["id"]},
             {"$set": {
-                "clock_out": open_record["clock_in"][:10] + "T23:59:59+00:00",
+                "clock_out": auto_close_time,
+                "hours_worked": MAX_SHIFT_HOURS,
+                "auto_close_time": auto_close_time,
                 "flagged": True,
-                "flag_reason": "Auto-closed: forgot to clock out",
+                "flag_reason": "ghost_shift_auto_closed",
+                "needs_staff_correction": True,
             }}
         )
         open_record = None
 
     if open_record:
-        # Clock OUT
+        # Normal Clock OUT
         hours_worked = (now - datetime.fromisoformat(open_record["clock_in"])).total_seconds() / 3600
         await db.attendance.update_one(
             {"id": open_record["id"]},
@@ -121,7 +166,7 @@ async def clock_in_out(data: ClockRequest):
             "restaurant_id": data.restaurant_id,
             "staff_id": staff_id,
             "staff_name": matched_user.get("username", ""),
-            "date": today_str,
+            "date": now.strftime("%Y-%m-%d"),
             "clock_in": now.isoformat(),
             "clock_out": None,
             "hours_worked": None,
@@ -144,14 +189,12 @@ async def clock_in_out(data: ClockRequest):
         }
 
 
-class ClockMeRequest(BaseModel):
-    latitude: Optional[float] = None
-    longitude: Optional[float] = None
-
+# ── JWT-based clock (Personal device mode) ──
 
 @router.post("/attendance/clock-me")
 async def clock_me(data: ClockMeRequest, current_user: User = Depends(require_feature("workforce"))):
-    """Authenticated clock in/out — no PIN needed (personal device only)."""
+    """Authenticated clock in/out — no PIN needed (personal device only).
+    If a ghost shift is detected (>14h open), returns ghost_shift_pending instead of clocking in."""
     staff = await db.users.find_one(
         {"username": current_user.username, "restaurant_id": current_user.restaurant_id},
         {"_id": 0}
@@ -160,45 +203,32 @@ async def clock_me(data: ClockMeRequest, current_user: User = Depends(require_fe
         raise HTTPException(status_code=404, detail="Staff record not found")
 
     staff_id = staff.get("id")
-    entry_source = "mobile_app"
     latitude = data.latitude
     longitude = data.longitude
 
-    # Geofence enforcement
+    # Geofence
     restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0})
     if restaurant:
-        biz = restaurant.get("business_info", {})
-        biz_lat = biz.get("latitude")
-        biz_lng = biz.get("longitude")
-        if biz_lat is not None and biz_lng is not None:
-            if latitude is None or longitude is None:
-                raise HTTPException(status_code=400, detail="Location required for clock in/out. Please enable GPS.")
-            distance = haversine_distance(biz_lat, biz_lng, latitude, longitude)
-            if distance > GEOFENCE_RADIUS_METERS:
-                raise HTTPException(status_code=403, detail=f"You are {int(distance)}m away. Clock in/out is only allowed within {GEOFENCE_RADIUS_METERS}m.")
+        _check_geofence("mobile_app", restaurant.get("business_info", {}), latitude, longitude)
 
     now = datetime.now(timezone.utc)
-    today_str = now.strftime("%Y-%m-%d")
 
-    # Check for open record
     open_record = await db.attendance.find_one(
         {"staff_id": staff_id, "restaurant_id": current_user.restaurant_id, "clock_out": None},
         {"_id": 0}
     )
 
-    # Ghost shift detection
-    if open_record and open_record.get("date") != today_str:
-        await db.attendance.update_one(
-            {"id": open_record["id"]},
-            {"$set": {
-                "clock_out": open_record["clock_in"][:10] + "T23:59:59+00:00",
-                "flagged": True,
-                "flag_reason": "Auto-closed: forgot to clock out",
-            }}
-        )
-        open_record = None
+    # Ghost shift detection — BLOCKER: staff must resolve before new clock-in
+    ghost = _detect_ghost_shift(open_record)
+    if ghost:
+        return {
+            "action": "ghost_shift_pending",
+            "ghost_shift": ghost,
+            "message": "You have an unresolved shift. Please provide your finish time before clocking in.",
+        }
 
     if open_record:
+        # Normal Clock OUT
         hours_worked = (now - datetime.fromisoformat(open_record["clock_in"])).total_seconds() / 3600
         await db.attendance.update_one(
             {"id": open_record["id"]},
@@ -215,23 +245,24 @@ async def clock_me(data: ClockMeRequest, current_user: User = Depends(require_fe
             "staff_id": staff_id,
             "clock_out": now.isoformat(),
             "hours_worked": round(hours_worked, 2),
-            "entry_source": entry_source,
+            "entry_source": "mobile_app",
             "message": f"Clocked out. Worked {hours_worked:.1f} hours today.",
         }
     else:
+        # Clock IN
         record = {
             "id": f"att_{now.timestamp()}",
             "restaurant_id": current_user.restaurant_id,
             "staff_id": staff_id,
             "staff_name": staff.get("username", ""),
-            "date": today_str,
+            "date": now.strftime("%Y-%m-%d"),
             "clock_in": now.isoformat(),
             "clock_out": None,
             "hours_worked": None,
             "flagged": False,
             "flag_reason": None,
             "approved": False,
-            "entry_source": entry_source,
+            "entry_source": "mobile_app",
             "clock_in_lat": latitude,
             "clock_in_lng": longitude,
             "created_at": now.isoformat(),
@@ -242,10 +273,164 @@ async def clock_me(data: ClockMeRequest, current_user: User = Depends(require_fe
             "staff_name": staff.get("username"),
             "staff_id": staff_id,
             "clock_in": now.isoformat(),
-            "entry_source": entry_source,
+            "entry_source": "mobile_app",
             "message": "Clocked in. Have a great shift!",
         }
 
+
+# ── Staff Self-Correction: Resolve Ghost Shift ──
+
+@router.post("/attendance/resolve-ghost")
+async def resolve_ghost_shift(data: ResolveGhostRequest, current_user: User = Depends(require_feature("workforce"))):
+    """Staff provides their claimed finish time for a ghost shift. Blocks new clock-in until resolved."""
+    staff = await db.users.find_one(
+        {"username": current_user.username, "restaurant_id": current_user.restaurant_id},
+        {"_id": 0, "id": 1}
+    )
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff record not found")
+
+    record = await db.attendance.find_one(
+        {"id": data.record_id, "staff_id": staff["id"], "restaurant_id": current_user.restaurant_id},
+        {"_id": 0}
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="Attendance record not found")
+
+    # Parse claimed time
+    try:
+        claimed_out = datetime.fromisoformat(data.claimed_clock_out)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid datetime format. Use ISO format.")
+
+    clock_in = datetime.fromisoformat(record["clock_in"])
+
+    # Sanity checks
+    if claimed_out <= clock_in:
+        raise HTTPException(status_code=400, detail="Finish time must be after clock-in time.")
+    claimed_hours = (claimed_out - clock_in).total_seconds() / 3600
+    if claimed_hours > MAX_SHIFT_HOURS:
+        raise HTTPException(status_code=400, detail=f"Claimed shift exceeds {MAX_SHIFT_HOURS} hours. Please check the time.")
+
+    # Auto-close time = 14h after start (for audit trail)
+    auto_close_time = (clock_in + timedelta(hours=MAX_SHIFT_HOURS)).isoformat()
+
+    await db.attendance.update_one(
+        {"id": data.record_id},
+        {"$set": {
+            "clock_out": data.claimed_clock_out,
+            "hours_worked": round(claimed_hours, 2),
+            "auto_close_time": auto_close_time,
+            "staff_claimed_time": data.claimed_clock_out,
+            "manager_approved_time": None,
+            "flagged": True,
+            "flag_reason": "manual_staff_correction",
+            "needs_staff_correction": False,
+            "pending_manager_approval": True,
+            "corrected_by": current_user.username,
+            "corrected_at": datetime.now(timezone.utc).isoformat(),
+        }}
+    )
+    return {
+        "message": f"Shift resolved. You claimed {claimed_hours:.1f} hours. Pending manager approval.",
+        "hours_claimed": round(claimed_hours, 2),
+    }
+
+
+# ── My Status (enhanced with ghost shift detection) ──
+
+@router.get("/attendance/my-status")
+async def get_my_clock_status(current_user: User = Depends(require_feature("workforce"))):
+    """Get current user's clock-in status, including ghost shift detection."""
+    staff = await db.users.find_one({"username": current_user.username}, {"_id": 0, "id": 1})
+    if not staff:
+        return {"clocked_in": False}
+
+    open_record = await db.attendance.find_one(
+        {"staff_id": staff["id"], "restaurant_id": current_user.restaurant_id, "clock_out": None},
+        {"_id": 0}
+    )
+    if not open_record:
+        return {"clocked_in": False}
+
+    # Check if it's a ghost shift
+    ghost = _detect_ghost_shift(open_record)
+    if ghost:
+        return {
+            "clocked_in": False,
+            "ghost_shift_pending": True,
+            "ghost_shift": ghost,
+        }
+
+    return {"clocked_in": True, "clock_in": open_record["clock_in"], "staff_name": open_record.get("staff_name")}
+
+
+# ── Manager: Pending Adjustments ──
+
+@router.get("/attendance/pending-adjustments")
+async def get_pending_adjustments(current_user: User = Depends(require_admin)):
+    """Manager sees all staff-corrected shifts awaiting approval."""
+    records = await db.attendance.find(
+        {
+            "restaurant_id": current_user.restaurant_id,
+            "pending_manager_approval": True,
+        },
+        {"_id": 0}
+    ).sort("corrected_at", -1).to_list(100)
+    return records
+
+
+@router.put("/attendance/{record_id}/approve-adjustment")
+async def approve_adjustment(record_id: str, data: ApproveAdjustmentRequest, current_user: User = Depends(require_admin)):
+    """Manager approves or edits a staff's claimed clock-out time."""
+    record = await db.attendance.find_one(
+        {"id": record_id, "restaurant_id": current_user.restaurant_id},
+        {"_id": 0}
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    # Determine final approved time
+    if data.approved_clock_out:
+        try:
+            approved_out = datetime.fromisoformat(data.approved_clock_out)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid datetime format.")
+        clock_in = datetime.fromisoformat(record["clock_in"])
+        approved_hours = round((approved_out - clock_in).total_seconds() / 3600, 2)
+        final_clock_out = data.approved_clock_out
+    elif data.approved_hours is not None:
+        clock_in = datetime.fromisoformat(record["clock_in"])
+        approved_out = clock_in + timedelta(hours=data.approved_hours)
+        approved_hours = data.approved_hours
+        final_clock_out = approved_out.isoformat()
+    else:
+        # Manager approves the staff's claimed time as-is
+        final_clock_out = record.get("staff_claimed_time") or record.get("clock_out")
+        clock_in = datetime.fromisoformat(record["clock_in"])
+        approved_hours = round((datetime.fromisoformat(final_clock_out) - clock_in).total_seconds() / 3600, 2)
+
+    await db.attendance.update_one(
+        {"id": record_id},
+        {"$set": {
+            "clock_out": final_clock_out,
+            "hours_worked": approved_hours,
+            "manager_approved_time": final_clock_out,
+            "flagged": False,
+            "flag_reason": None,
+            "pending_manager_approval": False,
+            "approved": True,
+            "approved_by": current_user.username,
+            "approved_at": datetime.now(timezone.utc).isoformat(),
+        }}
+    )
+    return {
+        "message": f"Shift approved: {approved_hours:.1f} hours.",
+        "hours_approved": approved_hours,
+    }
+
+
+# ── Standard Endpoints ──
 
 @router.get("/attendance")
 async def get_attendance(start_date: str, end_date: str, current_user: User = Depends(require_feature("workforce"))):
@@ -270,21 +455,6 @@ async def get_live_attendance(current_user: User = Depends(require_admin)):
         {"_id": 0}
     ).to_list(100)
     return records
-
-
-@router.get("/attendance/my-status")
-async def get_my_clock_status(current_user: User = Depends(require_feature("workforce"))):
-    """Get current user's clock-in status."""
-    staff = await db.users.find_one({"username": current_user.username}, {"_id": 0, "id": 1})
-    if not staff:
-        return {"clocked_in": False}
-    record = await db.attendance.find_one(
-        {"staff_id": staff["id"], "restaurant_id": current_user.restaurant_id, "clock_out": None},
-        {"_id": 0}
-    )
-    if record:
-        return {"clocked_in": True, "clock_in": record["clock_in"], "staff_name": record.get("staff_name")}
-    return {"clocked_in": False}
 
 
 @router.get("/attendance/my-summary")
@@ -329,13 +499,12 @@ async def get_my_hours_summary(current_user: User = Depends(require_feature("wor
     monthly_salary = staff.get("monthly_salary", 0) or 0
 
     if pay_type == "monthly":
-        week_pay = monthly_salary / 4.33  # approximate weekly from monthly
+        week_pay = monthly_salary / 4.33
         month_pay = monthly_salary
     else:
         week_pay = week_hours * hourly_rate
         month_pay = month_hours * hourly_rate
 
-    # Get currency
     restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0, "currency": 1})
     currency = restaurant.get("currency", "GBP") if restaurant else "GBP"
 
@@ -358,33 +527,36 @@ async def get_my_hours_summary(current_user: User = Depends(require_feature("wor
 
 @router.get("/attendance/dashboard-stats")
 async def workforce_dashboard_stats(current_user: User = Depends(require_feature("workforce"))):
-    """Dashboard summary: today's shifts, clocked-in staff, total hours."""
+    """Dashboard summary: today's shifts, clocked-in staff, total hours, pending adjustments."""
     now = datetime.now(timezone.utc)
     today_str = now.strftime("%Y-%m-%d")
 
-    # Today's scheduled shifts
     shifts_today = await db.shifts.find(
         {"restaurant_id": current_user.restaurant_id, "date": today_str},
         {"_id": 0}
     ).to_list(200)
 
-    # Currently clocked in
     clocked_in = await db.attendance.find(
         {"restaurant_id": current_user.restaurant_id, "clock_out": None},
         {"_id": 0}
     ).to_list(100)
 
-    # Today's completed attendance (hours worked)
     completed_today = await db.attendance.find(
         {"restaurant_id": current_user.restaurant_id, "date": today_str, "clock_out": {"$ne": None}},
         {"_id": 0}
     ).to_list(200)
     total_hours = sum(r.get("hours_worked", 0) or 0 for r in completed_today)
 
-    # Staff count
     staff_count = await db.users.count_documents(
         {"restaurant_id": current_user.restaurant_id, "role": {"$in": ["user", "admin"]}}
     )
+
+    # Pending adjustments count for managers
+    pending_count = 0
+    if current_user.role == "admin":
+        pending_count = await db.attendance.count_documents(
+            {"restaurant_id": current_user.restaurant_id, "pending_manager_approval": True}
+        )
 
     return {
         "scheduled_shifts": len(shifts_today),
@@ -393,6 +565,7 @@ async def workforce_dashboard_stats(current_user: User = Depends(require_feature
         "completed_sessions": len(completed_today),
         "total_hours_today": round(total_hours, 1),
         "total_staff": staff_count,
+        "pending_adjustments_count": pending_count,
         "shifts": [{"staff_name": s.get("staff_name", ""), "start_time": s.get("start_time"), "end_time": s.get("end_time"), "position": s.get("position", "")} for s in shifts_today],
     }
 
@@ -405,6 +578,13 @@ async def resolve_flagged(record_id: str, hours_worked: float, current_user: Use
         raise HTTPException(status_code=404, detail="Record not found")
     await db.attendance.update_one(
         {"id": record_id},
-        {"$set": {"hours_worked": hours_worked, "flagged": False, "flag_reason": None, "resolved_by": current_user.username}}
+        {"$set": {
+            "hours_worked": hours_worked,
+            "flagged": False,
+            "flag_reason": None,
+            "pending_manager_approval": False,
+            "approved": True,
+            "resolved_by": current_user.username,
+        }}
     )
     return {"message": "Flagged record resolved"}

@@ -12,7 +12,7 @@ import {
   TrendingUp, TrendingDown, ShoppingBag, Package, Coins, Calendar, 
   AlertTriangle, Clock, CreditCard, Banknote, QrCode,
   MonitorSmartphone, UtensilsCrossed, Power, ChefHat, ArrowUpRight, ArrowDownRight,
-  Users, UserCheck, Timer, CalendarClock
+  Users, UserCheck, Timer, CalendarClock, CheckCircle, Edit3
 } from 'lucide-react';
 
 const getCurrencySymbol = (currency) => {
@@ -32,6 +32,8 @@ const AdminDashboard = () => {
   const [kdsStats, setKdsStats] = useState(null);
   const [weeklyTrend, setWeeklyTrend] = useState(null);
   const [workforceStats, setWorkforceStats] = useState(null);
+  const [pendingAdjustments, setPendingAdjustments] = useState([]);
+  const [approvingId, setApprovingId] = useState(null);
 
   const hasPOS = hasFeature('pos');
   const hasWorkforce = hasFeature('workforce');
@@ -53,6 +55,7 @@ const AdminDashboard = () => {
       // Only load workforce stats if workforce is enabled
       if (hasWorkforce) {
         promises.push(attendanceAPI.getDashboardStats().catch(() => null));
+        promises.push(attendanceAPI.getPendingAdjustments().catch(() => []));
       }
 
       const results = await Promise.all(promises);
@@ -70,7 +73,9 @@ const AdminDashboard = () => {
       }
       if (hasWorkforce) {
         const wfStats = results[idx++];
+        const pendAdj = results[idx++];
         if (wfStats) setWorkforceStats(wfStats);
+        if (pendAdj) setPendingAdjustments(pendAdj);
       }
 
       if (restaurant?.currency) setCurrency(restaurant.currency);
@@ -104,6 +109,20 @@ const AdminDashboard = () => {
   };
 
   const sym = getCurrencySymbol(currency);
+
+  const handleApproveAdjustment = async (recordId) => {
+    setApprovingId(recordId);
+    try {
+      await attendanceAPI.approveAdjustment(recordId);
+      toast.success('Shift approved!');
+      setPendingAdjustments(prev => prev.filter(r => r.id !== recordId));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to approve');
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
   const today = new Date().toLocaleDateString('en-GB', { 
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
   });
@@ -292,6 +311,55 @@ const AdminDashboard = () => {
                               </span>
                             </div>
                           ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Pending Adjustments — staff-corrected ghost shifts */}
+                  {pendingAdjustments.length > 0 && (
+                    <Card className="mb-4 md:mb-6 bg-white border-amber-200/60 shadow-sm" data-testid="wf-pending-adjustments">
+                      <CardHeader className="px-4 md:px-6 py-3 md:pb-2">
+                        <CardTitle className="text-xs md:text-base font-bold text-amber-800 flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-600" />
+                          Pending Approvals
+                          <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">{pendingAdjustments.length}</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-4 md:px-6 pb-4">
+                        <div className="space-y-2">
+                          {pendingAdjustments.map((r) => {
+                            const clockIn = r.clock_in ? new Date(r.clock_in) : null;
+                            const claimed = r.staff_claimed_time ? new Date(r.staff_claimed_time) : null;
+                            const claimedHours = r.hours_worked;
+                            return (
+                              <div key={r.id} className="p-3 rounded-lg border border-amber-200/60 bg-amber-50/30" data-testid={`adjustment-${r.id}`}>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-semibold text-slate-800">{r.staff_name || 'Staff'}</div>
+                                    <div className="text-xs text-slate-500 mt-0.5">
+                                      {r.date} &middot; {clockIn ? clockIn.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '--'}
+                                      {' → '}
+                                      {claimed ? claimed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '--'}
+                                    </div>
+                                    <div className="text-xs text-amber-700 font-medium mt-1">
+                                      Claims <span className="font-bold">{claimedHours?.toFixed(1)}h</span> worked
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-1.5 shrink-0">
+                                    <button
+                                      onClick={() => handleApproveAdjustment(r.id)}
+                                      disabled={approvingId === r.id}
+                                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
+                                      data-testid={`approve-${r.id}`}
+                                    >
+                                      {approvingId === r.id ? '...' : 'Approve'}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </CardContent>
                     </Card>
