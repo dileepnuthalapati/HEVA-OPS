@@ -118,6 +118,38 @@ def daily_summary_html(business_name: str, date_str: str, data: dict, currency_s
     return html
 
 
+def staff_welcome_html(staff_name: str, business_name: str, position: str, onboarding_url: str) -> str:
+    """Generate HTML for staff welcome/onboarding email."""
+    position_line = f'<p style="color:#64748b;font-size:13px;margin:0 0 4px;">Position: <strong>{position}</strong></p>' if position else ''
+
+    return f"""
+    <div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;max-width:600px;margin:0 auto;background:#ffffff;">
+      <div style="background:linear-gradient(135deg,#1e293b,#334155);padding:32px 24px;text-align:center;">
+        <h1 style="color:#fff;font-size:24px;margin:0 0 4px;">Heva<span style="color:#818cf8;">One</span></h1>
+        <p style="color:#94a3b8;font-size:13px;margin:0;">Welcome to the team</p>
+      </div>
+      <div style="padding:32px 24px;">
+        <h2 style="font-size:20px;color:#1e293b;margin:0 0 8px;">Hi {staff_name},</h2>
+        <p style="color:#475569;font-size:15px;line-height:1.6;margin:0 0 16px;">
+          You've been added to <strong>{business_name}</strong> on Heva One. Tap the button below to set up your password and PIN — it only takes a minute.
+        </p>
+        {position_line}
+        <div style="text-align:center;margin:28px 0;">
+          <a href="{onboarding_url}" style="display:inline-block;background:#4f46e5;color:#ffffff;font-size:16px;font-weight:700;padding:14px 32px;border-radius:12px;text-decoration:none;">
+            Set Up My Account
+          </a>
+        </div>
+        <p style="color:#94a3b8;font-size:12px;line-height:1.5;margin:0;">
+          If the button doesn't work, copy and paste this link into your browser:<br/>
+          <span style="color:#4f46e5;word-break:break-all;">{onboarding_url}</span>
+        </p>
+      </div>
+      <div style="padding:16px 24px;background:#f8fafc;text-align:center;">
+        <p style="color:#94a3b8;font-size:11px;margin:0;">Sent by Heva One — Your business management platform</p>
+      </div>
+    </div>"""
+
+
 def trial_reminder_html(business_name: str, days_left: int) -> str:
     """Generate HTML for trial expiry reminder."""
     urgency_color = "#dc2626" if days_left <= 1 else "#f59e0b" if days_left <= 3 else "#3b82f6"
