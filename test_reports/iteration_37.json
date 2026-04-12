@@ -1,0 +1,100 @@
+{
+  "summary": "Iteration 37: Pre-launch Fixes Testing - All 4 features verified. Backend 11/11 tests passed (100%). Frontend all tests passed. (1) Onboarding link uses REACT_APP_BACKEND_URL not localhost, (2) pay_type and monthly_salary fields work in staff management, (3) Strict 10m geofencing returns HTTP 403 for far coordinates, (4) My Pay page at /heva-ops/pay shows week/month hours and pay.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration37_prelaunch_fixes.py",
+    "/app/test_reports/pytest/pytest_results_iteration37.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "RestaurantSettings.js Line 179: Onboarding link correctly uses process.env.REACT_APP_BACKEND_URL",
+    "RestaurantSettings.js Lines 853-856: Pay Type dropdown with 'hourly' and 'monthly' options, dynamically shows Hourly Rate or Monthly Salary field",
+    "attendance.py Lines 32-33: GEOFENCE_RADIUS_METERS=10, Lines 53-58: Strict enforcement returns HTTP 403 with distance message",
+    "attendance.py Lines 188-253: my-summary endpoint returns pay_type, hourly_rate, monthly_salary, week/month hours/pay",
+    "StaffMyPay.js: Full page component with week-hours-card, week-pay-card, month-hours-card, month-pay-card, recent-records-card",
+    "App.js Line 182: Route /heva-ops/pay maps to StaffMyPay component",
+    "StaffClockIn.js Lines 63-66: GPS error shows toast.error with location permission message"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration37_prelaunch_fixes.py"
+  ],
+  "success_rate": {
+    "backend": "100% (11/11 passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "platform_owner": {"username": "platform_owner", "password": "admin123"},
+    "skadmin": {"username": "SKAdmin", "password": "saswata@123", "restaurant_id": "rest_demo_1", "manager_pin": "1234"},
+    "staff_user": {"username": "user", "password": "user123", "pos_pin": "1111"}
+  },
+  "seed_data_creation": "Created test staff members during testing (test_monthly_*, test_update_*, test_onboard_*) - all cleaned up after tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 37 verified all 4 pre-launch fixes: (1) Onboarding link in RestaurantSettings.js uses process.env.REACT_APP_BACKEND_URL - verified URL shows https://revenue-dash-33.preview.emergentagent.com/onboarding/... not localhost. (2) Staff management has pay_type dropdown (hourly/monthly) and shows Hourly Rate or Monthly Salary field based on selection - backend stores and returns these fields correctly. (3) Geofencing is strictly enforced: POST /api/attendance/clock returns HTTP 403 with distance message when coordinates are far from business location (tested with lat=0, lng=0), returns 400 when location missing for mobile_app, but succeeds for pos_terminal without location. (4) My Pay page at /heva-ops/pay shows staff name, position, pay type, week/month hours and pay, and recent clock records with Terminal/Mobile badges.",
+  "features_verified": {
+    "onboarding_link_not_localhost": {
+      "status": "VERIFIED",
+      "evidence": "Created staff, onboarding link dialog showed https://revenue-dash-33.preview.emergentagent.com/onboarding/... NOT localhost"
+    },
+    "pay_type_dropdown_in_staff_form": {
+      "status": "VERIFIED",
+      "evidence": "Add Staff dialog has Pay Type dropdown with 'Hourly' and 'Monthly (Salaried)' options"
+    },
+    "monthly_salary_field_conditional": {
+      "status": "VERIFIED",
+      "evidence": "When Pay Type is 'monthly', Monthly Salary field appears; when 'hourly', Hourly Rate field appears"
+    },
+    "backend_staff_pay_fields": {
+      "status": "VERIFIED",
+      "evidence": "POST /api/restaurant/staff with pay_type=monthly, monthly_salary=3000 creates staff correctly; PUT updates work"
+    },
+    "geofence_rejects_far_coordinates": {
+      "status": "VERIFIED",
+      "evidence": "POST /api/attendance/clock with lat=0, lng=0 returns HTTP 403 with 'You are Xm away' message"
+    },
+    "geofence_rejects_missing_location": {
+      "status": "VERIFIED",
+      "evidence": "POST /api/attendance/clock without lat/lng for mobile_app returns HTTP 400 'Location required'"
+    },
+    "geofence_skipped_for_terminal": {
+      "status": "VERIFIED",
+      "evidence": "POST /api/attendance/clock with entry_source=pos_terminal succeeds without location"
+    },
+    "my_summary_endpoint": {
+      "status": "VERIFIED",
+      "evidence": "GET /api/attendance/my-summary returns pay_type, hourly_rate, monthly_salary, week_hours, month_hours, week_pay, month_pay"
+    },
+    "my_pay_page_renders": {
+      "status": "VERIFIED",
+      "evidence": "StaffMyPay page at /heva-ops/pay renders with all required cards: week-hours-card, week-pay-card, month-hours-card, month-pay-card, recent-records-card"
+    },
+    "staff_clock_in_page": {
+      "status": "VERIFIED",
+      "evidence": "StaffClockIn page at /heva-ops/clock renders with live clock, status badge, PIN pad, and last action info"
+    },
+    "login_page_renders": {
+      "status": "VERIFIED",
+      "evidence": "Login page shows EMAIL OR USERNAME and PASSWORD fields with Sign In button"
+    },
+    "skadmin_login": {
+      "status": "VERIFIED",
+      "evidence": "SKAdmin/saswata@123 login successful, navigates to /dashboard"
+    },
+    "staff_user_login": {
+      "status": "VERIFIED",
+      "evidence": "user/user123 login successful, navigates to /heva-ops/shifts"
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Email sending via /api/email/*"]
+  }
+}

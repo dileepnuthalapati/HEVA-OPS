@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash, Monitor, Smartphone } from 'lucide-react';
+import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash, Monitor, Smartphone, MapPin, Loader2 } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -37,7 +37,7 @@ const RestaurantSettings = () => {
   const [staffLoading, setStaffLoading] = useState(false);
   const [showStaffDialog, setShowStaffDialog] = useState(false);
   const [editingStaff, setEditingStaff] = useState(null);
-  const [staffForm, setStaffForm] = useState({ username: '', email: '', password: '', role: 'user', capabilities: [], pos_pin: '', position: '', hourly_rate: '', phone: '', employment_type: 'full_time', joining_date: '', tax_id: '' });
+  const [staffForm, setStaffForm] = useState({ username: '', email: '', password: '', role: 'user', capabilities: [], pos_pin: '', position: '', pay_type: 'hourly', hourly_rate: '', monthly_salary: '', phone: '', employment_type: 'full_time', joining_date: '', tax_id: '' });
   const [staffSaving, setStaffSaving] = useState(false);
   const [onboardingLink, setOnboardingLink] = useState(null); // { url, username }
 
@@ -65,6 +65,24 @@ const RestaurantSettings = () => {
   const [pinForm, setPinForm] = useState({ password: '', pin: '', confirmPin: '' });
   const [pinSaving, setPinSaving] = useState(false);
   const [showPinFields, setShowPinFields] = useState({ password: false, pin: false, confirm: false });
+
+  // Geolocation for lat/lng
+  const [geoLoading, setGeoLoading] = useState(false);
+  const handleUseMyLocation = () => {
+    setGeoLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setFormData(prev => ({ ...prev, latitude: parseFloat(pos.coords.latitude.toFixed(6)), longitude: parseFloat(pos.coords.longitude.toFixed(6)) }));
+        toast.success('Location captured! Remember to save settings.');
+        setGeoLoading(false);
+      },
+      (err) => {
+        toast.error('Could not get location. Please enable GPS or enter coordinates manually.');
+        setGeoLoading(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   useEffect(() => { loadRestaurant(); }, []);
   useEffect(() => { if (activeTab === 'staff') loadStaff(); }, [activeTab]);
@@ -146,7 +164,7 @@ const RestaurantSettings = () => {
 
   const openEditStaff = (staff) => {
     setEditingStaff(staff);
-    setStaffForm({ username: staff.username, email: staff.email || '', password: '', role: staff.role, capabilities: staff.capabilities || [], pos_pin: '', position: staff.position || '', hourly_rate: staff.hourly_rate || '', phone: staff.phone || '', employment_type: staff.employment_type || 'full_time', joining_date: staff.joining_date || '', tax_id: staff.tax_id || '' });
+    setStaffForm({ username: staff.username, email: staff.email || '', password: '', role: staff.role, capabilities: staff.capabilities || [], pos_pin: '', position: staff.position || '', pay_type: staff.pay_type || 'hourly', hourly_rate: staff.hourly_rate || '', monthly_salary: staff.monthly_salary || '', phone: staff.phone || '', employment_type: staff.employment_type || 'full_time', joining_date: staff.joining_date || '', tax_id: staff.tax_id || '' });
     setShowStaffDialog(true);
   };
 
@@ -161,6 +179,7 @@ const RestaurantSettings = () => {
       const cleanedData = {
         ...staffForm,
         hourly_rate: staffForm.hourly_rate ? parseFloat(staffForm.hourly_rate) : null,
+        monthly_salary: staffForm.monthly_salary ? parseFloat(staffForm.monthly_salary) : null,
         phone: staffForm.phone || null,
         position: staffForm.position || null,
         tax_id: staffForm.tax_id || null,
@@ -175,7 +194,7 @@ const RestaurantSettings = () => {
         setShowStaffDialog(false);
         // Show onboarding link
         if (result.onboarding_token) {
-          const baseUrl = window.location.origin;
+          const baseUrl = process.env.REACT_APP_BACKEND_URL || window.location.origin;
           setOnboardingLink({
             url: `${baseUrl}/onboarding/${result.onboarding_token}`,
             username: staffForm.username,
@@ -396,6 +415,13 @@ const RestaurantSettings = () => {
                       <div>
                         <Label htmlFor="longitude" className="text-sm font-semibold">Longitude <span className="text-muted-foreground text-xs">(for geofence clock-in)</span></Label>
                         <Input id="longitude" data-testid="longitude-input" type="number" step="any" value={formData.longitude || ''} onChange={(e) => handleChange('longitude', parseFloat(e.target.value) || null)} placeholder="-0.1278" className="h-12" />
+                      </div>
+                      <div className="md:col-span-2">
+                        <Button type="button" variant="outline" data-testid="use-my-location-btn" onClick={handleUseMyLocation} disabled={geoLoading} className="h-10 gap-2 text-sm">
+                          {geoLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
+                          {geoLoading ? 'Getting location...' : 'Use My Current Location'}
+                        </Button>
+                        <p className="text-xs text-muted-foreground mt-1">Open this page on-site to auto-fill your business coordinates. Staff must clock in within 10m of this location.</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -848,8 +874,19 @@ const RestaurantSettings = () => {
                 <Input value={staffForm.position} onChange={(e) => setStaffForm({ ...staffForm, position: e.target.value })} placeholder="e.g., Server, Chef" className="h-10" data-testid="staff-position-input" />
               </div>
               <div>
-                <Label>Hourly Rate</Label>
-                <Input type="number" step="0.01" value={staffForm.hourly_rate} onChange={(e) => setStaffForm({ ...staffForm, hourly_rate: e.target.value })} placeholder="0.00" className="h-10" data-testid="staff-hourly-rate" />
+                <Label>Pay Type</Label>
+                <select value={staffForm.pay_type} onChange={(e) => setStaffForm({ ...staffForm, pay_type: e.target.value })} className="w-full h-10 rounded-md border border-input bg-background px-3 text-sm" data-testid="staff-pay-type">
+                  <option value="hourly">Hourly</option>
+                  <option value="monthly">Monthly (Salaried)</option>
+                </select>
+              </div>
+              <div>
+                <Label>{staffForm.pay_type === 'monthly' ? 'Monthly Salary' : 'Hourly Rate'}</Label>
+                {staffForm.pay_type === 'monthly' ? (
+                  <Input type="number" step="0.01" value={staffForm.monthly_salary} onChange={(e) => setStaffForm({ ...staffForm, monthly_salary: e.target.value })} placeholder="0.00" className="h-10" data-testid="staff-monthly-salary" />
+                ) : (
+                  <Input type="number" step="0.01" value={staffForm.hourly_rate} onChange={(e) => setStaffForm({ ...staffForm, hourly_rate: e.target.value })} placeholder="0.00" className="h-10" data-testid="staff-hourly-rate" />
+                )}
               </div>
               <div>
                 <Label>Phone</Label>

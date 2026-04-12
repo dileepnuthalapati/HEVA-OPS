@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authAPI } from '../services/api';
+import { initPushNotifications, teardownPushNotifications } from '../services/push';
 
 const AuthContext = createContext();
 
@@ -92,6 +93,8 @@ export const AuthProvider = ({ children }) => {
       };
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
+      // Initialize push notifications after login
+      initPushNotifications().catch(() => {});
       // Cache credentials for offline login
       try {
         const hash = btoa(username + ':' + password);
@@ -144,6 +147,7 @@ export const AuthProvider = ({ children }) => {
     if (lastRestId) {
       localStorage.setItem('last_restaurant_id', lastRestId);
     }
+    teardownPushNotifications().catch(() => {});
     setUser(null);
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user');

@@ -1,0 +1,114 @@
+{
+  "summary": "Iteration 39: Smart Attendance Handling - All features verified. Backend 14/14 tests passed (100%). Frontend all tests passed. Ghost shift detection (>14h), staff self-correction flow, manager approval workflow, and terminal auto-close all working correctly.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration39_smart_attendance.py",
+    "/app/test_reports/pytest/pytest_results_iteration39.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "attendance.py Lines 36-39: MAX_SHIFT_HOURS=14 constant defines ghost shift threshold",
+    "attendance.py Lines 67-82: _detect_ghost_shift() helper returns ghost info if elapsed >14h",
+    "attendance.py Lines 123-139: PIN-based clock auto-closes ghost shifts with flag_reason='ghost_shift_auto_closed'",
+    "attendance.py Lines 221-228: clock-me returns action='ghost_shift_pending' when ghost exists (BLOCKER)",
+    "attendance.py Lines 283-337: resolve-ghost endpoint validates claimed time (must be after clock_in, <=14h)",
+    "attendance.py Lines 370-380: pending-adjustments endpoint returns records with pending_manager_approval=true",
+    "attendance.py Lines 383-430: approve-adjustment sets manager_approved_time, clears pending_manager_approval",
+    "attendance.py Lines 554-559: dashboard-stats includes pending_adjustments_count for admin",
+    "StaffClockIn.js Lines 127-174: Ghost shift intercept UI with 'Missing Clock-Out' card, datetime picker, Submit button",
+    "StaffClockIn.js Lines 89-106: handleResolveGhost calls attendanceAPI.resolveGhost with claimed time",
+    "AdminDashboard.js Lines 319-366: Pending Approvals widget with Approve button for each record",
+    "AdminDashboard.js Lines 113-124: handleApproveAdjustment calls attendanceAPI.approveAdjustment",
+    "api.js Lines 593-607: resolveGhost, getPendingAdjustments, approveAdjustment methods added"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration39_smart_attendance.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "platform_owner": {"username": "platform_owner", "password": "admin123"},
+    "skadmin": {"username": "SKAdmin", "password": "saswata@123", "restaurant_id": "rest_demo_1", "manager_pin": "1234"},
+    "staff_user": {"username": "user", "password": "user123", "pos_pin": "1111", "staff_id": "restaurant_user_1"}
+  },
+  "seed_data_creation": "Created ghost shift test records (20h old open attendance) for testing, cleaned up after tests",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 39 verified Smart Attendance Handling: (1) Ghost shift detection triggers when open attendance record exceeds 14 hours. (2) Staff sees 'Missing Clock-Out' card on /heva-ops/clock with datetime picker to enter claimed finish time. (3) Clock In button is hidden (BLOCKER) until ghost is resolved. (4) POST /api/attendance/resolve-ghost validates claimed time (must be after clock_in, <=14h). (5) Admin dashboard shows 'Pending Approvals' widget with Approve button. (6) PUT /api/attendance/{id}/approve-adjustment sets manager_approved_time and clears pending flag. (7) PIN-based terminal clock auto-closes ghost shifts with flag_reason='ghost_shift_auto_closed'. (8) Audit trail fields: auto_close_time, staff_claimed_time, manager_approved_time stored on attendance record.",
+  "features_verified": {
+    "clock_me_normal_works": {
+      "status": "VERIFIED",
+      "evidence": "POST /api/attendance/clock-me with JWT returns clock_in or clock_out action"
+    },
+    "my_status_ghost_detection": {
+      "status": "VERIFIED",
+      "evidence": "GET /api/attendance/my-status returns ghost_shift_pending:true with ghost_shift object when >14h open record exists"
+    },
+    "clock_me_blocked_by_ghost": {
+      "status": "VERIFIED",
+      "evidence": "POST /api/attendance/clock-me returns action='ghost_shift_pending' when ghost shift exists"
+    },
+    "resolve_ghost_saves_claimed_time": {
+      "status": "VERIFIED",
+      "evidence": "POST /api/attendance/resolve-ghost saves staff_claimed_time and sets pending_manager_approval:true"
+    },
+    "resolve_ghost_rejects_before_clock_in": {
+      "status": "VERIFIED",
+      "evidence": "POST /api/attendance/resolve-ghost returns 400 if claimed time is before clock_in"
+    },
+    "resolve_ghost_rejects_exceeds_14h": {
+      "status": "VERIFIED",
+      "evidence": "POST /api/attendance/resolve-ghost returns 400 if claimed shift exceeds 14 hours"
+    },
+    "pending_adjustments_admin_only": {
+      "status": "VERIFIED",
+      "evidence": "GET /api/attendance/pending-adjustments returns 403 for non-admin, returns list for admin"
+    },
+    "approve_adjustment_works": {
+      "status": "VERIFIED",
+      "evidence": "PUT /api/attendance/{id}/approve-adjustment sets manager_approved_time, approved:true, clears pending_manager_approval"
+    },
+    "dashboard_stats_pending_count": {
+      "status": "VERIFIED",
+      "evidence": "GET /api/attendance/dashboard-stats includes pending_adjustments_count for admin (0 for staff)"
+    },
+    "terminal_auto_closes_ghost": {
+      "status": "VERIFIED",
+      "evidence": "POST /api/attendance/clock (PIN-based) auto-closes ghost shifts and allows new clock-in"
+    },
+    "frontend_ghost_shift_card": {
+      "status": "VERIFIED",
+      "evidence": "StaffClockIn page shows 'Missing Clock-Out' card with datetime picker when ghost detected"
+    },
+    "frontend_submit_finish_time_btn": {
+      "status": "VERIFIED",
+      "evidence": "'Submit Finish Time' button visible and calls resolve-ghost API"
+    },
+    "frontend_clock_in_hidden_blocker": {
+      "status": "VERIFIED",
+      "evidence": "Clock In button is hidden when ghost shift is pending"
+    },
+    "frontend_pending_approvals_widget": {
+      "status": "VERIFIED",
+      "evidence": "Admin dashboard shows 'Pending Approvals' widget with Approve button when pending adjustments exist"
+    },
+    "frontend_approve_button_works": {
+      "status": "VERIFIED",
+      "evidence": "Approve button calls approveAdjustment API and removes record from widget"
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

@@ -6,13 +6,13 @@ import { reportAPI, restaurantAPI, subscriptionAPI, attendanceAPI } from '../ser
 import api from '../services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Switch } from '../components/ui/switch';
-import { AreaChart, Area, BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Cell } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { toast } from 'sonner';
 import { 
-  TrendingUp, TrendingDown, ShoppingBag, Package, Coins, Calendar, 
+  TrendingUp, ShoppingBag, Coins, Calendar,
   AlertTriangle, Clock, CreditCard, Banknote, QrCode,
-  MonitorSmartphone, UtensilsCrossed, Power, ChefHat, ArrowUpRight, ArrowDownRight,
-  Users, UserCheck, Timer, CalendarClock
+  MonitorSmartphone, UtensilsCrossed, ChefHat,
+  Users, UserCheck, Timer, CalendarClock, CheckCircle, Bell
 } from 'lucide-react';
 
 const getCurrencySymbol = (currency) => {
@@ -30,8 +30,9 @@ const AdminDashboard = () => {
   const [qrEnabled, setQrEnabled] = useState(true);
   const [togglingQR, setTogglingQR] = useState(false);
   const [kdsStats, setKdsStats] = useState(null);
-  const [weeklyTrend, setWeeklyTrend] = useState(null);
   const [workforceStats, setWorkforceStats] = useState(null);
+  const [pendingAdjustments, setPendingAdjustments] = useState([]);
+  const [approvingId, setApprovingId] = useState(null);
 
   const hasPOS = hasFeature('pos');
   const hasWorkforce = hasFeature('workforce');
@@ -47,12 +48,12 @@ const AdminDashboard = () => {
         promises.push(
           reportAPI.getTodayStats().catch(() => null),
           api.get('/kds/stats').then(r => r.data).catch(() => null),
-          reportAPI.getWeeklyTrend().catch(() => null),
         );
       }
       // Only load workforce stats if workforce is enabled
       if (hasWorkforce) {
         promises.push(attendanceAPI.getDashboardStats().catch(() => null));
+        promises.push(attendanceAPI.getPendingAdjustments().catch(() => []));
       }
 
       const results = await Promise.all(promises);
@@ -63,14 +64,14 @@ const AdminDashboard = () => {
       if (hasPOS) {
         const statsData = results[idx++];
         const kds = results[idx++];
-        const weekly = results[idx++];
         if (statsData) setStats(statsData);
         if (kds) setKdsStats(kds);
-        if (weekly) setWeeklyTrend(weekly);
       }
       if (hasWorkforce) {
         const wfStats = results[idx++];
+        const pendAdj = results[idx++];
         if (wfStats) setWorkforceStats(wfStats);
+        if (pendAdj) setPendingAdjustments(pendAdj);
       }
 
       if (restaurant?.currency) setCurrency(restaurant.currency);
@@ -104,6 +105,20 @@ const AdminDashboard = () => {
   };
 
   const sym = getCurrencySymbol(currency);
+
+  const handleApproveAdjustment = async (recordId) => {
+    setApprovingId(recordId);
+    try {
+      await attendanceAPI.approveAdjustment(recordId);
+      toast.success('Shift approved!');
+      setPendingAdjustments(prev => prev.filter(r => r.id !== recordId));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to approve');
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
   const today = new Date().toLocaleDateString('en-GB', { 
     weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' 
   });
@@ -296,6 +311,55 @@ const AdminDashboard = () => {
                       </CardContent>
                     </Card>
                   )}
+
+                  {/* Pending Adjustments — staff-corrected ghost shifts */}
+                  {pendingAdjustments.length > 0 && (
+                    <Card className="mb-4 md:mb-6 bg-white border-amber-200/60 shadow-sm" data-testid="wf-pending-adjustments">
+                      <CardHeader className="px-4 md:px-6 py-3 md:pb-2">
+                        <CardTitle className="text-xs md:text-base font-bold text-amber-800 flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-600" />
+                          Pending Approvals
+                          <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">{pendingAdjustments.length}</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-4 md:px-6 pb-4">
+                        <div className="space-y-2">
+                          {pendingAdjustments.map((r) => {
+                            const clockIn = r.clock_in ? new Date(r.clock_in) : null;
+                            const claimed = r.staff_claimed_time ? new Date(r.staff_claimed_time) : null;
+                            const claimedHours = r.hours_worked;
+                            return (
+                              <div key={r.id} className="p-3 rounded-lg border border-amber-200/60 bg-amber-50/30" data-testid={`adjustment-${r.id}`}>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-semibold text-slate-800">{r.staff_name || 'Staff'}</div>
+                                    <div className="text-xs text-slate-500 mt-0.5">
+                                      {r.date} &middot; {clockIn ? clockIn.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '--'}
+                                      {' → '}
+                                      {claimed ? claimed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '--'}
+                                    </div>
+                                    <div className="text-xs text-amber-700 font-medium mt-1">
+                                      Claims <span className="font-bold">{claimedHours?.toFixed(1)}h</span> worked
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-1.5 shrink-0">
+                                    <button
+                                      onClick={() => handleApproveAdjustment(r.id)}
+                                      disabled={approvingId === r.id}
+                                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
+                                      data-testid={`approve-${r.id}`}
+                                    >
+                                      {approvingId === r.id ? '...' : 'Approve'}
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
                 </div>
               )}
 
@@ -307,103 +371,35 @@ const AdminDashboard = () => {
                 const todayTotal = stats?.total_sales || 0;
                 const cashTotal = stats?.cash_total || 0;
                 const cardTotal = stats?.card_total || 0;
-                const yesterdayData = weeklyTrend?.days?.[5]; // 2nd to last = yesterday
-                const yesterdayTotal = yesterdayData?.total || 0;
-                const pctChange = yesterdayTotal > 0 
-                  ? ((todayTotal - yesterdayTotal) / yesterdayTotal * 100).toFixed(1)
-                  : todayTotal > 0 ? 100 : 0;
-                const isUp = pctChange >= 0;
                 const cashPct = todayTotal > 0 ? (cashTotal / todayTotal * 100).toFixed(0) : 50;
 
                 return (
                   <Card className="mb-4 md:mb-6 bg-white border-slate-200/60 shadow-sm overflow-hidden" data-testid="daily-revenue-widget">
-                    <CardContent className="p-0">
-                      {/* Mobile: stacked compact / Desktop: side-by-side */}
-                      <div className="grid grid-cols-1 lg:grid-cols-[1fr_1px_280px] xl:grid-cols-[1fr_1px_340px]">
-                        {/* Revenue Info */}
-                        <div className="p-4 md:p-6">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Today's Revenue</span>
-                            {pctChange != 0 && (
-                              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] md:text-xs font-bold ${
-                                isUp ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-500'
-                              }`} data-testid="revenue-pct-change">
-                                {isUp ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                                {Math.abs(pctChange)}%
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-2xl md:text-4xl font-bold font-mono text-slate-900 mb-3" data-testid="revenue-total">
-                            {sym}{todayTotal.toFixed(2)}
-                          </div>
+                    <CardContent className="p-4 md:p-6">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Today's Revenue</span>
+                      </div>
+                      <div className="text-2xl md:text-4xl font-bold font-mono text-slate-900 mb-3" data-testid="revenue-total">
+                        {sym}{todayTotal.toFixed(2)}
+                      </div>
 
-                          {/* Cash vs Card - compact on mobile */}
-                          <div className="space-y-1.5">
-                            <div className="flex items-center justify-between text-xs md:text-sm">
-                              <span className="flex items-center gap-1.5 text-slate-600 font-medium">
-                                <Banknote className="w-3.5 h-3.5 text-emerald-500" /> Cash
-                              </span>
-                              <span className="font-bold font-mono text-slate-800">{sym}{cashTotal.toFixed(2)}</span>
-                            </div>
-                            <div className="w-full h-2.5 md:h-3 bg-slate-100 rounded-full overflow-hidden flex">
-                              <div className="h-full bg-emerald-500 rounded-l-full transition-all duration-500" style={{ width: `${cashPct}%` }} data-testid="cash-bar" />
-                              <div className="h-full bg-indigo-500 rounded-r-full transition-all duration-500" style={{ width: `${100 - cashPct}%` }} data-testid="card-bar" />
-                            </div>
-                            <div className="flex items-center justify-between text-xs md:text-sm">
-                              <span className="flex items-center gap-1.5 text-slate-600 font-medium">
-                                <CreditCard className="w-3.5 h-3.5 text-indigo-500" /> Card
-                              </span>
-                              <span className="font-bold font-mono text-slate-800">{sym}{cardTotal.toFixed(2)}</span>
-                            </div>
-                          </div>
-
-                          {/* Mobile-only: inline mini sparkline below cash/card */}
-                          {weeklyTrend?.days && (
-                            <div className="lg:hidden mt-3 pt-3 border-t border-slate-100">
-                              <span className="text-[10px] font-bold tracking-[0.1em] uppercase text-slate-400 mb-1.5 block">Last 7 Days</span>
-                              <div className="h-[64px]" data-testid="weekly-chart-mobile">
-                                <ResponsiveContainer width="100%" height="100%">
-                                  <BarChart data={weeklyTrend.days} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
-                                    <XAxis dataKey="label" tick={{ fontSize: 9, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
-                                    <Bar dataKey="total" radius={[3, 3, 0, 0]} maxBarSize={24}>
-                                      {weeklyTrend.days.map((entry, index) => (
-                                        <Cell key={index} fill={index === weeklyTrend.days.length - 1 ? '#4F46E5' : '#cbd5e1'} />
-                                      ))}
-                                    </Bar>
-                                  </BarChart>
-                                </ResponsiveContainer>
-                              </div>
-                            </div>
-                          )}
+                      {/* Cash vs Card */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between text-xs md:text-sm">
+                          <span className="flex items-center gap-1.5 text-slate-600 font-medium">
+                            <Banknote className="w-3.5 h-3.5 text-emerald-500" /> Cash
+                          </span>
+                          <span className="font-bold font-mono text-slate-800">{sym}{cashTotal.toFixed(2)}</span>
                         </div>
-
-                        {/* Divider - desktop only */}
-                        <div className="hidden lg:block bg-slate-100" />
-
-                        {/* Desktop: 7-Day Chart */}
-                        <div className="hidden lg:block p-5 md:p-6">
-                          <span className="text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400 mb-3 block">Last 7 Days</span>
-                          {weeklyTrend?.days ? (
-                            <div className="h-[120px]" data-testid="weekly-chart">
-                              <ResponsiveContainer width="100%" height="100%">
-                                <BarChart data={weeklyTrend.days} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
-                                  <XAxis dataKey="label" tick={{ fontSize: 11, fill: '#94a3b8' }} tickLine={false} axisLine={false} />
-                                  <Tooltip
-                                    formatter={(value) => [`${sym}${value.toFixed(2)}`, 'Revenue']}
-                                    labelFormatter={(label, payload) => payload?.[0]?.payload?.date || label}
-                                    contentStyle={{ borderRadius: 10, border: '1px solid #e2e8f0', fontSize: 12, padding: '6px 10px' }}
-                                  />
-                                  <Bar dataKey="total" radius={[4, 4, 0, 0]} maxBarSize={32}>
-                                    {weeklyTrend.days.map((entry, index) => (
-                                      <Cell key={index} fill={index === weeklyTrend.days.length - 1 ? '#4F46E5' : '#cbd5e1'} />
-                                    ))}
-                                  </Bar>
-                                </BarChart>
-                              </ResponsiveContainer>
-                            </div>
-                          ) : (
-                            <div className="h-[120px] flex items-center justify-center text-sm text-slate-400">Loading...</div>
-                          )}
+                        <div className="w-full h-2.5 md:h-3 bg-slate-100 rounded-full overflow-hidden flex">
+                          <div className="h-full bg-emerald-500 rounded-l-full transition-all duration-500" style={{ width: `${cashPct}%` }} data-testid="cash-bar" />
+                          <div className="h-full bg-indigo-500 rounded-r-full transition-all duration-500" style={{ width: `${100 - cashPct}%` }} data-testid="card-bar" />
+                        </div>
+                        <div className="flex items-center justify-between text-xs md:text-sm">
+                          <span className="flex items-center gap-1.5 text-slate-600 font-medium">
+                            <CreditCard className="w-3.5 h-3.5 text-indigo-500" /> Card
+                          </span>
+                          <span className="font-bold font-mono text-slate-800">{sym}{cardTotal.toFixed(2)}</span>
                         </div>
                       </div>
                     </CardContent>

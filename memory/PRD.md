@@ -8,7 +8,7 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 
 | Mode | Device | Boot Screen | Experience |
 |---|---|---|---|
-| **Terminal (Kiosk)** | Store tablet | PIN Pad | Staff enter PIN → POS or Clock-In toast |
+| **Terminal (Kiosk)** | Store tablet | PIN Pad | Staff enter PIN -> POS or Clock-In toast |
 | **Personal** | Staff phone | Email + Password | Heva Ops workspace (shifts, clock-in, swaps) |
 
 ## Email System (Apr 12, 2026)
@@ -44,9 +44,16 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 15. Universal App — Split-Brain Routing
 16. Staff Capabilities System
 17. Staff Onboarding Link (self-service password + PIN setup)
-18. **Automated Email System (Apr 12, 2026)** — Resend integration, daily summaries, trial reminders
+18. Automated Email System (Apr 12, 2026) — Resend integration, daily summaries, trial reminders
+19. **Pre-Launch Fixes (Apr 12, 2026)** — Pay types (hourly/monthly), strict 10m geofencing, onboarding link domain fix, Staff My Pay view
+20. **One-Tap Clock-In (Apr 12, 2026)** — Personal devices use JWT auth for clock-in (no PIN), "Use My Current Location" button in Settings for easy geofence setup
+21. **Smart Attendance Handling (Apr 12, 2026)** — 14-hour smart buffer (no more midnight auto-close), staff self-correction flow for ghost shifts, manager Pending Approvals dashboard widget, full audit trail (auto_close_time, staff_claimed_time, manager_approved_time)
+22. **Shift Nudge Notifications (Apr 12, 2026)** — In-app notification bell in Heva Ops, background task checks every 30min for shifts >10h, creates "Still on shift?" nudge, staff can dismiss via dropdown
+23. **Dashboard Cleanup (Apr 12, 2026)** — Removed outdated 7-day POS bar chart widget, simplified Today's Revenue card
+24. **Native Push Notification Infrastructure (Apr 12, 2026)** — Firebase Admin SDK integration with graceful dry-run mode, device token registration/unregistration API, push sending on long shift nudges and ghost shifts, Capacitor push registration on login/teardown on logout. Awaiting Firebase credentials to go live.
 
 ## Upcoming
+- iOS App Build Prep (Capacitor config for iOS deployment)
 - Add trial_end_date to business creation flow (auto 14-day trial)
 - Add "Send Daily Summary" button in Admin Dashboard UI
 - Background scheduler for automated daily email dispatch (Railway cron)
@@ -55,7 +62,6 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 - Print Void Receipt to Kitchen
 - Split monolithic server.py into modular routers
 - Deliverect / Middleware API Integration
-- iOS App Build Prep
 - Self-service module upgrade (Stripe-powered)
 
 ## Production Checklist
@@ -66,3 +72,6 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 - [ ] Build Android APK via Capacitor
 - [ ] Set up Railway cron for daily email dispatch
 - [ ] Add real emails to all staff accounts
+- [ ] Build iOS via Capacitor (upcoming)
+- [ ] Add Firebase credentials (FIREBASE_CREDENTIALS_PATH) to enable native push notifications
+- [ ] Upload APNs key in Firebase console for iOS push

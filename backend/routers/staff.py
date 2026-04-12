@@ -41,7 +41,9 @@ async def create_restaurant_staff(staff: StaffCreate, current_user: User = Depen
         "restaurant_id": current_user.restaurant_id,
         "capabilities": staff.capabilities or [],
         "position": staff.position or "",
+        "pay_type": staff.pay_type or "hourly",
         "hourly_rate": staff.hourly_rate or 0,
+        "monthly_salary": staff.monthly_salary or 0,
         "phone": staff.phone or "",
         "employment_type": staff.employment_type or "full_time",
         "joining_date": staff.joining_date or datetime.now(timezone.utc).strftime("%Y-%m-%d"),
@@ -54,6 +56,22 @@ async def create_restaurant_staff(staff: StaffCreate, current_user: User = Depen
     if staff.pos_pin and len(staff.pos_pin) == 4 and staff.pos_pin.isdigit():
         user_doc["pos_pin_hash"] = get_password_hash(staff.pos_pin)
     await db.users.insert_one(user_doc)
+
+    # Send welcome email with onboarding link
+    if staff.email:
+        try:
+            from services.email import send_email, staff_welcome_html
+            restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0})
+            biz_name = restaurant.get("business_info", {}).get("name", restaurant.get("name", "")) if restaurant else ""
+            import os
+            base_url = os.environ.get("FRONTEND_URL") or os.environ.get("REACT_APP_BACKEND_URL", "")
+            onboarding_url = f"{base_url}/onboarding/{onboarding_token}"
+            html = staff_welcome_html(staff.username, biz_name, staff.position or "", onboarding_url)
+            await send_email(staff.email, f"Welcome to {biz_name} — Set up your account", html)
+        except Exception as e:
+            import logging
+            logging.getLogger("staff").warning(f"Welcome email failed for {staff.email}: {e}")
+
     return {
         "message": f"Staff '{staff.username}' created",
         "id": user_doc["id"],
@@ -147,8 +165,12 @@ async def update_staff(user_id: str, staff: StaffUpdate, current_user: User = De
         update["capabilities"] = staff.capabilities
     if staff.position is not None:
         update["position"] = staff.position
+    if staff.pay_type is not None:
+        update["pay_type"] = staff.pay_type
     if staff.hourly_rate is not None:
         update["hourly_rate"] = staff.hourly_rate
+    if staff.monthly_salary is not None:
+        update["monthly_salary"] = staff.monthly_salary
     if staff.phone is not None:
         update["phone"] = staff.phone
     if staff.employment_type is not None:

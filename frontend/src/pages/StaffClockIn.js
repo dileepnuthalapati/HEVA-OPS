@@ -1,32 +1,40 @@
 import React, { useState, useEffect } from 'react';
 import { attendanceAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import { Card } from '../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
-import { Clock, LogIn, LogOut, CheckCircle } from 'lucide-react';
+import { LogIn, LogOut, MapPin, Loader2, AlertTriangle, Clock, CheckCircle } from 'lucide-react';
 
 export default function StaffClockIn() {
   const { user } = useAuth();
-  const [pin, setPin] = useState('');
-  const [status, setStatus] = useState(null); // 'clocked_in' | 'clocked_out' | null
+  const [status, setStatus] = useState(null);
+  const [ghostShift, setGhostShift] = useState(null);
   const [lastAction, setLastAction] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [resolving, setResolving] = useState(false);
+  const [claimedTime, setClaimedTime] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
 
-  // Live clock
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(interval);
   }, []);
 
-  // Check current status
   useEffect(() => {
     const checkStatus = async () => {
       try {
         const res = await attendanceAPI.getMyStatus();
-        if (res.clocked_in) {
+        if (res.ghost_shift_pending) {
+          setStatus('ghost_pending');
+          setGhostShift(res.ghost_shift);
+          // Pre-fill a reasonable default time
+          const clockIn = new Date(res.ghost_shift.clock_in);
+          const defaultEnd = new Date(clockIn.getTime() + 8 * 3600 * 1000); // 8h after start
+          setClaimedTime(defaultEnd.toISOString().slice(0, 16));
+        } else if (res.clocked_in) {
           setStatus('clocked_in');
           setLastAction({ type: 'in', time: res.clock_in });
         } else {
@@ -37,21 +45,9 @@ export default function StaffClockIn() {
     checkStatus();
   }, [user]);
 
-  const handlePinKey = (digit) => {
-    if (pin.length >= 4) return;
-    const newPin = pin + digit;
-    setPin(newPin);
-
-    // Auto-submit on 4 digits
-    if (newPin.length === 4) {
-      handleClock(newPin);
-    }
-  };
-
-  const handleClock = async (clockPin) => {
+  const handleClock = async () => {
     setLoading(true);
     try {
-      // Capture GPS
       let lat = null, lng = null;
       try {
         const pos = await new Promise((resolve, reject) =>
@@ -59,12 +55,22 @@ export default function StaffClockIn() {
         );
         lat = pos.coords.latitude;
         lng = pos.coords.longitude;
-      } catch {}
+      } catch (gpsErr) {
+        toast.error('Location access required. Please enable GPS and allow location permission.');
+        setLoading(false);
+        return;
+      }
 
-      const res = await attendanceAPI.clock(clockPin, user?.restaurant_id, lat, lng, 'mobile_app');
-      const action = res.action || (status === 'clocked_in' ? 'clock_out' : 'clock_in');
+      const res = await attendanceAPI.clockMe(lat, lng);
 
-      if (action === 'clock_in') {
+      if (res.action === 'ghost_shift_pending') {
+        setStatus('ghost_pending');
+        setGhostShift(res.ghost_shift);
+        const clockIn = new Date(res.ghost_shift.clock_in);
+        const defaultEnd = new Date(clockIn.getTime() + 8 * 3600 * 1000);
+        setClaimedTime(defaultEnd.toISOString().slice(0, 16));
+        toast.error('You have an unresolved previous shift.');
+      } else if (res.action === 'clock_in') {
         setStatus('clocked_in');
         setLastAction({ type: 'in', time: new Date().toISOString() });
         toast.success('Clocked in successfully!');
@@ -76,13 +82,38 @@ export default function StaffClockIn() {
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Clock action failed');
     } finally {
-      setPin('');
       setLoading(false);
+    }
+  };
+
+  const handleResolveGhost = async () => {
+    if (!claimedTime) {
+      toast.error('Please enter the time you finished your shift.');
+      return;
+    }
+    setResolving(true);
+    try {
+      const isoTime = new Date(claimedTime).toISOString();
+      const res = await attendanceAPI.resolveGhost(ghostShift.record_id, isoTime);
+      toast.success(res.message || 'Shift resolved! Pending manager approval.');
+      setGhostShift(null);
+      setStatus('clocked_out');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to resolve shift.');
+    } finally {
+      setResolving(false);
     }
   };
 
   const timeStr = currentTime.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
   const dateStr = currentTime.toLocaleDateString('en-GB', { weekday: 'long', day: 'numeric', month: 'long' });
+  const isClockedIn = status === 'clocked_in';
+  const isGhostPending = status === 'ghost_pending';
+
+  // Format ghost shift info
+  const ghostClockIn = ghostShift ? new Date(ghostShift.clock_in) : null;
+  const ghostDateStr = ghostClockIn ? ghostClockIn.toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' }) : '';
+  const ghostTimeStr = ghostClockIn ? ghostClockIn.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '';
 
   return (
     <div className="p-4 max-w-sm mx-auto flex flex-col items-center" data-testid="staff-clock-page">
@@ -92,85 +123,117 @@ export default function StaffClockIn() {
         <p className="text-sm text-muted-foreground mt-1">{dateStr}</p>
       </div>
 
-      {/* Status Badge */}
-      <div className={`mb-6 px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 ${
-        status === 'clocked_in'
-          ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
-          : 'bg-slate-100 text-slate-600 border border-slate-200'
-      }`} data-testid="clock-status">
-        {status === 'clocked_in' ? (
-          <>
-            <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-            Currently Clocked In
-          </>
-        ) : (
-          <>
-            <div className="w-2 h-2 rounded-full bg-slate-400" />
-            Clocked Out
-          </>
-        )}
-      </div>
+      {/* Ghost Shift Intercept */}
+      {isGhostPending && ghostShift ? (
+        <Card className="w-full max-w-xs border-amber-300 bg-amber-50/50" data-testid="ghost-shift-card">
+          <CardHeader className="pb-2 px-4 pt-4">
+            <CardTitle className="text-base font-bold flex items-center gap-2 text-amber-800">
+              <AlertTriangle className="w-5 h-5 text-amber-600" />
+              Missing Clock-Out
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 space-y-3">
+            <p className="text-sm text-amber-900">
+              You didn't clock out from your shift on <span className="font-semibold">{ghostDateStr}</span> (started {ghostTimeStr}).
+            </p>
+            <p className="text-xs text-amber-700">What time did you finish?</p>
 
-      {/* PIN Pad */}
-      <Card className="p-5 w-full max-w-xs" data-testid="clock-pin-pad">
-        <p className="text-center text-xs text-muted-foreground font-medium mb-3">
-          Enter your 4-digit PIN to {status === 'clocked_in' ? 'clock out' : 'clock in'}
-        </p>
+            <div>
+              <Label htmlFor="claimed-time" className="text-xs font-semibold text-amber-800">Finish Time</Label>
+              <Input
+                id="claimed-time"
+                type="datetime-local"
+                value={claimedTime}
+                onChange={(e) => setClaimedTime(e.target.value)}
+                min={ghostShift.clock_in?.slice(0, 16)}
+                className="h-11 bg-white border-amber-200"
+                data-testid="claimed-time-input"
+              />
+            </div>
 
-        {/* PIN Display */}
-        <div className="flex justify-center gap-3 mb-5">
-          {[0, 1, 2, 3].map(i => (
-            <div
-              key={i}
-              className={`w-10 h-10 rounded-lg border-2 flex items-center justify-center text-lg font-bold transition-all ${
-                pin.length > i
-                  ? 'border-indigo-500 bg-indigo-50 text-indigo-700'
-                  : 'border-slate-200 bg-slate-50'
+            <Button
+              onClick={handleResolveGhost}
+              disabled={resolving || !claimedTime}
+              className="w-full h-12 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl"
+              data-testid="resolve-ghost-btn"
+            >
+              {resolving ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <>
+                  <CheckCircle className="w-4 h-4 mr-2" />
+                  Submit Finish Time
+                </>
+              )}
+            </Button>
+
+            <p className="text-[10px] text-amber-600 text-center">
+              Your manager will review and approve this correction.
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        <>
+          {/* Status Badge */}
+          <div className={`mb-6 px-4 py-2 rounded-full text-sm font-medium flex items-center gap-2 ${
+            isClockedIn
+              ? 'bg-emerald-100 text-emerald-700 border border-emerald-200'
+              : 'bg-slate-100 text-slate-600 border border-slate-200'
+          }`} data-testid="clock-status">
+            {isClockedIn ? (
+              <>
+                <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                Currently Clocked In
+              </>
+            ) : (
+              <>
+                <div className="w-2 h-2 rounded-full bg-slate-400" />
+                Clocked Out
+              </>
+            )}
+          </div>
+
+          {/* One-Tap Clock Button */}
+          <Card className="p-6 w-full max-w-xs" data-testid="clock-action-card">
+            <p className="text-center text-xs text-muted-foreground font-medium mb-4">
+              <MapPin className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" />
+              GPS location will be captured automatically
+            </p>
+
+            <Button
+              onClick={handleClock}
+              disabled={loading || status === null}
+              data-testid="clock-action-btn"
+              className={`w-full h-16 text-lg font-bold rounded-2xl transition-all ${
+                isClockedIn
+                  ? 'bg-red-500 hover:bg-red-600 text-white'
+                  : 'bg-emerald-600 hover:bg-emerald-700 text-white'
               }`}
             >
-              {pin.length > i ? '*' : ''}
-            </div>
-          ))}
-        </div>
+              {loading ? (
+                <Loader2 className="w-6 h-6 animate-spin" />
+              ) : isClockedIn ? (
+                <>
+                  <LogOut className="w-5 h-5 mr-2" />
+                  Clock Out
+                </>
+              ) : (
+                <>
+                  <LogIn className="w-5 h-5 mr-2" />
+                  Clock In
+                </>
+              )}
+            </Button>
 
-        {/* Number Pad */}
-        <div className="grid grid-cols-3 gap-2">
-          {[1, 2, 3, 4, 5, 6, 7, 8, 9].map(d => (
-            <button
-              key={d}
-              onClick={() => handlePinKey(String(d))}
-              disabled={loading}
-              className="h-12 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-lg font-semibold transition-all"
-              data-testid={`pin-key-${d}`}
-            >
-              {d}
-            </button>
-          ))}
-          <div />
-          <button
-            onClick={() => handlePinKey('0')}
-            disabled={loading}
-            className="h-12 rounded-xl bg-slate-100 hover:bg-slate-200 active:bg-slate-300 text-lg font-semibold transition-all"
-            data-testid="pin-key-0"
-          >
-            0
-          </button>
-          <button
-            onClick={() => setPin(pin.slice(0, -1))}
-            className="h-12 rounded-xl bg-slate-100 hover:bg-slate-200 text-sm font-medium text-slate-500"
-            data-testid="pin-backspace"
-          >
-            DEL
-          </button>
-        </div>
-
-        {loading && (
-          <p className="text-center text-xs text-indigo-600 mt-3 animate-pulse">Processing...</p>
-        )}
-      </Card>
+            {loading && (
+              <p className="text-center text-xs text-indigo-600 mt-3 animate-pulse">Getting your location...</p>
+            )}
+          </Card>
+        </>
+      )}
 
       {/* Last Action */}
-      {lastAction && (
+      {lastAction && !isGhostPending && (
         <div className="mt-4 text-center text-xs text-muted-foreground" data-testid="last-action-info">
           Last {lastAction.type === 'in' ? 'clock in' : 'clock out'}: {new Date(lastAction.time).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}
           {lastAction.hours && <span className="ml-1">({lastAction.hours.toFixed(1)}h)</span>}
