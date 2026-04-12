@@ -1,20 +1,25 @@
 """Firebase Cloud Messaging push notification service.
-Gracefully handles missing credentials — logs warnings instead of crashing."""
+Gracefully handles missing credentials — logs warnings instead of crashing.
+Uses lazy initialization to ensure .env is loaded before checking credentials."""
 import os
 import logging
 
 logger = logging.getLogger(__name__)
 
 _firebase_app = None
-_fcm_available = False
+_fcm_available = None  # None = not initialized yet
 
 
-def _init_firebase():
-    """Initialize Firebase Admin SDK if credentials are available."""
+def _ensure_initialized():
+    """Lazy init: only called when push is actually used."""
     global _firebase_app, _fcm_available
+    if _fcm_available is not None:
+        return
+
     creds_path = os.environ.get("FIREBASE_CREDENTIALS_PATH")
     if not creds_path or not os.path.exists(creds_path):
         logger.warning("[Push] FIREBASE_CREDENTIALS_PATH not set or file missing. Push notifications disabled.")
+        _fcm_available = False
         return
 
     try:
@@ -29,17 +34,17 @@ def _init_firebase():
         logger.info("[Push] Firebase initialized. Push notifications enabled.")
     except Exception as e:
         logger.error(f"[Push] Firebase init failed: {e}")
-
-
-_init_firebase()
+        _fcm_available = False
 
 
 def is_push_available():
+    _ensure_initialized()
     return _fcm_available
 
 
 def send_push(token: str, title: str, body: str, data: dict = None) -> str:
     """Send a push notification to a single device. Returns message_id or None."""
+    _ensure_initialized()
     if not _fcm_available:
         logger.info(f"[Push] (dry-run) → {title}: {body}")
         return None
@@ -58,6 +63,7 @@ def send_push(token: str, title: str, body: str, data: dict = None) -> str:
 
 def send_push_multi(tokens: list, title: str, body: str, data: dict = None):
     """Send push to multiple devices. Returns (success_count, failure_count, failed_tokens)."""
+    _ensure_initialized()
     if not _fcm_available:
         logger.info(f"[Push] (dry-run multi) → {title}: {body} to {len(tokens)} devices")
         return len(tokens), 0, []
