@@ -8,7 +8,7 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 
 | Mode | Device | Boot Screen | Experience |
 |---|---|---|---|
-| **Terminal (Kiosk)** | Store tablet | PIN Pad | Staff enter PIN → POS or Clock-In toast |
+| **Terminal (Kiosk)** | Store tablet | PIN Pad | Staff enter PIN -> POS or Clock-In toast |
 | **Personal** | Staff phone | Email + Password | Heva Ops workspace (shifts, clock-in, swaps) |
 
 ## Email System (Apr 12, 2026)
@@ -44,9 +44,11 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 15. Universal App — Split-Brain Routing
 16. Staff Capabilities System
 17. Staff Onboarding Link (self-service password + PIN setup)
-18. **Automated Email System (Apr 12, 2026)** — Resend integration, daily summaries, trial reminders
+18. Automated Email System (Apr 12, 2026) — Resend integration, daily summaries, trial reminders
+19. **Pre-Launch Fixes (Apr 12, 2026)** — Pay types (hourly/monthly), strict 10m geofencing, onboarding link domain fix, Staff My Pay view
 
 ## Upcoming
+- iOS App Build Prep (Capacitor config for iOS deployment)
 - Add trial_end_date to business creation flow (auto 14-day trial)
 - Add "Send Daily Summary" button in Admin Dashboard UI
 - Background scheduler for automated daily email dispatch (Railway cron)
@@ -55,7 +57,6 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 - Print Void Receipt to Kitchen
 - Split monolithic server.py into modular routers
 - Deliverect / Middleware API Integration
-- iOS App Build Prep
 - Self-service module upgrade (Stripe-powered)
 
 ## Production Checklist
@@ -66,3 +67,4 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 - [ ] Build Android APK via Capacitor
 - [ ] Set up Railway cron for daily email dispatch
 - [ ] Add real emails to all staff accounts
+- [ ] Build iOS via Capacitor (upcoming)
