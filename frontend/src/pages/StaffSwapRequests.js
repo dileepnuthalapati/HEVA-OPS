@@ -130,6 +130,13 @@ export default function StaffSwapRequests() {
     finally { setActioningId(null); }
   };
 
+  const handleCancelSwap = async (id) => {
+    setActioningId(id);
+    try { await api.delete(`/swap-requests/${id}`); toast.success('Swap request cancelled'); loadData(); }
+    catch (e) { toast.error(e.response?.data?.detail || 'Failed to cancel'); }
+    finally { setActioningId(null); }
+  };
+
   const handleClaim = async (shiftId) => {
     setActioningId(shiftId);
     try { const res = await api.post(`/shifts/${shiftId}/claim`); toast.success(res.data.message || 'Shift claimed!'); loadData(); }
@@ -233,9 +240,16 @@ export default function StaffSwapRequests() {
                         {sr.acceptor_name && <p className="text-xs text-emerald-600 mt-0.5">{sr.acceptor_name} accepted</p>}
                         {sr.reason && <p className="text-xs text-slate-400 mt-0.5">{sr.reason}</p>}
                       </div>
-                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_STYLES[sr.status] || 'bg-slate-100'}`}>
-                        {STATUS_LABELS[sr.status] || sr.status}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${STATUS_STYLES[sr.status] || 'bg-slate-100'}`}>
+                          {STATUS_LABELS[sr.status] || sr.status}
+                        </span>
+                        {(sr.status === 'waiting_acceptance' || sr.status === 'pending_approval') && (
+                          <Button size="sm" variant="ghost" onClick={() => handleCancelSwap(sr.id)} disabled={actioningId === sr.id} className="h-6 px-1.5 text-slate-400 hover:text-red-500" data-testid={`cancel-swap-${sr.id}`}>
+                            <X className="w-3.5 h-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   </Card>
                 ))}

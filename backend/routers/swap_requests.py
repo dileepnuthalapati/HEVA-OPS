@@ -130,6 +130,32 @@ async def create_swap_request(data: SwapRequestCreate, current_user: User = Depe
     return {"message": f"Swap request sent to {len(target_ids)} colleagues", "id": request_doc["id"], "status": "waiting_acceptance"}
 
 
+@router.delete("/swap-requests/{request_id}")
+async def cancel_swap_request(request_id: str, current_user: User = Depends(get_current_user)):
+    """Staff cancels their own swap request. Only allowed while waiting_acceptance."""
+    staff = await db.users.find_one({"username": current_user.username}, {"_id": 0, "id": 1})
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff not found")
+
+    req = await db.swap_requests.find_one({"id": request_id, "restaurant_id": current_user.restaurant_id})
+    if not req:
+        raise HTTPException(status_code=404, detail="Swap request not found")
+    if req["requester_id"] != staff["id"] and current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="You can only cancel your own requests")
+    if req["status"] not in ["waiting_acceptance", "pending_approval"]:
+        raise HTTPException(status_code=400, detail=f"Cannot cancel a request with status '{req['status']}'")
+
+    await db.swap_requests.update_one(
+        {"id": request_id},
+        {"$set": {"status": "cancelled", "cancelled_at": datetime.now(timezone.utc).isoformat(), "cancelled_by": current_user.username}}
+    )
+    # Clean up notifications
+    await db.notifications.delete_many({"ref_id": request_id, "read": {"$ne": True}})
+
+    return {"message": "Swap request cancelled"}
+
+
+
 @router.get("/swap-requests")
 async def get_swap_requests(current_user: User = Depends(get_current_user)):
     """Get swap requests relevant to the current user.
@@ -144,6 +170,9 @@ async def get_swap_requests(current_user: User = Depends(get_current_user)):
             {"restaurant_id": current_user.restaurant_id, "status": {"$in": ["pending_approval", "waiting_acceptance"]}},
             {"_id": 0}
         ).sort("created_at", -1).to_list(200)
+        # Admins can also be swap targets — mark if they can accept
+        for r in requests:
+            r["can_accept"] = (r["status"] == "waiting_acceptance" and staff_id in (r.get("target_staff_ids") or []) and r["requester_id"] != staff_id)
     else:
         # Staff sees: their own requests (any status) + incoming requests they can accept
         own = await db.swap_requests.find(
@@ -407,6 +436,8 @@ async def drop_shift(data: DropShiftRequest, current_user: User = Depends(get_cu
             "clock_out": None,
             "hours_worked": 0,
             "entry_source": "sick_leave",
+            "record_type": "leave",
+            "is_operational": False,
             "flagged": False,
             "flag_reason": None,
             "approved": False,

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
 import { shiftAPI, staffAPI } from '../services/api';
+import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -11,16 +12,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight, Plus, Copy, Send, Trash2, Edit2 } from 'lucide-react';
 
-const DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+const ALL_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+function getDayLabels(startDay) {
+  const result = [];
+  for (let i = 0; i < 7; i++) result.push(ALL_DAYS[(startDay + i) % 7]);
+  return result;
+}
 
-function getWeekDates(offset = 0) {
+function getWeekDates(offset = 0, weekStartDay = 1) {
+  // weekStartDay: 0=Sunday, 1=Monday, 6=Saturday
   const now = new Date();
   const day = now.getDay();
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1) + offset * 7);
+  const diff = (day - weekStartDay + 7) % 7;
+  const start = new Date(now);
+  start.setDate(now.getDate() - diff + offset * 7);
   return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
+    const d = new Date(start);
+    d.setDate(start.getDate() + i);
     return d.toISOString().split('T')[0];
   });
 }
@@ -44,10 +52,23 @@ export default function ShiftScheduler() {
   const [copyMode, setCopyMode] = useState(false);
   const [form, setForm] = useState({ staff_id: '', date: '', start_time: '09:00', end_time: '17:00', position: '', note: '' });
   const [saving, setSaving] = useState(false);
+  const [weekStartDay, setWeekStartDay] = useState(1); // 0=Sun, 1=Mon, 6=Sat
 
-  const weekDates = getWeekDates(weekOffset);
+  const weekDates = getWeekDates(weekOffset, weekStartDay);
   const startDate = weekDates[0];
   const endDate = weekDates[6];
+
+  // Load week_start_day from restaurant settings
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const res = await api.get('/restaurant/my');
+        const wsd = res.data?.business_info?.week_start_day;
+        if (wsd !== undefined && wsd !== null) setWeekStartDay(wsd);
+      } catch {}
+    };
+    loadSettings();
+  }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -99,7 +120,7 @@ export default function ShiftScheduler() {
   };
 
   const handleCopyWeek = async () => {
-    const targetDates = getWeekDates(weekOffset + 1);
+    const targetDates = getWeekDates(weekOffset + 1, weekStartDay);
     try {
       await shiftAPI.copyWeek(startDate, targetDates[0]);
       toast.success(`Copied shifts to week of ${targetDates[0]}`);
@@ -188,7 +209,7 @@ export default function ShiftScheduler() {
                       const isToday = d === new Date().toISOString().split('T')[0];
                       return (
                         <th key={d} className={`p-3 text-center text-xs font-semibold ${isToday ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500'}`}>
-                          <div>{DAYS[i]}</div>
+                          <div>{getDayLabels(weekStartDay)[i]}</div>
                           <div className="text-[10px] font-normal">{new Date(d + 'T12:00:00').getDate()}</div>
                         </th>
                       );

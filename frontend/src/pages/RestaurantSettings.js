@@ -29,7 +29,7 @@ const RestaurantSettings = () => {
   const [formData, setFormData] = useState({
     name: '', address_line1: '', address_line2: '', city: '', postcode: '',
     phone: '', email: '', website: '', vat_number: '', receipt_footer: '',
-    latitude: null, longitude: null,
+    latitude: null, longitude: null, week_start_day: 1,
   });
 
   // Staff state
@@ -451,6 +451,23 @@ const RestaurantSettings = () => {
                       <Label htmlFor="receipt_footer" className="text-sm font-semibold">Receipt Footer Message <span className="text-muted-foreground text-xs">(optional)</span></Label>
                       <Textarea id="receipt_footer" data-testid="receipt-footer-input" value={formData.receipt_footer} onChange={(e) => handleChange('receipt_footer', e.target.value)} placeholder="Thank you for visiting! Come again soon!" rows={3} />
                       <p className="text-xs text-muted-foreground mt-2">This message will appear at the bottom of customer receipts</p>
+                    </div>
+                    )}
+                    {hasFeature('workforce') && (
+                    <div>
+                      <Label htmlFor="week_start_day" className="text-sm font-semibold">Week Starts On</Label>
+                      <select
+                        id="week_start_day"
+                        data-testid="week-start-day-select"
+                        value={formData.week_start_day ?? 1}
+                        onChange={(e) => handleChange('week_start_day', parseInt(e.target.value))}
+                        className="flex h-12 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+                      >
+                        <option value={1}>Monday</option>
+                        <option value={0}>Sunday</option>
+                        <option value={6}>Saturday</option>
+                      </select>
+                      <p className="text-xs text-muted-foreground mt-1">Controls the shift scheduler weekly view. Some businesses prefer Saturday–Friday.</p>
                     </div>
                     )}
                     <div className="pt-4">
