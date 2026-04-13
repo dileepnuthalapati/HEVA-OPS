@@ -135,6 +135,19 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleRejectAdjustment = async (recordId) => {
+    setApprovingId(recordId);
+    try {
+      await api.put(`/attendance/${recordId}/reject-adjustment`);
+      toast.success('Rejected — staff will be asked to re-submit');
+      setPendingAdjustments(prev => prev.filter(r => r.id !== recordId));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to reject');
+    } finally {
+      setApprovingId(null);
+    }
+  };
+
   const handleSwapAction = async (requestId, action) => {
     setSwapActionId(requestId);
     try {
@@ -242,319 +255,7 @@ const AdminDashboard = () => {
                 </Card>
               )}
 
-              {/* ══════════════ Workforce Dashboard ══════════════ */}
-              {hasWorkforce && workforceStats && (
-                <div className="mb-4 md:mb-6" data-testid="workforce-dashboard">
-                  {!hasPOS && (
-                    <div className="mb-3">
-                      <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Workforce Overview</span>
-                    </div>
-                  )}
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4 mb-4">
-                    <Card className="bg-white border-slate-200/60 shadow-sm" data-testid="wf-total-staff">
-                      <CardContent className="p-3 md:p-5">
-                        <div className="flex items-center justify-between mb-2 md:mb-3">
-                          <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Team</span>
-                          <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-indigo-50 flex items-center justify-center">
-                            <Users className="w-3.5 h-3.5 md:w-4 md:h-4 text-indigo-600" />
-                          </div>
-                        </div>
-                        <div className="text-lg md:text-2xl font-bold font-mono text-slate-900">{workforceStats.total_staff}</div>
-                        <p className="text-[10px] md:text-[11px] text-slate-400 font-medium mt-1">Total members</p>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="bg-white border-emerald-200/60 shadow-sm" data-testid="wf-clocked-in">
-                      <CardContent className="p-3 md:p-5">
-                        <div className="flex items-center justify-between mb-2 md:mb-3">
-                          <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-emerald-500">On Shift</span>
-                          <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-emerald-50 flex items-center justify-center">
-                            <UserCheck className="w-3.5 h-3.5 md:w-4 md:h-4 text-emerald-600" />
-                          </div>
-                        </div>
-                        <div className="text-lg md:text-2xl font-bold font-mono text-emerald-700">{workforceStats.clocked_in_count}</div>
-                        <p className="text-[10px] md:text-[11px] text-slate-400 font-medium mt-1">On floor now</p>
-                        {workforceStats.unavailable_count > 0 && (
-                          <p className="text-[10px] text-amber-500 font-medium mt-0.5">{workforceStats.unavailable_count} unavailable</p>
-                        )}
-                      </CardContent>
-                    </Card>
-
-                    <Card className="bg-white border-slate-200/60 shadow-sm" data-testid="wf-scheduled">
-                      <CardContent className="p-3 md:p-5">
-                        <div className="flex items-center justify-between mb-2 md:mb-3">
-                          <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Scheduled</span>
-                          <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-violet-50 flex items-center justify-center">
-                            <CalendarClock className="w-3.5 h-3.5 md:w-4 md:h-4 text-violet-600" />
-                          </div>
-                        </div>
-                        <div className="text-lg md:text-2xl font-bold font-mono text-slate-900">{workforceStats.scheduled_shifts}</div>
-                        <p className="text-[10px] md:text-[11px] text-slate-400 font-medium mt-1">Shifts today</p>
-                      </CardContent>
-                    </Card>
-
-                    <Card className="bg-white border-slate-200/60 shadow-sm" data-testid="wf-hours-today">
-                      <CardContent className="p-3 md:p-5">
-                        <div className="flex items-center justify-between mb-2 md:mb-3">
-                          <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Hours</span>
-                          <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-amber-50 flex items-center justify-center">
-                            <Timer className="w-3.5 h-3.5 md:w-4 md:h-4 text-amber-600" />
-                          </div>
-                        </div>
-                        <div className="text-lg md:text-2xl font-bold font-mono text-slate-900">{workforceStats.total_hours_today}h</div>
-                        <p className="text-[10px] md:text-[11px] text-slate-400 font-medium mt-1">Worked today</p>
-                      </CardContent>
-                    </Card>
-                  </div>
-
-                  {/* Currently clocked in staff list */}
-                  {workforceStats.clocked_in_staff?.length > 0 && (
-                    <Card className="mb-4 bg-white border-emerald-200/40 shadow-sm" data-testid="wf-live-staff">
-                      <CardHeader className="px-4 md:px-6 py-3 md:pb-2">
-                        <CardTitle className="text-xs md:text-base font-bold text-slate-900 flex items-center gap-2">
-                          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                          Currently On Shift
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="px-4 md:px-6 pb-4">
-                        <div className="space-y-2">
-                          {workforceStats.clocked_in_staff.map((s, i) => (
-                            <div key={i} className="flex items-center justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50">
-                              <div className="flex items-center gap-2.5">
-                                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-xs font-bold text-emerald-700">
-                                  {s.name?.charAt(0)?.toUpperCase() || '?'}
-                                </div>
-                                <span className="text-sm font-semibold text-slate-800">{s.name}</span>
-                              </div>
-                              <span className="text-xs text-slate-400 font-medium">
-                                Since {s.since ? new Date(s.since).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '--'}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* Today's scheduled shifts */}
-                  {workforceStats.shifts?.length > 0 && (
-                    <Card className="mb-4 md:mb-6 bg-white border-slate-200/60 shadow-sm" data-testid="wf-todays-shifts">
-                      <CardHeader className="px-4 md:px-6 py-3 md:pb-2">
-                        <CardTitle className="text-xs md:text-base font-bold text-slate-900">Today's Schedule</CardTitle>
-                      </CardHeader>
-                      <CardContent className="px-4 md:px-6 pb-4">
-                        <div className="space-y-2">
-                          {workforceStats.shifts.map((s, i) => (
-                            <div key={i} className="flex items-center justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50">
-                              <div className="flex items-center gap-2.5 min-w-0">
-                                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700">
-                                  {s.staff_name?.charAt(0)?.toUpperCase() || '?'}
-                                </div>
-                                <div className="min-w-0">
-                                  <span className="text-sm font-semibold text-slate-800 block truncate">{s.staff_name}</span>
-                                  {s.position && <span className="text-[10px] text-slate-400">{s.position}</span>}
-                                </div>
-                              </div>
-                              <span className="text-xs font-mono font-semibold text-slate-600 shrink-0 ml-2">
-                                {s.start_time} - {s.end_time}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* Pending Adjustments — staff-corrected ghost shifts */}
-                  {pendingAdjustments.length > 0 && (
-                    <Card className="mb-4 md:mb-6 bg-white border-amber-200/60 shadow-sm" data-testid="wf-pending-adjustments">
-                      <CardHeader className="px-4 md:px-6 py-3 md:pb-2">
-                        <CardTitle className="text-xs md:text-base font-bold text-amber-800 flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 text-amber-600" />
-                          Pending Approvals
-                          <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">{pendingAdjustments.length}</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="px-4 md:px-6 pb-4">
-                        <div className="space-y-2">
-                          {pendingAdjustments.map((r) => {
-                            const clockIn = r.clock_in ? new Date(r.clock_in) : null;
-                            const claimed = r.staff_claimed_time ? new Date(r.staff_claimed_time) : null;
-                            const claimedHours = r.hours_worked;
-                            return (
-                              <div key={r.id} className="p-3 rounded-lg border border-amber-200/60 bg-amber-50/30" data-testid={`adjustment-${r.id}`}>
-                                <div className="flex items-start justify-between gap-2">
-                                  <div className="min-w-0">
-                                    <div className="text-sm font-semibold text-slate-800">{r.staff_name || 'Staff'}</div>
-                                    <div className="text-xs text-slate-500 mt-0.5">
-                                      {r.date} &middot; {clockIn ? clockIn.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '--'}
-                                      {' → '}
-                                      {claimed ? claimed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '--'}
-                                    </div>
-                                    <div className="text-xs text-amber-700 font-medium mt-1">
-                                      Claims <span className="font-bold">{claimedHours?.toFixed(1)}h</span> worked
-                                    </div>
-                                  </div>
-                                  <div className="flex gap-1.5 shrink-0">
-                                    <button
-                                      onClick={() => handleApproveAdjustment(r.id)}
-                                      disabled={approvingId === r.id}
-                                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
-                                      data-testid={`approve-${r.id}`}
-                                    >
-                                      {approvingId === r.id ? '...' : 'Approve'}
-                                    </button>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* Swap Requests — staff requesting shift changes */}
-                  {swapRequests.length > 0 && (
-                    <Card className="mb-4 md:mb-6 bg-white border-indigo-200/60 shadow-sm" data-testid="wf-swap-requests">
-                      <CardHeader className="px-4 md:px-6 py-3 md:pb-2">
-                        <CardTitle className="text-xs md:text-base font-bold text-indigo-800 flex items-center gap-2">
-                          <ArrowRightLeft className="w-4 h-4 text-indigo-600" />
-                          Swap Requests
-                          <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">{swapRequests.length}</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="px-4 md:px-6 pb-4">
-                        <div className="space-y-2">
-                          {swapRequests.map((sr) => (
-                            <div key={sr.id} className="p-3 rounded-lg border border-indigo-200/60 bg-indigo-50/30" data-testid={`swap-req-${sr.id}`}>
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0">
-                                  <div className="text-sm font-semibold text-slate-800">
-                                    {sr.requester_name || 'Staff'}
-                                    {sr.acceptor_name && <span className="text-indigo-600"> ↔ {sr.acceptor_name}</span>}
-                                  </div>
-                                  <div className="text-xs text-slate-500 mt-0.5">
-                                    {sr.shift_date} &middot; {sr.shift_start} → {sr.shift_end}
-                                  </div>
-                                  {sr.reason && <div className="text-xs text-indigo-600 mt-1">"{sr.reason}"</div>}
-                                  <span className={`inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                                    sr.status === 'pending_approval' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
-                                  }`}>
-                                    {sr.status === 'pending_approval' ? 'Ready for approval' : 'Waiting for colleague'}
-                                  </span>
-                                </div>
-                                <div className="flex gap-1.5 shrink-0">
-                                  {sr.status === 'pending_approval' && (
-                                    <>
-                                      <button
-                                        onClick={() => handleSwapAction(sr.id, 'approve')}
-                                        disabled={swapActionId === sr.id}
-                                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
-                                        data-testid={`approve-swap-${sr.id}`}
-                                      >
-                                        {swapActionId === sr.id ? '...' : 'Approve'}
-                                      </button>
-                                      <button
-                                        onClick={() => handleSwapAction(sr.id, 'reject')}
-                                        disabled={swapActionId === sr.id}
-                                        className="px-2 py-1.5 rounded-lg bg-slate-200 hover:bg-red-100 text-slate-600 hover:text-red-600 text-xs font-bold transition-colors disabled:opacity-50"
-                                        data-testid={`reject-swap-${sr.id}`}
-                                      >
-                                        <X className="w-3.5 h-3.5" />
-                                      </button>
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-
-                  {/* Drop Requests — high-priority manager alerts */}
-                  {dropRequests.length > 0 && (
-                    <Card className="mb-4 md:mb-6 bg-white border-red-200/60 shadow-sm" data-testid="wf-drop-requests">
-                      <CardHeader className="px-4 md:px-6 py-3 md:pb-2">
-                        <CardTitle className="text-xs md:text-base font-bold text-red-800 flex items-center gap-2">
-                          <AlertTriangle className="w-4 h-4 text-red-600" />
-                          Shift Drops
-                          <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">{dropRequests.length}</span>
-                        </CardTitle>
-                      </CardHeader>
-                      <CardContent className="px-4 md:px-6 pb-4">
-                        <div className="space-y-2">
-                          {dropRequests.map((dr) => (
-                            <div key={dr.id} className="p-3 rounded-lg border border-red-200/60 bg-red-50/30" data-testid={`drop-req-${dr.id}`}>
-                              <div className="flex items-start justify-between gap-2">
-                                <div className="min-w-0">
-                                  <div className="text-sm font-semibold text-slate-800">{dr.requester_name}</div>
-                                  <div className="text-xs text-slate-500 mt-0.5">
-                                    {dr.shift_date} &middot; {dr.shift_start} → {dr.shift_end}
-                                  </div>
-                                  <div className="text-xs text-red-600 font-medium mt-1">{dr.reason_label}</div>
-                                  {dr.note && <div className="text-xs text-slate-400 mt-0.5">"{dr.note}"</div>}
-                                </div>
-                                <div className="flex gap-1.5 shrink-0">
-                                  <button
-                                    onClick={() => handleDropAction(dr.id, 'open')}
-                                    disabled={dropActionId === dr.id}
-                                    className="px-2.5 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition-colors disabled:opacity-50"
-                                    data-testid={`open-drop-${dr.id}`}
-                                  >
-                                    {dropActionId === dr.id ? '...' : 'Open'}
-                                  </button>
-                                  <button
-                                    onClick={() => { setShowReassignDialog(dr.id); setReassignTarget(''); }}
-                                    disabled={dropActionId === dr.id}
-                                    className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
-                                    data-testid={`reassign-drop-${dr.id}`}
-                                  >
-                                    Reassign
-                                  </button>
-                                </div>
-                              </div>
-                              {/* Inline reassign picker */}
-                              {showReassignDialog === dr.id && (
-                                <div className="mt-2 p-2 rounded-lg bg-white border border-slate-200 flex gap-2 items-end">
-                                  <div className="flex-1">
-                                    <select
-                                      value={reassignTarget}
-                                      onChange={(e) => setReassignTarget(e.target.value)}
-                                      className="w-full text-xs border rounded-lg px-2 py-1.5"
-                                      data-testid={`reassign-select-${dr.id}`}
-                                    >
-                                      <option value="">Select staff...</option>
-                                      {staffList.filter(s => s.id !== dr.requester_id).map(s => (
-                                        <option key={s.id} value={s.id}>{s.username}{s.position ? ` (${s.position})` : ''}</option>
-                                      ))}
-                                    </select>
-                                  </div>
-                                  <button
-                                    onClick={() => handleDropAction(dr.id, 'reassign')}
-                                    disabled={!reassignTarget || dropActionId === dr.id}
-                                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold disabled:opacity-50"
-                                    data-testid={`confirm-reassign-${dr.id}`}
-                                  >
-                                    Confirm
-                                  </button>
-                                  <button onClick={() => setShowReassignDialog(null)} className="px-2 py-1.5 text-slate-400 hover:text-slate-600">
-                                    <X className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  )}
-                </div>
-              )}
-
-              {/* ══════════════ POS Section — only when POS module is active ══════════════ */}
+              {/* ══════════════ POS Section — Revenue first when business has POS ══════════════ */}
               {hasPOS && (
               <>
               {/* ══════════════ Daily Revenue Widget ══════════════ */}
@@ -781,6 +482,324 @@ const AdminDashboard = () => {
                 </Card>
               )}
               </>
+              )}
+
+              {/* ══════════════ Workforce Dashboard ══════════════ */}
+              {hasWorkforce && workforceStats && (
+                <div className="mb-4 md:mb-6" data-testid="workforce-dashboard">
+                  <div className="mb-3">
+                    <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Workforce Overview</span>
+                  </div>
+                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 md:gap-4 mb-4">
+                    <Card className="bg-white border-slate-200/60 shadow-sm" data-testid="wf-total-staff">
+                      <CardContent className="p-3 md:p-5">
+                        <div className="flex items-center justify-between mb-2 md:mb-3">
+                          <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Team</span>
+                          <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-indigo-50 flex items-center justify-center">
+                            <Users className="w-3.5 h-3.5 md:w-4 md:h-4 text-indigo-600" />
+                          </div>
+                        </div>
+                        <div className="text-lg md:text-2xl font-bold font-mono text-slate-900">{workforceStats.total_staff}</div>
+                        <p className="text-[10px] md:text-[11px] text-slate-400 font-medium mt-1">Total members</p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-white border-emerald-200/60 shadow-sm" data-testid="wf-clocked-in">
+                      <CardContent className="p-3 md:p-5">
+                        <div className="flex items-center justify-between mb-2 md:mb-3">
+                          <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-emerald-500">On Shift</span>
+                          <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-emerald-50 flex items-center justify-center">
+                            <UserCheck className="w-3.5 h-3.5 md:w-4 md:h-4 text-emerald-600" />
+                          </div>
+                        </div>
+                        <div className="text-lg md:text-2xl font-bold font-mono text-emerald-700">{workforceStats.clocked_in_count}</div>
+                        <p className="text-[10px] md:text-[11px] text-slate-400 font-medium mt-1">On floor now</p>
+                        {workforceStats.unavailable_count > 0 && (
+                          <p className="text-[10px] text-amber-500 font-medium mt-0.5">{workforceStats.unavailable_count} unavailable</p>
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-white border-slate-200/60 shadow-sm" data-testid="wf-scheduled">
+                      <CardContent className="p-3 md:p-5">
+                        <div className="flex items-center justify-between mb-2 md:mb-3">
+                          <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Scheduled</span>
+                          <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-violet-50 flex items-center justify-center">
+                            <CalendarClock className="w-3.5 h-3.5 md:w-4 md:h-4 text-violet-600" />
+                          </div>
+                        </div>
+                        <div className="text-lg md:text-2xl font-bold font-mono text-slate-900">{workforceStats.scheduled_shifts}</div>
+                        <p className="text-[10px] md:text-[11px] text-slate-400 font-medium mt-1">Shifts today</p>
+                      </CardContent>
+                    </Card>
+
+                    <Card className="bg-white border-slate-200/60 shadow-sm" data-testid="wf-hours-today">
+                      <CardContent className="p-3 md:p-5">
+                        <div className="flex items-center justify-between mb-2 md:mb-3">
+                          <span className="text-[10px] md:text-[11px] font-bold tracking-[0.1em] uppercase text-slate-400">Hours</span>
+                          <div className="w-7 h-7 md:w-8 md:h-8 rounded-xl bg-amber-50 flex items-center justify-center">
+                            <Timer className="w-3.5 h-3.5 md:w-4 md:h-4 text-amber-600" />
+                          </div>
+                        </div>
+                        <div className="text-lg md:text-2xl font-bold font-mono text-slate-900">{workforceStats.total_hours_today}h</div>
+                        <p className="text-[10px] md:text-[11px] text-slate-400 font-medium mt-1">Worked today</p>
+                      </CardContent>
+                    </Card>
+                  </div>
+
+                  {/* Currently clocked in staff list */}
+                  {workforceStats.clocked_in_staff?.length > 0 && (
+                    <Card className="mb-4 bg-white border-emerald-200/40 shadow-sm" data-testid="wf-live-staff">
+                      <CardHeader className="px-4 md:px-6 py-3 md:pb-2">
+                        <CardTitle className="text-xs md:text-base font-bold text-slate-900 flex items-center gap-2">
+                          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                          Currently On Shift
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-4 md:px-6 pb-4">
+                        <div className="space-y-2">
+                          {workforceStats.clocked_in_staff.map((s, i) => (
+                            <div key={i} className="flex items-center justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50">
+                              <div className="flex items-center gap-2.5">
+                                <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-xs font-bold text-emerald-700">
+                                  {s.name?.charAt(0)?.toUpperCase() || '?'}
+                                </div>
+                                <span className="text-sm font-semibold text-slate-800">{s.name}</span>
+                              </div>
+                              <span className="text-xs text-slate-400 font-medium">
+                                Since {s.since ? new Date(s.since).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '--'}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Today's scheduled shifts */}
+                  {workforceStats.shifts?.length > 0 && (
+                    <Card className="mb-4 md:mb-6 bg-white border-slate-200/60 shadow-sm" data-testid="wf-todays-shifts">
+                      <CardHeader className="px-4 md:px-6 py-3 md:pb-2">
+                        <CardTitle className="text-xs md:text-base font-bold text-slate-900">Today's Schedule</CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-4 md:px-6 pb-4">
+                        <div className="space-y-2">
+                          {workforceStats.shifts.map((s, i) => (
+                            <div key={i} className="flex items-center justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <div className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center text-xs font-bold text-indigo-700">
+                                  {s.staff_name?.charAt(0)?.toUpperCase() || '?'}
+                                </div>
+                                <div className="min-w-0">
+                                  <span className="text-sm font-semibold text-slate-800 block truncate">{s.staff_name}</span>
+                                  {s.position && <span className="text-[10px] text-slate-400">{s.position}</span>}
+                                </div>
+                              </div>
+                              <span className="text-xs font-mono font-semibold text-slate-600 shrink-0 ml-2">
+                                {s.start_time} - {s.end_time}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Pending Adjustments — staff-corrected ghost shifts */}
+                  {pendingAdjustments.length > 0 && (
+                    <Card className="mb-4 md:mb-6 bg-white border-amber-200/60 shadow-sm" data-testid="wf-pending-adjustments">
+                      <CardHeader className="px-4 md:px-6 py-3 md:pb-2">
+                        <CardTitle className="text-xs md:text-base font-bold text-amber-800 flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-amber-600" />
+                          Pending Approvals
+                          <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-700">{pendingAdjustments.length}</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-4 md:px-6 pb-4">
+                        <div className="space-y-2">
+                          {pendingAdjustments.map((r) => {
+                            const clockIn = r.clock_in ? new Date(r.clock_in) : null;
+                            const claimed = r.staff_claimed_time ? new Date(r.staff_claimed_time) : null;
+                            const claimedHours = r.hours_worked;
+                            return (
+                              <div key={r.id} className="p-3 rounded-lg border border-amber-200/60 bg-amber-50/30" data-testid={`adjustment-${r.id}`}>
+                                <div className="flex items-start justify-between gap-2">
+                                  <div className="min-w-0">
+                                    <div className="text-sm font-semibold text-slate-800">{r.staff_name || 'Staff'}</div>
+                                    <div className="text-xs text-slate-500 mt-0.5">
+                                      {r.date} &middot; {clockIn ? clockIn.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '--'}
+                                      {' → '}
+                                      {claimed ? claimed.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }) : '--'}
+                                    </div>
+                                    <div className="text-xs text-amber-700 font-medium mt-1">
+                                      Claims <span className="font-bold">{claimedHours?.toFixed(1)}h</span> worked
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-1.5 shrink-0">
+                                    <button
+                                      onClick={() => handleApproveAdjustment(r.id)}
+                                      disabled={approvingId === r.id}
+                                      className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
+                                      data-testid={`approve-${r.id}`}
+                                    >
+                                      {approvingId === r.id ? '...' : 'Approve'}
+                                    </button>
+                                    <button
+                                      onClick={() => handleRejectAdjustment(r.id)}
+                                      disabled={approvingId === r.id}
+                                      className="px-2 py-1.5 rounded-lg bg-slate-200 hover:bg-red-100 text-slate-600 hover:text-red-600 text-xs font-bold transition-colors disabled:opacity-50"
+                                      data-testid={`reject-adj-${r.id}`}
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Swap Requests — staff requesting shift changes */}
+                  {swapRequests.length > 0 && (
+                    <Card className="mb-4 md:mb-6 bg-white border-indigo-200/60 shadow-sm" data-testid="wf-swap-requests">
+                      <CardHeader className="px-4 md:px-6 py-3 md:pb-2">
+                        <CardTitle className="text-xs md:text-base font-bold text-indigo-800 flex items-center gap-2">
+                          <ArrowRightLeft className="w-4 h-4 text-indigo-600" />
+                          Swap Requests
+                          <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 text-indigo-700">{swapRequests.length}</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-4 md:px-6 pb-4">
+                        <div className="space-y-2">
+                          {swapRequests.map((sr) => (
+                            <div key={sr.id} className="p-3 rounded-lg border border-indigo-200/60 bg-indigo-50/30" data-testid={`swap-req-${sr.id}`}>
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-semibold text-slate-800">
+                                    {sr.requester_name || 'Staff'}
+                                    {sr.acceptor_name && <span className="text-indigo-600"> ↔ {sr.acceptor_name}</span>}
+                                  </div>
+                                  <div className="text-xs text-slate-500 mt-0.5">
+                                    {sr.shift_date} &middot; {sr.shift_start} → {sr.shift_end}
+                                  </div>
+                                  {sr.reason && <div className="text-xs text-indigo-600 mt-1">"{sr.reason}"</div>}
+                                  <span className={`inline-block mt-1 text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                                    sr.status === 'pending_approval' ? 'bg-amber-100 text-amber-700' : 'bg-blue-100 text-blue-700'
+                                  }`}>
+                                    {sr.status === 'pending_approval' ? 'Ready for approval' : 'Waiting for colleague'}
+                                  </span>
+                                </div>
+                                <div className="flex gap-1.5 shrink-0">
+                                  {sr.status === 'pending_approval' && (
+                                    <>
+                                      <button
+                                        onClick={() => handleSwapAction(sr.id, 'approve')}
+                                        disabled={swapActionId === sr.id}
+                                        className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
+                                        data-testid={`approve-swap-${sr.id}`}
+                                      >
+                                        {swapActionId === sr.id ? '...' : 'Approve'}
+                                      </button>
+                                      <button
+                                        onClick={() => handleSwapAction(sr.id, 'reject')}
+                                        disabled={swapActionId === sr.id}
+                                        className="px-2 py-1.5 rounded-lg bg-slate-200 hover:bg-red-100 text-slate-600 hover:text-red-600 text-xs font-bold transition-colors disabled:opacity-50"
+                                        data-testid={`reject-swap-${sr.id}`}
+                                      >
+                                        <X className="w-3.5 h-3.5" />
+                                      </button>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Drop Requests — high-priority manager alerts */}
+                  {dropRequests.length > 0 && (
+                    <Card className="mb-4 md:mb-6 bg-white border-red-200/60 shadow-sm" data-testid="wf-drop-requests">
+                      <CardHeader className="px-4 md:px-6 py-3 md:pb-2">
+                        <CardTitle className="text-xs md:text-base font-bold text-red-800 flex items-center gap-2">
+                          <AlertTriangle className="w-4 h-4 text-red-600" />
+                          Shift Drops
+                          <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 text-red-700">{dropRequests.length}</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-4 md:px-6 pb-4">
+                        <div className="space-y-2">
+                          {dropRequests.map((dr) => (
+                            <div key={dr.id} className="p-3 rounded-lg border border-red-200/60 bg-red-50/30" data-testid={`drop-req-${dr.id}`}>
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-semibold text-slate-800">{dr.requester_name}</div>
+                                  <div className="text-xs text-slate-500 mt-0.5">
+                                    {dr.shift_date} &middot; {dr.shift_start} → {dr.shift_end}
+                                  </div>
+                                  <div className="text-xs text-red-600 font-medium mt-1">{dr.reason_label}</div>
+                                  {dr.note && <div className="text-xs text-slate-400 mt-0.5">"{dr.note}"</div>}
+                                </div>
+                                <div className="flex gap-1.5 shrink-0">
+                                  <button
+                                    onClick={() => handleDropAction(dr.id, 'open')}
+                                    disabled={dropActionId === dr.id}
+                                    className="px-2.5 py-1.5 rounded-lg bg-orange-500 hover:bg-orange-600 text-white text-xs font-bold transition-colors disabled:opacity-50"
+                                    data-testid={`open-drop-${dr.id}`}
+                                  >
+                                    {dropActionId === dr.id ? '...' : 'Open'}
+                                  </button>
+                                  <button
+                                    onClick={() => { setShowReassignDialog(dr.id); setReassignTarget(''); }}
+                                    disabled={dropActionId === dr.id}
+                                    className="px-2.5 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
+                                    data-testid={`reassign-drop-${dr.id}`}
+                                  >
+                                    Reassign
+                                  </button>
+                                </div>
+                              </div>
+                              {/* Inline reassign picker */}
+                              {showReassignDialog === dr.id && (
+                                <div className="mt-2 p-2 rounded-lg bg-white border border-slate-200 flex gap-2 items-end">
+                                  <div className="flex-1">
+                                    <select
+                                      value={reassignTarget}
+                                      onChange={(e) => setReassignTarget(e.target.value)}
+                                      className="w-full text-xs border rounded-lg px-2 py-1.5"
+                                      data-testid={`reassign-select-${dr.id}`}
+                                    >
+                                      <option value="">Select staff...</option>
+                                      {staffList.filter(s => s.id !== dr.requester_id).map(s => (
+                                        <option key={s.id} value={s.id}>{s.username}{s.position ? ` (${s.position})` : ''}</option>
+                                      ))}
+                                    </select>
+                                  </div>
+                                  <button
+                                    onClick={() => handleDropAction(dr.id, 'reassign')}
+                                    disabled={!reassignTarget || dropActionId === dr.id}
+                                    className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold disabled:opacity-50"
+                                    data-testid={`confirm-reassign-${dr.id}`}
+                                  >
+                                    Confirm
+                                  </button>
+                                  <button onClick={() => setShowReassignDialog(null)} className="px-2 py-1.5 text-slate-400 hover:text-slate-600">
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+                </div>
               )}
             </>
           )}

@@ -1,5 +1,5 @@
 """
-HevaPOS QR Table Ordering — Public endpoints (no auth required).
+Heva One QR Table Ordering — Public endpoints (no auth required).
 
 Endpoints:
   POST /qr/tables/{table_id}/generate-hash      → Admin generates QR hash (auth required)

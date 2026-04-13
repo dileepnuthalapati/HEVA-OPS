@@ -598,3 +598,41 @@ async def resolve_flagged(record_id: str, hours_worked: float, current_user: Use
         }}
     )
     return {"message": "Flagged record resolved"}
+
+
+@router.put("/attendance/{record_id}/reject-adjustment")
+async def reject_adjustment(record_id: str, current_user: User = Depends(require_admin)):
+    """Manager rejects a staff's claimed clock-out time. Record re-opens for staff to re-submit."""
+    record = await db.attendance.find_one({"id": record_id, "restaurant_id": current_user.restaurant_id})
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found")
+    now = datetime.now(timezone.utc)
+    await db.attendance.update_one(
+        {"id": record_id},
+        {"$set": {
+            "clock_out": None,
+            "hours_worked": None,
+            "staff_claimed_time": None,
+            "pending_manager_approval": False,
+            "flagged": True,
+            "flag_reason": "manager_rejected",
+            "needs_staff_correction": True,
+            "rejected_by": current_user.username,
+            "rejected_at": now.isoformat(),
+        }}
+    )
+    # Notify staff
+    staff_id = record.get("staff_id")
+    if staff_id:
+        await db.notifications.insert_one({
+            "id": f"notif_{now.timestamp()}_{staff_id}",
+            "restaurant_id": current_user.restaurant_id,
+            "staff_id": staff_id,
+            "type": "adjustment_rejected",
+            "ref_id": record_id,
+            "title": "Hours Rejected",
+            "message": f"Your claimed hours for {record.get('date')} were rejected. Please re-submit your finish time.",
+            "read": False,
+            "created_at": now.isoformat(),
+        })
+    return {"message": "Adjustment rejected. Staff will be asked to re-submit."}

@@ -661,7 +661,7 @@ const RestaurantSettings = () => {
               <Card data-testid="terminal-registration-card">
                 <CardHeader>
                   <CardTitle className="text-xl font-semibold flex items-center gap-2"><Monitor className="w-5 h-5" /> Device Registration</CardTitle>
-                  <CardDescription>Register this device as a POS Terminal (Kiosk Mode)</CardDescription>
+                  <CardDescription>Register this device as a Shared Kiosk (PIN-based access for staff)</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {localStorage.getItem('heva_terminal') ? (
@@ -669,8 +669,8 @@ const RestaurantSettings = () => {
                       <div className="flex items-center gap-3 p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
                         <CheckCircle className="w-8 h-8 text-emerald-600 shrink-0" />
                         <div>
-                          <p className="font-bold text-emerald-900">Registered as POS Terminal</p>
-                          <p className="text-sm text-emerald-700">This device boots into PIN Pad kiosk mode.</p>
+                          <p className="font-bold text-emerald-900">Registered as Shared Kiosk</p>
+                          <p className="text-sm text-emerald-700">This device boots into PIN Pad mode for staff.</p>
                         </div>
                       </div>
                       <Button
@@ -691,14 +691,14 @@ const RestaurantSettings = () => {
                         <Smartphone className="w-8 h-8 text-slate-500 shrink-0" />
                         <div>
                           <p className="font-bold text-slate-800">Personal Mode</p>
-                          <p className="text-sm text-slate-600">This device runs in Personal mode. Register it to enable Kiosk/PIN Pad mode for shared terminals.</p>
+                          <p className="text-sm text-slate-600">This device runs in Personal mode. Register it to enable Kiosk mode — staff use PINs to clock in or access the system.</p>
                         </div>
                       </div>
                       <div className="text-sm text-muted-foreground space-y-1 ml-1">
                         <p className="font-medium text-foreground">What happens after registration:</p>
                         <ul className="list-disc ml-4 space-y-0.5">
                           <li>App shows a PIN Pad on launch (no login screen)</li>
-                          <li>Staff enter their 4-digit PIN to access POS or clock in</li>
+                          <li>Staff enter their 4-digit PIN to clock in or access their workspace</li>
                           <li>After logout, returns to PIN Pad (never leaves kiosk)</li>
                           <li>Unregister requires Manager PIN</li>
                         </ul>
@@ -719,7 +719,7 @@ const RestaurantSettings = () => {
                         data-testid="register-terminal-btn"
                         className="bg-indigo-600 hover:bg-indigo-700"
                       >
-                        <Monitor className="w-4 h-4 mr-2" /> Register as POS Terminal
+                        <Monitor className="w-4 h-4 mr-2" /> Register as Shared Kiosk
                       </Button>
                     </div>
                   )}

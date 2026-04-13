@@ -1,5 +1,5 @@
 /**
- * HevaPOS Socket.IO Client — Real-time order updates.
+ * Heva One Socket.IO Client — Real-time order updates.
  * 
  * Connects to the backend Socket.IO server for:
  * - new_qr_order: Guest placed an order via QR menu

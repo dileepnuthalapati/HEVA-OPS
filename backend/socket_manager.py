@@ -1,5 +1,5 @@
 """
-HevaPOS WebSocket Manager — Socket.IO for real-time order updates.
+Heva One WebSocket Manager — Socket.IO for real-time order updates.
 
 Events:
   - join_restaurant: Client joins a restaurant room to receive events

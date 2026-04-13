@@ -62,7 +62,7 @@ export default function ShiftScheduler() {
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        const res = await api.get('/restaurant/my');
+        const res = await api.get('/restaurants/my');
         const wsd = res.data?.business_info?.week_start_day;
         if (wsd !== undefined && wsd !== null) setWeekStartDay(wsd);
       } catch {}

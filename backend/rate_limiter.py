@@ -1,5 +1,5 @@
 """
-HevaPOS Rate Limiting — Protect public & auth endpoints from abuse.
+Heva One Rate Limiting — Protect public & auth endpoints from abuse.
 
 Uses SlowAPI with in-memory storage (suitable for single-instance deployments).
 """

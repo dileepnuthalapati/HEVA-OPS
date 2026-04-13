@@ -1,5 +1,5 @@
 """
-HevaPOS Kitchen Display System (KDS) — Digital ticket management for kitchen staff.
+Heva One Kitchen Display System (KDS) — Digital ticket management for kitchen staff.
 
 KDS Status Flow:
   new → acknowledged → preparing → ready
