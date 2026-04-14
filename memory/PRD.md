@@ -60,6 +60,7 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 31. **6 More Fixes (Apr 13, 2026)** — Reject button for ghost shift adjustments, top 5 items sorted by revenue, "Shared Kiosk" generic naming, dashboard reorder (revenue first, workforce last), week_start_day API path fix, HevaPOS→Heva One branding across codebase
 32. **Top Selling Toggle (Apr 14, 2026)** — Revenue vs Qty Sold toggle on dashboard Top Selling card, backend supports sort_top_by query param
 33. **Leave & Availability System (Apr 14, 2026)** — Staff request time off (vacation/sick/personal/public_holiday), manager approve/decline on dashboard, recurring availability rules, scheduler overlay (hard block for approved leave, soft block for unavailability, pending leave warnings), overlapping leave detection
+34. **Premium UI/UX Overhaul (Apr 14, 2026)** — Inter font, borderless inputs with bg fill, rounded-2xl cards with soft diffused shadows, gradient primary buttons with active:scale, softer dialog overlay, refined sidebar, off-white app background, tighter typography tracking
 
 ## Upcoming
 - iOS App Build Prep (Capacitor config for iOS deployment)
