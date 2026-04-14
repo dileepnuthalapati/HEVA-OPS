@@ -291,7 +291,7 @@ async def get_report_stats(start_date: str, end_date: str, current_user: User = 
 
 
 @router.get("/reports/today")
-async def get_today_stats(current_user: User = Depends(require_admin)):
+async def get_today_stats(sort_top_by: str = "revenue", current_user: User = Depends(require_admin)):
     now = datetime.now(timezone.utc)
     today_str = now.strftime("%Y-%m-%d")
     start_str = f"{today_str}T00:00:00"
@@ -330,7 +330,8 @@ async def get_today_stats(current_user: User = Depends(require_admin)):
             product_sales[name]["quantity"] += item.get("quantity", 0)
             product_sales[name]["revenue"] += item.get("total", 0)
 
-    top_products = sorted(product_sales.items(), key=lambda x: x[1]["revenue"], reverse=True)[:5]
+    sort_key = "revenue" if sort_top_by == "revenue" else "quantity"
+    top_products = sorted(product_sales.items(), key=lambda x: x[1][sort_key], reverse=True)[:5]
 
     # Hourly revenue breakdown for the mini-chart
     hourly = {}

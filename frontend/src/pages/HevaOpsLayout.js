@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate, Outlet } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { Calendar, Clock, ArrowRightLeft, LogOut, Wallet, Bell, X } from 'lucide-react';
+import { Calendar, Clock, ArrowRightLeft, LogOut, Wallet, Bell, X, CalendarDays } from 'lucide-react';
 import api from '../services/api';
 import { toast } from 'sonner';
 
@@ -36,10 +36,11 @@ export default function HevaOpsLayout() {
   const unreadCount = notifications.length;
 
   const navItems = [
-    { path: '/heva-ops/shifts', icon: Calendar, label: 'My Shifts' },
+    { path: '/heva-ops/shifts', icon: Calendar, label: 'Shifts' },
     { path: '/heva-ops/clock', icon: Clock, label: 'Clock In' },
-    { path: '/heva-ops/pay', icon: Wallet, label: 'My Pay' },
+    { path: '/heva-ops/time-off', icon: CalendarDays, label: 'Time Off' },
     { path: '/heva-ops/swaps', icon: ArrowRightLeft, label: 'Swaps' },
+    { path: '/heva-ops/pay', icon: Wallet, label: 'Pay' },
   ];
 
   return (
