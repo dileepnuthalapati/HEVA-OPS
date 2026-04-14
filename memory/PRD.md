@@ -57,6 +57,7 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 28. **Drop Shift Escalation (Apr 12, 2026)** — Staff drops with mandatory reason (Emergency/Sickness/Unresolved Swap) → Manager opens to marketplace OR directly reassigns → Sickness auto-logs to attendance/leave
 29. **Open Shift Marketplace (Apr 12, 2026)** — Blast notification to all staff → first to claim gets the shift (no manager approval needed) → admin notified of claim
 30. **5 Bug Fixes (Apr 12, 2026)** — Swap visibility for admin colleagues (can_accept flag), duplicate shifts on copy (clears target week), week start day preference (Mon/Sun/Sat), cancel/delete swap requests, sick leave ghost in "Currently on Shift" (record_type + is_operational fields, "On Floor" vs "Unavailable" counts)
+31. **6 More Fixes (Apr 13, 2026)** — Reject button for ghost shift adjustments, top 5 items sorted by revenue, "Shared Kiosk" generic naming, dashboard reorder (revenue first, workforce last), week_start_day API path fix, HevaPOS→Heva One branding across codebase
 
 ## Upcoming
 - iOS App Build Prep (Capacitor config for iOS deployment)

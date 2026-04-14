@@ -330,7 +330,7 @@ async def get_today_stats(current_user: User = Depends(require_admin)):
             product_sales[name]["quantity"] += item.get("quantity", 0)
             product_sales[name]["revenue"] += item.get("total", 0)
 
-    top_products = sorted(product_sales.items(), key=lambda x: x[1]["quantity"], reverse=True)[:5]
+    top_products = sorted(product_sales.items(), key=lambda x: x[1]["revenue"], reverse=True)[:5]
 
     # Hourly revenue breakdown for the mini-chart
     hourly = {}

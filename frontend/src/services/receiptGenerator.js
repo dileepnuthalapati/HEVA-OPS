@@ -1,5 +1,5 @@
 /**
- * HevaPOS Frontend ESC/POS Receipt Generator
+ * Heva One Frontend ESC/POS Receipt Generator
  * 
  * Generates ESC/POS thermal printer commands entirely on the frontend.
  * This makes the tablet the "brain" — receipts print even when offline.

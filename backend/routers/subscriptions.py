@@ -144,7 +144,7 @@ async def create_stripe_checkout(current_user: User = Depends(require_platform_o
     try:
         session = stripe.checkout.Session.create(
             payment_method_types=["card"],
-            line_items=[{"price_data": {"currency": "gbp", "product_data": {"name": "HevaPOS Standard Plan"}, "unit_amount": 4999, "recurring": {"interval": "month"}}, "quantity": 1}],
+            line_items=[{"price_data": {"currency": "gbp", "product_data": {"name": "Heva One Standard Plan"}, "unit_amount": 4999, "recurring": {"interval": "month"}}, "quantity": 1}],
             mode="subscription",
             success_url=os.environ.get("FRONTEND_URL", "http://localhost:3000") + "/platform/subscriptions?success=true",
             cancel_url=os.environ.get("FRONTEND_URL", "http://localhost:3000") + "/platform/subscriptions?cancelled=true",

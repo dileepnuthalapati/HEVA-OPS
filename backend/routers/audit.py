@@ -1,5 +1,5 @@
 """
-HevaPOS Audit Log — Tamper-proof activity trail for security & compliance.
+Heva One Audit Log — Tamper-proof activity trail for security & compliance.
 
 Tracks: order cancellations/voids, edits, completions, discounts, KDS bumps, QR toggles.
 

@@ -1,5 +1,5 @@
 """
-HevaPOS Database Index Management
+Heva One Database Index Management
 
 Creates and ensures MongoDB indexes for optimal query performance.
 Called once on application startup.
@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 async def ensure_indexes():
-    """Create all required MongoDB indexes for HevaPOS."""
+    """Create all required MongoDB indexes for Heva One."""
     try:
         # --- Orders (most queried collection) ---
         await db.orders.create_index("id", unique=True)

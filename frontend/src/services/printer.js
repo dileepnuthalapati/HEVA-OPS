@@ -1,5 +1,5 @@
 /**
- * HevaPOS Universal Thermal Printer Service
+ * Heva One Universal Thermal Printer Service
  * 
  * THREE connection methods — covers ALL printer setups:
  * 
