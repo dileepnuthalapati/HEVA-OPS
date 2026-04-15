@@ -266,8 +266,9 @@ export const reportAPI = {
     const response = await api.get(`/reports/stats?start_date=${startDate}&end_date=${endDate}`);
     return response.data;
   },
-  getTodayStats: async () => {
-    const response = await api.get('/reports/today');
+  getTodayStats: async (sortTopBy) => {
+    const params = sortTopBy ? { sort_top_by: sortTopBy } : {};
+    const response = await api.get('/reports/today', { params });
     return response.data;
   },
   getWeeklyTrend: async () => {

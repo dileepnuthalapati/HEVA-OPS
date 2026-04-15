@@ -50,6 +50,7 @@ from routers import qr_menu, kds, audit, payments
 from routers import docs as feature_docs
 from routers import shifts, attendance, timesheets, payroll, swap_requests
 from routers import devices
+from routers import leave
 
 # Include all routers into the api_router
 api_router.include_router(auth.router)
@@ -80,6 +81,7 @@ api_router.include_router(timesheets.router)
 api_router.include_router(payroll.router)
 api_router.include_router(swap_requests.router)
 api_router.include_router(devices.router)
+api_router.include_router(leave.router)
 
 # Include the main api_router in the app
 fastapi_app.include_router(api_router)

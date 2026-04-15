@@ -52,7 +52,8 @@ export default function ShiftScheduler() {
   const [copyMode, setCopyMode] = useState(false);
   const [form, setForm] = useState({ staff_id: '', date: '', start_time: '09:00', end_time: '17:00', position: '', note: '' });
   const [saving, setSaving] = useState(false);
-  const [weekStartDay, setWeekStartDay] = useState(1); // 0=Sun, 1=Mon, 6=Sat
+  const [weekStartDay, setWeekStartDay] = useState(1);
+  const [blocks, setBlocks] = useState({}); // 0=Sun, 1=Mon, 6=Sat
 
   const weekDates = getWeekDates(weekOffset, weekStartDay);
   const startDate = weekDates[0];
@@ -79,6 +80,11 @@ export default function ShiftScheduler() {
       ]);
       setShifts(s);
       setStaffList(st);
+      // Load scheduler blocks (leave + availability)
+      try {
+        const blk = await api.get(`/scheduler/blocks?start_date=${startDate}&end_date=${endDate}`);
+        setBlocks(blk.data || {});
+      } catch { setBlocks({}); }
     } catch (e) {
       toast.error('Failed to load shifts');
     } finally {
@@ -231,8 +237,33 @@ export default function ShiftScheduler() {
                         {weekDates.map(date => {
                           const dayShifts = shifts.filter(s => s.staff_id === sid && s.date === date);
                           const isToday = date === new Date().toISOString().split('T')[0];
+                          const block = blocks[sid]?.[date];
+                          const isHardBlock = block?.block_type === 'hard';
+                          const isPendingLeave = block?.block_type === 'pending_leave';
+                          const isSoftBlock = block?.block_type === 'soft';
                           return (
-                            <td key={date} className={`p-1.5 align-top ${isToday ? 'bg-indigo-50/50' : ''}`}>
+                            <td key={date} className={`p-1.5 align-top relative ${
+                              isToday ? 'bg-indigo-50/50' :
+                              isHardBlock ? 'bg-slate-100' :
+                              isPendingLeave ? 'bg-amber-50/60' :
+                              isSoftBlock ? 'bg-orange-50/40' : ''
+                            }`}>
+                              {/* Block overlay */}
+                              {isHardBlock && (
+                                <div className="text-[9px] text-slate-400 text-center py-1 italic capitalize" data-testid={`block-${sid}-${date}`}>
+                                  {block.reason?.replace('_', ' ') || 'Leave'}
+                                </div>
+                              )}
+                              {isPendingLeave && (
+                                <div className="text-[9px] text-amber-500 text-center py-1 italic" data-testid={`pending-leave-${sid}-${date}`}>
+                                  Pending {block.reason?.replace('_', ' ')}
+                                </div>
+                              )}
+                              {isSoftBlock && !isHardBlock && !isPendingLeave && (
+                                <div className="text-[9px] text-orange-400 text-center py-0.5 italic" data-testid={`unavail-${sid}-${date}`}>
+                                  {block.reason || 'Unavailable'}
+                                </div>
+                              )}
                               {dayShifts.map(sh => (
                                 <div
                                   key={sh.id}
@@ -254,13 +285,19 @@ export default function ShiftScheduler() {
                                   </button>
                                 </div>
                               ))}
-                              {user?.role === 'admin' && (
+                              {user?.role === 'admin' && !isHardBlock && (
                                 <button
                                   className="w-full h-7 rounded-lg border border-dashed border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-slate-400 hover:text-indigo-500 transition-all flex items-center justify-center"
-                                  onClick={() => openAdd(date, sid)}
+                                  onClick={() => {
+                                    if (isPendingLeave || isSoftBlock) {
+                                      if (!window.confirm(`${staff?.username || 'This person'} has a ${block?.reason || 'conflict'} on this day. Schedule anyway?`)) return;
+                                    }
+                                    openAdd(date, sid);
+                                  }}
                                   data-testid={`add-shift-${date}`}
                                 >
                                   <Plus className="w-3.5 h-3.5" />
+                                  {(isPendingLeave || isSoftBlock) && <span className="ml-0.5 text-amber-500 text-[9px]">!</span>}
                                 </button>
                               )}
                             </td>

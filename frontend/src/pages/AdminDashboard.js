@@ -40,6 +40,9 @@ const AdminDashboard = () => {
   const [staffList, setStaffList] = useState([]);
   const [showReassignDialog, setShowReassignDialog] = useState(null);
   const [reassignTarget, setReassignTarget] = useState('');
+  const [topSortBy, setTopSortBy] = useState('revenue');
+  const [pendingLeaves, setPendingLeaves] = useState([]);
+  const [leaveActionId, setLeaveActionId] = useState(null);
 
   const hasPOS = hasFeature('pos');
   const hasWorkforce = hasFeature('workforce');
@@ -53,7 +56,7 @@ const AdminDashboard = () => {
       // Only load POS stats if POS is enabled
       if (hasPOS) {
         promises.push(
-          reportAPI.getTodayStats().catch(() => null),
+          reportAPI.getTodayStats(topSortBy).catch(() => null),
           api.get('/kds/stats').then(r => r.data).catch(() => null),
         );
       }
@@ -64,6 +67,7 @@ const AdminDashboard = () => {
         promises.push(api.get('/swap-requests').then(r => r.data).catch(() => []));
         promises.push(api.get('/drop-requests').then(r => r.data).catch(() => []));
         promises.push(staffAPI.getAll().catch(() => []));
+        promises.push(api.get('/leave-requests/pending').then(r => r.data).catch(() => []));
       }
 
       const results = await Promise.all(promises);
@@ -88,6 +92,8 @@ const AdminDashboard = () => {
         const staff = results[idx++];
         if (drops) setDropRequests(drops);
         if (staff) setStaffList(staff);
+        const leaves = results[idx++];
+        if (leaves) setPendingLeaves(leaves);
       }
 
       if (restaurant?.currency) setCurrency(restaurant.currency);
@@ -98,7 +104,7 @@ const AdminDashboard = () => {
     } finally {
       setLoading(false);
     }
-  }, [hasPOS, hasWorkforce]);
+  }, [hasPOS, hasWorkforce, topSortBy]);
 
   useEffect(() => {
     loadAll();
@@ -179,6 +185,19 @@ const AdminDashboard = () => {
       toast.error(e.response?.data?.detail || 'Failed');
     } finally {
       setDropActionId(null);
+    }
+  };
+
+  const handleLeaveAction = async (leaveId, action) => {
+    setLeaveActionId(leaveId);
+    try {
+      await api.put(`/leave-requests/${leaveId}/${action}`);
+      toast.success(action === 'approve' ? 'Leave approved' : 'Leave declined');
+      setPendingLeaves(prev => prev.filter(r => r.id !== leaveId));
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed');
+    } finally {
+      setLeaveActionId(null);
     }
   };
 
@@ -445,8 +464,28 @@ const AdminDashboard = () => {
               {stats?.top_products && stats.top_products.length > 0 && (
                 <Card className="bg-white border-slate-200/60 shadow-sm" data-testid="top-products-card">
                   <CardHeader className="px-4 md:px-6">
-                    <CardTitle className="text-sm md:text-base font-bold text-slate-900">Top Selling Today</CardTitle>
-                    <CardDescription className="text-xs text-slate-400">Best performers this business day</CardDescription>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <CardTitle className="text-sm md:text-base font-bold text-slate-900">Top Selling Today</CardTitle>
+                        <CardDescription className="text-xs text-slate-400">Best performers this business day</CardDescription>
+                      </div>
+                      <div className="flex bg-slate-100 rounded-lg p-0.5" data-testid="top-sort-toggle">
+                        <button
+                          onClick={() => setTopSortBy('revenue')}
+                          className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-colors ${topSortBy === 'revenue' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}
+                          data-testid="sort-by-revenue"
+                        >
+                          Revenue
+                        </button>
+                        <button
+                          onClick={() => setTopSortBy('quantity')}
+                          className={`px-2.5 py-1 rounded-md text-[10px] font-semibold transition-colors ${topSortBy === 'quantity' ? 'bg-white text-slate-800 shadow-sm' : 'text-slate-400'}`}
+                          data-testid="sort-by-quantity"
+                        >
+                          Qty Sold
+                        </button>
+                      </div>
+                    </div>
                   </CardHeader>
                   <CardContent className="px-4 md:px-6">
                     <div className="space-y-2">
@@ -657,6 +696,56 @@ const AdminDashboard = () => {
                               </div>
                             );
                           })}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Leave Requests — staff requesting time off */}
+                  {pendingLeaves.length > 0 && (
+                    <Card className="mb-4 md:mb-6 bg-white border-blue-200/60 shadow-sm" data-testid="wf-leave-requests">
+                      <CardHeader className="px-4 md:px-6 py-3 md:pb-2">
+                        <CardTitle className="text-xs md:text-base font-bold text-blue-800 flex items-center gap-2">
+                          <CalendarClock className="w-4 h-4 text-blue-600" />
+                          Leave Requests
+                          <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-700">{pendingLeaves.length}</span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-4 md:px-6 pb-4">
+                        <div className="space-y-2">
+                          {pendingLeaves.map((lr) => (
+                            <div key={lr.id} className="p-3 rounded-lg border border-blue-200/60 bg-blue-50/30" data-testid={`leave-req-${lr.id}`}>
+                              <div className="flex items-start justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="text-sm font-semibold text-slate-800">{lr.staff_name || 'Staff'}</div>
+                                  <div className="text-xs text-slate-500 mt-0.5">
+                                    {lr.start_date === lr.end_date ? lr.start_date : `${lr.start_date} → ${lr.end_date}`}
+                                    <span className="ml-1 capitalize">({lr.leave_type?.replace('_', ' ')})</span>
+                                  </div>
+                                  <div className="text-xs text-blue-600 font-medium mt-1">{lr.days} day{lr.days > 1 ? 's' : ''}</div>
+                                  {lr.note && <div className="text-xs text-slate-400 mt-0.5">"{lr.note}"</div>}
+                                </div>
+                                <div className="flex gap-1.5 shrink-0">
+                                  <button
+                                    onClick={() => handleLeaveAction(lr.id, 'approve')}
+                                    disabled={leaveActionId === lr.id}
+                                    className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-colors disabled:opacity-50"
+                                    data-testid={`approve-leave-${lr.id}`}
+                                  >
+                                    {leaveActionId === lr.id ? '...' : 'Approve'}
+                                  </button>
+                                  <button
+                                    onClick={() => handleLeaveAction(lr.id, 'decline')}
+                                    disabled={leaveActionId === lr.id}
+                                    className="px-2 py-1.5 rounded-lg bg-slate-200 hover:bg-red-100 text-slate-600 hover:text-red-600 text-xs font-bold transition-colors disabled:opacity-50"
+                                    data-testid={`decline-leave-${lr.id}`}
+                                  >
+                                    <X className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </CardContent>
                     </Card>

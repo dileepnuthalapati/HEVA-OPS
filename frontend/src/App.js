@@ -41,6 +41,7 @@ import StaffShifts from './pages/StaffShifts';
 import StaffClockIn from './pages/StaffClockIn';
 import StaffSwapRequests from './pages/StaffSwapRequests';
 import StaffMyPay from './pages/StaffMyPay';
+import StaffTimeOff from './pages/StaffTimeOff';
 
 // Pages - All Users
 import Login from './pages/Login';
@@ -180,6 +181,7 @@ const AppRoutes = () => {
         <Route path="clock" element={<StaffClockIn />} />
         <Route path="swaps" element={<StaffSwapRequests />} />
         <Route path="pay" element={<StaffMyPay />} />
+        <Route path="time-off" element={<StaffTimeOff />} />
       </Route>
     </Routes>
   );
