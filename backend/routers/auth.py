@@ -53,21 +53,27 @@ async def login(request: Request, credentials: UserLogin):
     if not stored_password or not verify_password(credentials.password, stored_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    # ── Device Binding (Personal Mode only, staff/user role only) ──
+    # ── Device Binding (Personal Mode only, staff/user role only, when enabled) ──
     if credentials.device_id and user.get("role") not in ["admin", "platform_owner"]:
-        bound_device = user.get("bound_device_id")
-        if bound_device and bound_device != credentials.device_id:
-            # Hard block: device mismatch
-            raise HTTPException(
-                status_code=403,
-                detail="device_blocked:Security: This account is linked to another device. Please contact your manager to authorize this phone."
-            )
-        elif not bound_device:
-            # First login: bind this device
-            await db.users.update_one(
-                {"username": user["username"]},
-                {"$set": {"bound_device_id": credentials.device_id, "device_bound_at": datetime.now(timezone.utc).isoformat()}}
-            )
+        # Check if device binding is enabled for this restaurant
+        restaurant_id = user.get("restaurant_id")
+        device_binding_enabled = False
+        if restaurant_id:
+            rest = await db.restaurants.find_one({"id": restaurant_id}, {"_id": 0, "security_settings": 1})
+            device_binding_enabled = rest.get("security_settings", {}).get("device_binding_enabled", False) if rest else False
+
+        if device_binding_enabled:
+            bound_device = user.get("bound_device_id")
+            if bound_device and bound_device != credentials.device_id:
+                raise HTTPException(
+                    status_code=403,
+                    detail="device_blocked:Security: This account is linked to another device. Please contact your manager to authorize this phone."
+                )
+            elif not bound_device:
+                await db.users.update_one(
+                    {"username": user["username"]},
+                    {"$set": {"bound_device_id": credentials.device_id, "device_bound_at": datetime.now(timezone.utc).isoformat()}}
+                )
 
     # Get restaurant features for the JWT
     features = {}

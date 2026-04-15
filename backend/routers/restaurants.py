@@ -166,6 +166,7 @@ class SecuritySettingsUpdate(PydanticBaseModel):
     biometric_required: bool = False
     photo_audit_enabled: bool = True
     photo_retention_days: int = 90
+    device_binding_enabled: bool = False
 
 
 @router.get("/restaurants/my/security")
@@ -181,6 +182,7 @@ async def get_security_settings(current_user: User = Depends(get_current_user)):
         "biometric_required": security.get("biometric_required", False),
         "photo_audit_enabled": security.get("photo_audit_enabled", True),
         "photo_retention_days": security.get("photo_retention_days", 90),
+        "device_binding_enabled": security.get("device_binding_enabled", False),
     }
 
 
@@ -197,6 +199,7 @@ async def update_security_settings(data: SecuritySettingsUpdate, current_user: U
             "biometric_required": data.biometric_required,
             "photo_audit_enabled": data.photo_audit_enabled,
             "photo_retention_days": data.photo_retention_days,
+            "device_binding_enabled": data.device_binding_enabled,
         }}}
     )
     return {"message": "Security settings updated", "biometric_required": data.biometric_required}

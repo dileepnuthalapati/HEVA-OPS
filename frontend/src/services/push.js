@@ -34,18 +34,30 @@ async function initCapacitorPush() {
   try {
     const { PushNotifications } = await import('@capacitor/push-notifications');
 
-    // Request permission
-    let permStatus = await PushNotifications.checkPermissions();
-    if (permStatus.receive === 'prompt') {
-      permStatus = await PushNotifications.requestPermissions();
+    // Request permission - wrapped in try/catch to prevent app crash
+    let permStatus;
+    try {
+      permStatus = await PushNotifications.checkPermissions();
+      if (permStatus.receive === 'prompt') {
+        permStatus = await PushNotifications.requestPermissions();
+      }
+    } catch (permErr) {
+      console.warn('[Push] Permission check failed (non-fatal):', permErr.message);
+      return; // Don't crash — just skip push setup
     }
+
     if (permStatus.receive !== 'granted') {
       console.warn('[Push] Permission denied');
       return;
     }
 
-    // Register with native push service
-    await PushNotifications.register();
+    // Register with native push service - also wrapped
+    try {
+      await PushNotifications.register();
+    } catch (regErr) {
+      console.warn('[Push] Registration failed (non-fatal):', regErr.message);
+      return;
+    }
 
     // Listen for token
     PushNotifications.addListener('registration', async (token) => {
@@ -65,7 +77,6 @@ async function initCapacitorPush() {
     // Foreground notification
     PushNotifications.addListener('pushNotificationReceived', (notification) => {
       console.log('[Push] Received:', notification.title);
-      // The in-app notification bell will pick this up from the API
     });
 
     // Notification tap (app opened from notification)
