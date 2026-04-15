@@ -68,7 +68,7 @@ const RestaurantSettings = () => {
   const [showPinFields, setShowPinFields] = useState({ password: false, pin: false, confirm: false });
 
   // Security Settings
-  const [securitySettings, setSecuritySettings] = useState({ biometric_required: false, photo_audit_enabled: true, photo_retention_days: 90 });
+  const [securitySettings, setSecuritySettings] = useState({ biometric_required: false, photo_audit_enabled: true, photo_retention_days: 90, device_binding_enabled: false });
   const [securitySaving, setSecuritySaving] = useState(false);
 
   // Geolocation for lat/lng
@@ -646,16 +646,16 @@ const RestaurantSettings = () => {
                 ) : (
                   <div className="space-y-3">
                     {staffList.map((member) => (
-                      <div key={member.id} data-testid={`staff-row-${member.id}`} className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/30 transition-colors">
-                        <div className="flex items-center gap-3 min-w-0">
-                          <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
-                            <span className="text-sm font-bold text-primary">{member.username?.charAt(0).toUpperCase()}</span>
+                      <div key={member.id} data-testid={`staff-row-${member.id}`} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 border rounded-lg hover:bg-muted/30 transition-colors gap-2 sm:gap-3">
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                            <span className="text-xs sm:text-sm font-bold text-primary">{member.username?.charAt(0).toUpperCase()}</span>
                           </div>
-                          <div className="min-w-0">
-                            <div className="font-semibold truncate">{member.username}</div>
+                          <div className="min-w-0 flex-1">
+                            <div className="text-sm font-semibold truncate" data-testid={`staff-name-${member.id}`}>{member.username}</div>
                             <div className="text-xs text-muted-foreground truncate">{member.email || ''}</div>
                             <div className="flex flex-wrap items-center gap-1 mt-1">
-                              <span className={`px-2 py-0.5 rounded-full text-xs ${member.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] ${member.role === 'admin' ? 'bg-blue-100 text-blue-700' : 'bg-slate-100 text-slate-600'}`}>
                                 {member.role === 'admin' ? 'Admin' : 'Staff'}
                               </span>
                               {(member.capabilities || []).map(cap => (
@@ -666,7 +666,7 @@ const RestaurantSettings = () => {
                             </div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
+                        <div className="flex items-center gap-1.5 shrink-0 ml-12 sm:ml-0">
                           <Button size="sm" variant={member.has_pos_pin ? "default" : "outline"} data-testid={`set-pin-${member.id}`} onClick={() => member.has_pos_pin ? handleRemovePin(member) : (setPinDialog({ open: true, staff: member }), setPinValue(''))} title={member.has_pos_pin ? "Remove POS PIN" : "Set POS PIN"} className={`h-8 px-2 gap-1 text-xs ${member.has_pos_pin ? 'bg-emerald-600 hover:bg-red-500 text-white' : ''}`}>
                             <Hash className="w-3.5 h-3.5" />
                             {member.has_pos_pin ? 'PIN' : ''}
@@ -805,13 +805,21 @@ const RestaurantSettings = () => {
                     />
                   </div>
 
-                  {/* Device Binding Info */}
-                  <div className="flex items-center gap-3 p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
-                    <ShieldOff className="w-6 h-6 text-indigo-600 shrink-0" />
-                    <div>
-                      <p className="text-sm font-semibold text-indigo-800">Device Binding: Active</p>
-                      <p className="text-xs text-indigo-600 mt-0.5">Each staff account is locked to one phone. Use the shield icon in User Management to reset if a staff member changes phone.</p>
+                  {/* Device Binding Toggle */}
+                  <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <ShieldOff className="w-6 h-6 text-orange-600 shrink-0" />
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">Device Binding (One Phone = One Account)</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Lock each staff account to a single phone. Use the shield icon in User Management to reset if needed.</p>
+                      </div>
                     </div>
+                    <Switch
+                      checked={securitySettings.device_binding_enabled}
+                      onCheckedChange={(v) => handleSaveSecuritySettings({ device_binding_enabled: v })}
+                      disabled={securitySaving}
+                      data-testid="device-binding-toggle"
+                    />
                   </div>
                 </CardContent>
               </Card>
