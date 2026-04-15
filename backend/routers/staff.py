@@ -20,6 +20,9 @@ async def list_restaurant_staff(current_user: User = Depends(require_admin)):
 
 @router.post("/restaurant/staff")
 async def create_restaurant_staff(staff: StaffCreate, current_user: User = Depends(require_admin)):
+    # Validate: no spaces in username
+    if " " in staff.username:
+        raise HTTPException(status_code=400, detail="Username cannot contain spaces")
     existing = await db.users.find_one({"username": staff.username})
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")

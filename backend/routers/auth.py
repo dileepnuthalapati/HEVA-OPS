@@ -12,6 +12,9 @@ router = APIRouter()
 @router.post("/auth/register", response_model=User)
 @limiter.limit("5/minute")
 async def register(request: Request, user_data: UserCreate):
+    # Validate: no spaces in username
+    if " " in user_data.username:
+        raise HTTPException(status_code=400, detail="Username cannot contain spaces")
     existing = await db.users.find_one({"username": user_data.username})
     if existing:
         raise HTTPException(status_code=400, detail="Username already exists")

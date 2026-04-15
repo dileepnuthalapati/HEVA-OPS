@@ -38,11 +38,11 @@
   "seed_data_creation": "Created test staff members during testing (test_monthly_*, test_update_*, test_onboard_*) - all cleaned up after tests",
   "retest_needed": false,
   "should_main_agent_self_test": false,
-  "context_for_next_testing_agent": "Iteration 37 verified all 4 pre-launch fixes: (1) Onboarding link in RestaurantSettings.js uses process.env.REACT_APP_BACKEND_URL - verified URL shows https://revenue-dash-33.preview.emergentagent.com/onboarding/... not localhost. (2) Staff management has pay_type dropdown (hourly/monthly) and shows Hourly Rate or Monthly Salary field based on selection - backend stores and returns these fields correctly. (3) Geofencing is strictly enforced: POST /api/attendance/clock returns HTTP 403 with distance message when coordinates are far from business location (tested with lat=0, lng=0), returns 400 when location missing for mobile_app, but succeeds for pos_terminal without location. (4) My Pay page at /heva-ops/pay shows staff name, position, pay type, week/month hours and pay, and recent clock records with Terminal/Mobile badges.",
+  "context_for_next_testing_agent": "Iteration 37 verified all 4 pre-launch fixes: (1) Onboarding link in RestaurantSettings.js uses process.env.REACT_APP_BACKEND_URL - verified URL shows https://heva-one-preview.preview.emergentagent.com/onboarding/... not localhost. (2) Staff management has pay_type dropdown (hourly/monthly) and shows Hourly Rate or Monthly Salary field based on selection - backend stores and returns these fields correctly. (3) Geofencing is strictly enforced: POST /api/attendance/clock returns HTTP 403 with distance message when coordinates are far from business location (tested with lat=0, lng=0), returns 400 when location missing for mobile_app, but succeeds for pos_terminal without location. (4) My Pay page at /heva-ops/pay shows staff name, position, pay type, week/month hours and pay, and recent clock records with Terminal/Mobile badges.",
   "features_verified": {
     "onboarding_link_not_localhost": {
       "status": "VERIFIED",
-      "evidence": "Created staff, onboarding link dialog showed https://revenue-dash-33.preview.emergentagent.com/onboarding/... NOT localhost"
+      "evidence": "Created staff, onboarding link dialog showed https://heva-one-preview.preview.emergentagent.com/onboarding/... NOT localhost"
     },
     "pay_type_dropdown_in_staff_form": {
       "status": "VERIFIED",

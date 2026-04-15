@@ -104,7 +104,7 @@ const Login = () => {
                 placeholder="you@company.com"
                 required
                 autoComplete="email"
-                className="h-12 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 text-base"
+                className="h-12 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus-visible:bg-slate-800/80 text-base"
               />
             </div>
             <div>
@@ -118,7 +118,7 @@ const Login = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter password"
                   required
-                  className="h-12 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 pr-12 text-base"
+                  className="h-12 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 focus-visible:bg-slate-800/80 pr-12 text-base"
                 />
                 <button
                   type="button"

@@ -6,7 +6,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://revenue-dash-33.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://heva-one-preview.preview.emergentagent.com').rstrip('/')
 
 # Test credentials
 PLATFORM_OWNER = {"username": "platform_owner", "password": "admin123"}

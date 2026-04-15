@@ -171,6 +171,7 @@ const RestaurantSettings = () => {
   const handleStaffSubmit = async (e) => {
     e.preventDefault();
     if (!staffForm.username.trim()) return toast.error('Username is required');
+    if (/\s/.test(staffForm.username)) return toast.error('Username cannot contain spaces');
     if (!staffForm.email.trim()) return toast.error('Email is required');
     if (!editingStaff && !staffForm.password.trim()) return toast.error('Password is required');
     setStaffSaving(true);
@@ -835,7 +836,7 @@ const RestaurantSettings = () => {
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <Label htmlFor="staff-username">Username *</Label>
-                <Input id="staff-username" data-testid="staff-username-input" value={staffForm.username} onChange={(e) => setStaffForm({ ...staffForm, username: e.target.value })} placeholder="e.g., john" required className="h-10" />
+                <Input id="staff-username" data-testid="staff-username-input" value={staffForm.username} onChange={(e) => setStaffForm({ ...staffForm, username: e.target.value.replace(/\s/g, '') })} placeholder="e.g., john" required className="h-10" />
               </div>
               <div className="col-span-2">
                 <Label htmlFor="staff-email">Email *</Label>

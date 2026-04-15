@@ -14,7 +14,7 @@ import os
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 if not BASE_URL:
-    BASE_URL = "https://revenue-dash-33.preview.emergentagent.com"
+    BASE_URL = "https://heva-one-preview.preview.emergentagent.com"
 
 # Test credentials from test_credentials.md
 PLATFORM_OWNER = {"username": "platform_owner", "password": "admin123"}

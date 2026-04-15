@@ -5,4 +5,4 @@ import pytest
 import os
 
 # Set environment variable for tests
-os.environ.setdefault('REACT_APP_BACKEND_URL', 'https://revenue-dash-33.preview.emergentagent.com')
+os.environ.setdefault('REACT_APP_BACKEND_URL', 'https://heva-one-preview.preview.emergentagent.com')
