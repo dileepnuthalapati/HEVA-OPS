@@ -627,44 +627,44 @@ const RestaurantManagement = () => {
           </Dialog>
 
           {/* Stats Overview */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-6 md:mb-8">
             <Card className="metric-card">
-              <CardHeader className="pb-2">
-                <CardDescription className="text-sm font-medium">Total Restaurants</CardDescription>
+              <CardHeader className="pb-1 md:pb-2">
+                <CardDescription className="text-xs md:text-sm font-medium">Total Restaurants</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold">{restaurants.length}</div>
+                <div className="text-2xl md:text-3xl font-bold">{restaurants.length}</div>
               </CardContent>
             </Card>
 
             <Card className="metric-card">
-              <CardHeader className="pb-2">
-                <CardDescription className="text-sm font-medium">Active</CardDescription>
+              <CardHeader className="pb-1 md:pb-2">
+                <CardDescription className="text-xs md:text-sm font-medium">Active</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-emerald-600">
+                <div className="text-2xl md:text-3xl font-bold text-emerald-600">
                   {restaurants.filter(r => r.subscription_status === 'active').length}
                 </div>
               </CardContent>
             </Card>
 
             <Card className="metric-card">
-              <CardHeader className="pb-2">
-                <CardDescription className="text-sm font-medium">On Trial</CardDescription>
+              <CardHeader className="pb-1 md:pb-2">
+                <CardDescription className="text-xs md:text-sm font-medium">On Trial</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-amber-600">
+                <div className="text-2xl md:text-3xl font-bold text-amber-600">
                   {restaurants.filter(r => r.subscription_status === 'trial').length}
                 </div>
               </CardContent>
             </Card>
 
             <Card className="metric-card">
-              <CardHeader className="pb-2">
-                <CardDescription className="text-sm font-medium">Monthly Revenue</CardDescription>
+              <CardHeader className="pb-1 md:pb-2">
+                <CardDescription className="text-xs md:text-sm font-medium">Monthly Revenue</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-bold text-blue-600">
+                <div className="text-2xl md:text-3xl font-bold text-blue-600">
                   £{getTotalRevenue().toFixed(2)}
                 </div>
               </CardContent>
@@ -682,12 +682,12 @@ const RestaurantManagement = () => {
             <div className="space-y-4">
               {restaurants.map((restaurant) => (
                 <Card key={restaurant.id} data-testid={`restaurant-${restaurant.id}`}>
-                  <CardContent className="p-6">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-xl font-bold">{restaurant.business_info?.name || 'Unnamed'}</h3>
-                          <div className={`px-3 py-1 rounded-full text-xs font-semibold ${
+                  <CardContent className="p-4 md:p-6">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <h3 className="text-base md:text-xl font-bold truncate">{restaurant.business_info?.name || 'Unnamed'}</h3>
+                          <div className={`px-2 md:px-3 py-0.5 md:py-1 rounded-full text-[10px] md:text-xs font-semibold shrink-0 ${
                             restaurant.subscription_status === 'active' 
                               ? 'bg-emerald-100 text-emerald-700' 
                               : restaurant.subscription_status === 'trial'
@@ -697,21 +697,21 @@ const RestaurantManagement = () => {
                             {restaurant.subscription_status.toUpperCase()}
                           </div>
                         </div>
-                        <div className="text-sm text-muted-foreground space-y-1">
+                        <div className="text-xs md:text-sm text-muted-foreground space-y-0.5 md:space-y-1">
                           {restaurant.business_info?.address_line1 && (
-                            <div>{restaurant.business_info.address_line1}, {restaurant.business_info.city}</div>
+                            <div className="truncate">{restaurant.business_info.address_line1}, {restaurant.business_info.city}</div>
                           )}
                           {restaurant.business_info?.phone && (
                             <div>Tel: {restaurant.business_info.phone}</div>
                           )}
                           {restaurant.business_info?.email && (
-                            <div>Email: {restaurant.business_info.email}</div>
+                            <div className="truncate">Email: {restaurant.business_info.email}</div>
                           )}
-                          <div className="text-xs pt-1">
+                          <div className="text-[10px] md:text-xs pt-0.5">
                             Created: {new Date(restaurant.created_at).toLocaleDateString()}
                           </div>
                           {restaurant.features && (
-                            <div className="flex flex-wrap gap-1 pt-1.5">
+                            <div className="flex flex-wrap gap-1 pt-1">
                               {restaurant.business_info?.business_type && restaurant.business_info.business_type !== 'restaurant' && (
                                 <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-200 text-slate-600 font-medium capitalize">
                                   {restaurant.business_info.business_type.replace('_', ' ')}
@@ -726,37 +726,41 @@ const RestaurantManagement = () => {
                           )}
                         </div>
                       </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold font-mono text-emerald-600">
-                          {getCurrencySymbol(restaurant.currency)}{restaurant.price.toFixed(2)}
+                      <div className="flex sm:flex-col items-center sm:items-end justify-between sm:justify-start gap-2 sm:gap-1 pt-1 sm:pt-0">
+                        <div className="flex items-baseline gap-1">
+                          <span className="text-xl md:text-2xl font-bold font-mono text-emerald-600">
+                            {getCurrencySymbol(restaurant.currency)}{restaurant.price.toFixed(2)}
+                          </span>
+                          <span className="text-[10px] md:text-xs text-muted-foreground">/mo</span>
                         </div>
-                        <div className="text-xs text-muted-foreground mb-3">per month</div>
-                        <div className="flex gap-2 justify-end">
+                        <div className="flex gap-1.5">
                           <Button 
                             size="sm" 
                             variant="outline"
                             onClick={() => handleEditRestaurant(restaurant)}
                             data-testid={`edit-restaurant-${restaurant.id}`}
+                            className="h-8 text-xs px-2"
                           >
-                            <Edit className="w-4 h-4 mr-1" />
+                            <Edit className="w-3.5 h-3.5 mr-1" />
                             Edit
                           </Button>
                           <Button 
                             size="sm" 
                             variant="outline"
                             onClick={() => openUserManagement(restaurant)}
+                            className="h-8 text-xs px-2"
                           >
-                            <Users className="w-4 h-4 mr-1" />
+                            <Users className="w-3.5 h-3.5 mr-1" />
                             Users
                           </Button>
                           <Button 
                             size="sm" 
                             variant="outline"
-                            className="text-red-500 hover:text-red-700 hover:border-red-300"
+                            className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:border-red-300"
                             onClick={() => handleDeleteRestaurant(restaurant)}
                             data-testid={`delete-restaurant-${restaurant.id}`}
                           >
-                            <Trash2 className="w-4 h-4" />
+                            <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         </div>
                       </div>
