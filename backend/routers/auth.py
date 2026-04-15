@@ -5,6 +5,7 @@ from models import User, UserCreate, UserLogin, Token, PasswordChange
 from rate_limiter import limiter
 from pydantic import BaseModel as PydanticBaseModel
 from typing import Optional
+from datetime import datetime, timezone
 
 router = APIRouter()
 
@@ -52,6 +53,22 @@ async def login(request: Request, credentials: UserLogin):
     if not stored_password or not verify_password(credentials.password, stored_password):
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
+    # ── Device Binding (Personal Mode only, staff/user role only) ──
+    if credentials.device_id and user.get("role") not in ["admin", "platform_owner"]:
+        bound_device = user.get("bound_device_id")
+        if bound_device and bound_device != credentials.device_id:
+            # Hard block: device mismatch
+            raise HTTPException(
+                status_code=403,
+                detail="device_blocked:Security: This account is linked to another device. Please contact your manager to authorize this phone."
+            )
+        elif not bound_device:
+            # First login: bind this device
+            await db.users.update_one(
+                {"username": user["username"]},
+                {"$set": {"bound_device_id": credentials.device_id, "device_bound_at": datetime.now(timezone.utc).isoformat()}}
+            )
+
     # Get restaurant features for the JWT
     features = {}
     restaurant_id = user.get("restaurant_id")
@@ -70,6 +87,7 @@ async def login(request: Request, credentials: UserLogin):
         "features": features,
         "capabilities": capabilities,
         "email": user.get("email", ""),
+        "device_bound": bool(user.get("bound_device_id") or credentials.device_id),
     }
 
 
@@ -257,3 +275,28 @@ async def verify_manager_pin(request: Request, data: VerifyManagerPinRequest):
             return {"verified": True, "admin_username": admin.get("username")}
 
     raise HTTPException(status_code=401, detail="Invalid Manager PIN")
+
+
+
+# ── Device Binding Management ──
+
+@router.delete("/auth/reset-device/{user_id}")
+async def reset_device_binding(user_id: str, current_user: User = Depends(require_admin)):
+    """Manager resets a staff member's device binding so they can log in on a new phone."""
+    user = await db.users.find_one({"id": user_id, "restaurant_id": current_user.restaurant_id})
+    if not user:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"bound_device_id": None, "device_bound_at": None, "device_reset_by": current_user.username, "device_reset_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": f"Device binding reset for {user.get('username')}. They can now log in on any device."}
+
+
+@router.get("/auth/device-status/{user_id}")
+async def get_device_status(user_id: str, current_user: User = Depends(require_admin)):
+    """Check if a staff member has a bound device."""
+    user = await db.users.find_one({"id": user_id, "restaurant_id": current_user.restaurant_id}, {"_id": 0, "bound_device_id": 1, "device_bound_at": 1})
+    if not user:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+    return {"has_bound_device": bool(user.get("bound_device_id")), "bound_at": user.get("device_bound_at")}

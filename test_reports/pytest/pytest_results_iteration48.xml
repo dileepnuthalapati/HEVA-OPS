@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?><testsuites name="pytest tests"><testsuite name="pytest" errors="0" failures="4" skipped="0" tests="14" time="24.846" timestamp="2026-04-15T16:49:26.873319+00:00" hostname="agent-env-2b236eb7-34f5-49d8-add3-0e9c0b785fc0"><testcase classname="backend.tests.test_iteration48_anti_theft.TestDeviceBinding" name="test_staff_first_login_binds_device" time="1.205" /><testcase classname="backend.tests.test_iteration48_anti_theft.TestDeviceBinding" name="test_staff_login_same_device_succeeds" time="1.326" /><testcase classname="backend.tests.test_iteration48_anti_theft.TestDeviceBinding" name="test_staff_login_different_device_blocked" time="1.364" /><testcase classname="backend.tests.test_iteration48_anti_theft.TestDeviceBinding" name="test_admin_login_not_blocked_by_device" time="1.303" /><testcase classname="backend.tests.test_iteration48_anti_theft.TestDeviceBinding" name="test_platform_owner_login_not_blocked_by_device" time="1.381" /><testcase classname="backend.tests.test_iteration48_anti_theft.TestDeviceBinding" name="test_login_without_device_id_works" time="1.034" /><testcase classname="backend.tests.test_iteration48_anti_theft.TestDeviceBindingManagement" name="test_reset_device_binding" time="2.306" /><testcase classname="backend.tests.test_iteration48_anti_theft.TestDeviceBindingManagement" name="test_get_device_status" time="1.239"><failure message="AssertionError: Could not find staff user&#10;assert None">backend/tests/test_iteration48_anti_theft.py:218: in test_get_device_status
+    assert user_id, "Could not find staff user"
+E   AssertionError: Could not find staff user
+E   assert None</failure></testcase><testcase classname="backend.tests.test_iteration48_anti_theft.TestPhotoCapture" name="test_photo_upload_requires_valid_record" time="0.122" /><testcase classname="backend.tests.test_iteration48_anti_theft.TestPhotoCapture" name="test_clock_endpoint_returns_record_id" time="0.706" /><testcase classname="backend.tests.test_iteration48_anti_theft.TestPhotoCapture" name="test_photo_serve_requires_auth" time="0.117" /><testcase classname="backend.tests.test_iteration48_anti_theft.TestPhotoCapture" name="test_photo_cleanup_endpoint_exists" time="0.115"><failure message="AssertionError: Admin login failed: {&quot;error&quot;:&quot;Rate limit exceeded: 10 per 1 minute&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code">backend/tests/test_iteration48_anti_theft.py:293: in test_photo_cleanup_endpoint_exists
+    token = self.get_admin_token()
+            ^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_iteration48_anti_theft.py:235: in get_admin_token
+    assert resp.status_code == 200, f"Admin login failed: {resp.text}"
+E   AssertionError: Admin login failed: {"error":"Rate limit exceeded: 10 per 1 minute"}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_iteration48_anti_theft.TestAttendanceRecordId" name="test_attendance_records_have_id" time="6.269"><failure message="AssertionError: Admin login failed: {&quot;error&quot;:&quot;Rate limit exceeded: 10 per 1 minute&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code">backend/tests/test_iteration48_anti_theft.py:321: in test_attendance_records_have_id
+    token = self.get_admin_token()
+            ^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_iteration48_anti_theft.py:316: in get_admin_token
+    assert resp.status_code == 200, f"Admin login failed: {resp.text}"
+E   AssertionError: Admin login failed: {"error":"Rate limit exceeded: 10 per 1 minute"}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</failure></testcase><testcase classname="backend.tests.test_iteration48_anti_theft.TestPhotoUploadWithValidRecord" name="test_photo_upload_with_existing_record" time="6.243"><failure message="AssertionError: Admin login failed: {&quot;error&quot;:&quot;Rate limit exceeded: 10 per 1 minute&quot;}&#10;assert 429 == 200&#10; +  where 429 = &lt;Response [429]&gt;.status_code">backend/tests/test_iteration48_anti_theft.py:353: in test_photo_upload_with_existing_record
+    token = self.get_admin_token()
+            ^^^^^^^^^^^^^^^^^^^^^^
+backend/tests/test_iteration48_anti_theft.py:348: in get_admin_token
+    assert resp.status_code == 200, f"Admin login failed: {resp.text}"
+E   AssertionError: Admin login failed: {"error":"Rate limit exceeded: 10 per 1 minute"}
+E   assert 429 == 200
+E    +  where 429 = &lt;Response [429]&gt;.status_code</failure></testcase></testsuite></testsuites>

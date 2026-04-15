@@ -1,4 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Header
+from fastapi.responses import Response
 from database import db
 from dependencies import verify_password, get_current_user, require_admin, require_feature
 from models import User
@@ -6,6 +7,11 @@ from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
 from typing import Optional
 import math
+import logging
+import base64
+from io import BytesIO
+
+logger = logging.getLogger("attendance")
 
 router = APIRouter()
 
@@ -154,6 +160,7 @@ async def clock_in_out(data: ClockRequest):
             "action": "clock_out",
             "staff_name": matched_user.get("username"),
             "staff_id": staff_id,
+            "record_id": open_record["id"],
             "clock_out": now.isoformat(),
             "hours_worked": round(hours_worked, 2),
             "entry_source": data.entry_source,
@@ -185,6 +192,7 @@ async def clock_in_out(data: ClockRequest):
             "action": "clock_in",
             "staff_name": matched_user.get("username"),
             "staff_id": staff_id,
+            "record_id": record["id"],
             "clock_in": now.isoformat(),
             "entry_source": data.entry_source,
             "message": "Clocked in. Have a great shift!",
@@ -636,3 +644,74 @@ async def reject_adjustment(record_id: str, current_user: User = Depends(require
             "created_at": now.isoformat(),
         })
     return {"message": "Adjustment rejected. Staff will be asked to re-submit."}
+
+
+
+# ── Photo Audit: Upload & Serve ──
+
+class PhotoUploadRequest(BaseModel):
+    record_id: str
+    photo_base64: str  # Base64-encoded JPEG
+
+
+@router.post("/attendance/photo")
+async def upload_attendance_photo(data: PhotoUploadRequest):
+    """Upload a clock-in/out photo proof. Called async after PIN clock event."""
+    record = await db.attendance.find_one({"id": data.record_id}, {"_id": 0})
+    if not record:
+        raise HTTPException(status_code=404, detail="Attendance record not found")
+
+    try:
+        # Decode base64 photo
+        photo_bytes = base64.b64decode(data.photo_base64)
+        if len(photo_bytes) > 500_000:  # 500KB max
+            raise HTTPException(status_code=400, detail="Photo too large (max 500KB)")
+
+        from services.storage import upload_photo
+        storage_path = upload_photo(photo_bytes, record["staff_id"], "clock")
+
+        # Update attendance record with photo path
+        await db.attendance.update_one(
+            {"id": data.record_id},
+            {"$set": {"photo_proof_path": storage_path, "photo_uploaded_at": datetime.now(timezone.utc).isoformat()}}
+        )
+        return {"message": "Photo uploaded", "path": storage_path}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Photo upload failed for {data.record_id}: {e}")
+        raise HTTPException(status_code=500, detail="Photo upload failed")
+
+
+@router.get("/attendance/photo/{path:path}")
+async def serve_attendance_photo(path: str, auth: str = Query(None), authorization: str = Header(None)):
+    """Serve a clock-in/out photo. Supports query param auth for <img> tags."""
+    # Basic auth check - either header or query param
+    auth_header = authorization or (f"Bearer {auth}" if auth else None)
+    if not auth_header:
+        raise HTTPException(status_code=401, detail="Authentication required")
+
+    try:
+        from services.storage import get_object
+        data, content_type = get_object(path)
+        return Response(content=data, media_type=content_type)
+    except Exception as e:
+        logger.error(f"Photo serve failed for {path}: {e}")
+        raise HTTPException(status_code=404, detail="Photo not found")
+
+
+# ── Photo Retention Cleanup ──
+
+@router.delete("/attendance/photos/cleanup")
+async def cleanup_old_photos(days: int = 90, current_user: User = Depends(require_admin)):
+    """Soft-delete attendance photos older than specified days."""
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    result = await db.attendance.update_many(
+        {
+            "restaurant_id": current_user.restaurant_id,
+            "photo_proof_path": {"$exists": True, "$ne": None},
+            "photo_uploaded_at": {"$lt": cutoff},
+        },
+        {"$set": {"photo_proof_path": None, "photo_cleaned_at": datetime.now(timezone.utc).isoformat()}}
+    )
+    return {"message": f"Cleaned {result.modified_count} photo references older than {days} days"}

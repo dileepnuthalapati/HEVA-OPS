@@ -124,6 +124,13 @@ logger = logging.getLogger(__name__)
 async def startup_event():
     from indexes import ensure_indexes
     await ensure_indexes()
+    # Initialize object storage for photo audit
+    try:
+        from services.storage import init_storage
+        init_storage()
+    except Exception as e:
+        import logging
+        logging.getLogger("startup").warning(f"Object storage init: {e}")
     # Start background task for long shift notifications
     import asyncio
     asyncio.create_task(_long_shift_checker())

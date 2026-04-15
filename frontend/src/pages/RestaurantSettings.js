@@ -9,7 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash, Monitor, Smartphone, MapPin, Loader2 } from 'lucide-react';
+import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash, Monitor, Smartphone, MapPin, Loader2, ShieldOff } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -278,6 +278,16 @@ const RestaurantSettings = () => {
       setResetDialog({ open: false, staff: null });
       setNewPassword('');
     } catch (error) { toast.error('Failed to reset password'); }
+  };
+
+  const handleResetDevice = async (member) => {
+    if (!window.confirm(`Reset device binding for "${member.username}"? They will need to log in again on their phone.`)) return;
+    try {
+      await authAPI.resetDeviceBinding(member.id);
+      toast.success(`Device binding reset for "${member.username}"`);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to reset device');
+    }
   };
 
   const handleChangeOwnPassword = async (e) => {
@@ -639,6 +649,9 @@ const RestaurantSettings = () => {
                           </Button>
                           <Button size="sm" variant="outline" data-testid={`reset-pwd-${member.id}`} onClick={() => { setResetDialog({ open: true, staff: member }); setNewPassword(''); }} title="Reset Password" className="h-8 w-8 p-0">
                             <KeyRound className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button size="sm" variant="outline" data-testid={`reset-device-${member.id}`} onClick={() => handleResetDevice(member)} title="Reset Device Binding" className="h-8 w-8 p-0 text-orange-500 hover:bg-orange-50">
+                            <ShieldOff className="w-3.5 h-3.5" />
                           </Button>
                           <Button size="sm" variant="outline" data-testid={`edit-staff-${member.id}`} onClick={() => openEditStaff(member)} title="Edit" className="h-8 w-8 p-0">
                             <Edit className="w-3.5 h-3.5" />
