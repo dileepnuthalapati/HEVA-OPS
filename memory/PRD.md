@@ -64,8 +64,11 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 35. **Input Visibility & UI Polish (Apr 15, 2026)** — Fixed invisible text in inputs after CSS overhaul (text-slate-900, caret-indigo-600, placeholder:text-slate-400), Login page focus state fix (dark bg preserved on focus), Select/Textarea text colors harmonized, Skeleton loaders added to Dashboard/Scheduler/TimeOff
 36. **Availability Delete + Partial-Day Display (Apr 15, 2026)** — Trash icon on each availability rule for quick deletion, Shift Scheduler shows specific hours (e.g. "Unavail: 09:00 - 13:00") for partial-day unavailability instead of generic "Unavailable"
 37. **Username Space Validation (Apr 15, 2026)** — Frontend auto-strips spaces from username input, backend rejects usernames with spaces (400 error) in both /auth/register and /restaurant/staff endpoints
+38. **Anti-Time Theft Protocol — Phase 1: Photo Audit (Apr 15, 2026)** — Terminal PIN pad silently captures front-camera 320x240 JPEG on clock-in/out, uploads async to Emergent Object Storage, links `photo_proof_path` to attendance record, Manager Timesheet shows "Proof" column with Camera icon + preview dialog, GDPR notice on terminal, 90-day retention cleanup endpoint
+39. **Anti-Time Theft Protocol — Phase 2: Device Binding (Apr 15, 2026)** — Staff accounts bound to one phone (Hard Block), admins/platform_owner exempt, persistent device UUID via localStorage, login from different device returns 403 with user-friendly message, "Reset Device ID" (ShieldOff) button in Settings > User Management per staff, backend reset-device and device-status endpoints
 
 ## Upcoming
+- Phase 3: Biometric Clock-In (FaceID/Fingerprint via Capacitor, native-only)
 - Bulk "Week Off" tool (right-click/quick-action on Shift Scheduler to mark off for entire week)
 - Annual leave balance tracking & year-end report logic
 - iOS App Build Prep (Capacitor config for iOS deployment)
