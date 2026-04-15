@@ -27,6 +27,7 @@ class ClockRequest(BaseModel):
 class ClockMeRequest(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
+    biometric_verified: Optional[bool] = False
 
 
 class ResolveGhostRequest(BaseModel):
@@ -221,6 +222,11 @@ async def clock_me(data: ClockMeRequest, current_user: User = Depends(require_fe
     if restaurant:
         _check_geofence("mobile_app", restaurant.get("business_info", {}), latitude, longitude)
 
+    # Biometric check
+    security = restaurant.get("security_settings", {}) if restaurant else {}
+    if security.get("biometric_required") and not data.biometric_verified:
+        raise HTTPException(status_code=403, detail="Biometric verification required for clock-in/out. Please use FaceID or fingerprint.")
+
     now = datetime.now(timezone.utc)
 
     open_record = await db.attendance.find_one(
@@ -275,6 +281,7 @@ async def clock_me(data: ClockMeRequest, current_user: User = Depends(require_fe
             "entry_source": "mobile_app",
             "clock_in_lat": latitude,
             "clock_in_lng": longitude,
+            "biometric_verified": data.biometric_verified or False,
             "record_type": "shift",
             "is_operational": True,
             "created_at": now.isoformat(),

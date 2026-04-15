@@ -352,6 +352,14 @@ export const restaurantAPI = {
     const response = await api.put(`/restaurants/${restaurantId}/features`, features);
     return response.data;
   },
+  getSecuritySettings: async () => {
+    const response = await api.get('/restaurants/my/security');
+    return response.data;
+  },
+  updateSecuritySettings: async (settings) => {
+    const response = await api.put('/restaurants/my/security', settings);
+    return response.data;
+  },
 };
 
 // Tables API
@@ -606,10 +614,11 @@ export const attendanceAPI = {
     const response = await api.get('/attendance/dashboard-stats');
     return response.data;
   },
-  clockMe: async (latitude, longitude) => {
+  clockMe: async (latitude, longitude, biometricVerified) => {
     const body = {};
     if (latitude != null) body.latitude = latitude;
     if (longitude != null) body.longitude = longitude;
+    if (biometricVerified) body.biometric_verified = true;
     const response = await api.post('/attendance/clock-me', body);
     return response.data;
   },
