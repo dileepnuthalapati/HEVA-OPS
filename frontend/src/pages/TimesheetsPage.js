@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
-import { timesheetAPI, payrollAPI } from '../services/api';
+import { timesheetAPI, payrollAPI, attendanceAPI } from '../services/api';
+import { getAuthToken } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
-import { Receipt, Lock, Unlock, CheckCircle, DollarSign, TrendingUp } from 'lucide-react';
+import { Receipt, Lock, Unlock, CheckCircle, DollarSign, TrendingUp, Camera, X } from 'lucide-react';
+import { Dialog, DialogContent } from '../components/ui/dialog';
 
 function getWeekRange(offset = 0) {
   const now = new Date();
@@ -28,6 +30,8 @@ export default function TimesheetsPage() {
   const [payroll, setPayroll] = useState(null);
   const [efficiency, setEfficiency] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [photoPreview, setPhotoPreview] = useState(null);
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
 
   const { start, end } = getWeekRange(weekOffset);
 
@@ -36,12 +40,14 @@ export default function TimesheetsPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [ts, pr] = await Promise.all([
+      const [ts, pr, att] = await Promise.all([
         timesheetAPI.getSummary(start, end),
         payrollAPI.getReport(start, end),
+        attendanceAPI.getAll(start, end).catch(() => []),
       ]);
       setSummary(ts);
       setPayroll(pr);
+      setAttendanceRecords(att);
 
       if (showPosEfficiency) {
         try {
@@ -55,6 +61,20 @@ export default function TimesheetsPage() {
   }, [start, end, showPosEfficiency]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Get photo records for a staff member
+  const getStaffPhotos = (staffId) => {
+    return attendanceRecords.filter(r => r.staff_id === staffId && r.photo_proof_path);
+  };
+
+  const handleViewPhoto = async (photoPath) => {
+    try {
+      const blobUrl = await attendanceAPI.getPhotoBlob(photoPath);
+      setPhotoPreview(blobUrl);
+    } catch {
+      toast.error('Failed to load photo');
+    }
+  };
 
   const handleApprove = async (staffId) => {
     try {
@@ -145,6 +165,7 @@ export default function TimesheetsPage() {
                   <thead>
                     <tr className="border-b bg-slate-50">
                       <th className="p-3 text-left text-xs font-semibold text-slate-500">Staff</th>
+                      <th className="p-3 text-center text-xs font-semibold text-slate-500 w-12">Proof</th>
                       <th className="p-3 text-left text-xs font-semibold text-slate-500">Position</th>
                       <th className="p-3 text-center text-xs font-semibold text-slate-500">Scheduled</th>
                       <th className="p-3 text-center text-xs font-semibold text-slate-500">Actual</th>
@@ -155,9 +176,25 @@ export default function TimesheetsPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {summary.map(r => (
+                    {summary.map(r => {
+                      const photos = getStaffPhotos(r.staff_id);
+                      return (
                       <tr key={r.staff_id} className="border-b" data-testid={`ts-row-${r.staff_id}`}>
                         <td className="p-3 text-sm font-medium">{r.staff_name}</td>
+                        <td className="p-3 text-center">
+                          {photos.length > 0 ? (
+                            <button
+                              onClick={() => handleViewPhoto(photos[photos.length - 1].photo_proof_path)}
+                              className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-emerald-100 text-emerald-600 hover:bg-emerald-200 transition-colors"
+                              title={`${photos.length} photo(s) this week`}
+                              data-testid={`photo-proof-${r.staff_id}`}
+                            >
+                              <Camera className="w-3.5 h-3.5" />
+                            </button>
+                          ) : (
+                            <span className="text-slate-300 text-xs">--</span>
+                          )}
+                        </td>
                         <td className="p-3 text-sm text-slate-500">{r.position || '-'}</td>
                         <td className="p-3 text-sm text-center font-mono">{r.scheduled_hours}</td>
                         <td className="p-3 text-sm text-center font-mono">{r.actual_hours}</td>
@@ -180,12 +217,23 @@ export default function TimesheetsPage() {
                           )}
                         </td>
                       </tr>
-                    ))}
+                    );
+                    })}
                   </tbody>
                 </table>
               )}
             </CardContent>
           </Card>
+
+          {/* Photo Preview Dialog */}
+          <Dialog open={!!photoPreview} onOpenChange={() => { if (photoPreview) { URL.revokeObjectURL(photoPreview); } setPhotoPreview(null); }}>
+            <DialogContent className="max-w-sm p-2" data-testid="photo-preview-dialog">
+              <div className="relative">
+                <img src={photoPreview} alt="Clock-in proof" className="w-full rounded-xl" />
+                <p className="text-center text-xs text-muted-foreground mt-2">Clock-in/out photo proof</p>
+              </div>
+            </DialogContent>
+          </Dialog>
         </div>
       </div>
     </div>

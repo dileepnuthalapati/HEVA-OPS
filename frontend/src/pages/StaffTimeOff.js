@@ -9,7 +9,8 @@ import { Label } from '../components/ui/label';
 import { Switch } from '../components/ui/switch';
 import { toast } from 'sonner';
 import api from '../services/api';
-import { CalendarDays, Plus, X, Loader2, CheckCircle, Clock, XCircle } from 'lucide-react';
+import { Skeleton } from '../components/ui/skeleton';
+import { CalendarDays, Plus, X, Loader2, CheckCircle, Clock, XCircle, Trash2 } from 'lucide-react';
 
 const LEAVE_TYPES = [
   { value: 'vacation', label: 'Vacation' },
@@ -104,6 +105,17 @@ export default function StaffTimeOff() {
     } finally { setSubmitting(false); }
   };
 
+  const handleDeleteAvailRule = async (idx) => {
+    const updated = availability.filter((_, i) => i !== idx);
+    try {
+      await api.put('/availability/my', { rules: updated });
+      toast.success('Availability rule removed');
+      loadData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to delete');
+    }
+  };
+
   const addAvailRule = () => {
     setAvailRules([...availRules, { day_of_week: 1, unavailable_from: null, unavailable_to: null, reason: '' }]);
   };
@@ -148,7 +160,22 @@ export default function StaffTimeOff() {
         </button>
       </div>
 
-      {loading ? <p className="text-sm text-center py-8 text-muted-foreground">Loading...</p> : (
+      {loading ? (
+        <div className="space-y-3" data-testid="timeoff-skeleton">
+          {[...Array(3)].map((_, i) => (
+            <Card key={i} className="p-3">
+              <div className="flex items-start gap-2.5">
+                <Skeleton className="h-4 w-4 rounded-full mt-0.5" />
+                <div className="flex-1">
+                  <Skeleton className="h-4 w-32 mb-2" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
+                <Skeleton className="h-5 w-16 rounded-full" />
+              </div>
+            </Card>
+          ))}
+        </div>
+      ) : (
         <>
           {tab === 'requests' && (
             <div className="space-y-2">
@@ -213,7 +240,17 @@ export default function StaffTimeOff() {
                               {rule.reason && ` — ${rule.reason}`}
                             </p>
                           </div>
-                          <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">Unavailable</span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 font-medium">Unavailable</span>
+                            <button
+                              onClick={() => handleDeleteAvailRule(i)}
+                              className="text-slate-300 hover:text-red-500 transition-colors p-1 rounded-md hover:bg-red-50"
+                              data-testid={`delete-avail-rule-${i}`}
+                              title="Delete this rule"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </Card>
                     ))}
@@ -277,7 +314,7 @@ export default function StaffTimeOff() {
             {availRules.map((rule, idx) => (
               <div key={idx} className="p-3 border rounded-lg space-y-2" data-testid={`avail-edit-${idx}`}>
                 <div className="flex items-center justify-between">
-                  <select value={rule.day_of_week} onChange={e => updateAvailRule(idx, 'day_of_week', parseInt(e.target.value))} className="text-sm border rounded px-2 py-1">
+                  <select value={rule.day_of_week} onChange={e => updateAvailRule(idx, 'day_of_week', parseInt(e.target.value))} className="text-sm text-slate-900 border rounded-lg px-2 py-1 bg-slate-100/80 focus:ring-2 focus:ring-indigo-500/30 focus:outline-none">
                     {DAYS_OF_WEEK.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
                   </select>
                   <button onClick={() => removeAvailRule(idx)} className="text-slate-400 hover:text-red-500"><X className="w-4 h-4" /></button>

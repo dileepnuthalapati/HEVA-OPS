@@ -154,3 +154,49 @@ async def update_restaurant_features(restaurant_id: str, features: dict, current
 async def list_restaurants(current_user: User = Depends(require_platform_owner)):
     restaurants = await db.restaurants.find({}, {"_id": 0}).to_list(1000)
     return [Restaurant(**r) for r in restaurants]
+
+
+
+# ── Security Settings ──
+
+from pydantic import BaseModel as PydanticBaseModel
+
+
+class SecuritySettingsUpdate(PydanticBaseModel):
+    biometric_required: bool = False
+    photo_audit_enabled: bool = True
+    photo_retention_days: int = 90
+
+
+@router.get("/restaurants/my/security")
+async def get_security_settings(current_user: User = Depends(get_current_user)):
+    """Get restaurant security settings."""
+    if not current_user.restaurant_id:
+        return {"biometric_required": False, "photo_audit_enabled": True, "photo_retention_days": 90}
+    restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0})
+    if not restaurant:
+        return {"biometric_required": False, "photo_audit_enabled": True, "photo_retention_days": 90}
+    security = restaurant.get("security_settings", {})
+    return {
+        "biometric_required": security.get("biometric_required", False),
+        "photo_audit_enabled": security.get("photo_audit_enabled", True),
+        "photo_retention_days": security.get("photo_retention_days", 90),
+    }
+
+
+@router.put("/restaurants/my/security")
+async def update_security_settings(data: SecuritySettingsUpdate, current_user: User = Depends(get_current_user)):
+    """Admin updates restaurant security settings."""
+    if current_user.role not in ["admin", "platform_owner"]:
+        raise HTTPException(status_code=403, detail="Admin access required")
+    if not current_user.restaurant_id:
+        raise HTTPException(status_code=400, detail="No restaurant associated")
+    await db.restaurants.update_one(
+        {"id": current_user.restaurant_id},
+        {"$set": {"security_settings": {
+            "biometric_required": data.biometric_required,
+            "photo_audit_enabled": data.photo_audit_enabled,
+            "photo_retention_days": data.photo_retention_days,
+        }}}
+    )
+    return {"message": "Security settings updated", "biometric_required": data.biometric_required}

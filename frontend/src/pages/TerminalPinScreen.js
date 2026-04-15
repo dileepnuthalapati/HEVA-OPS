@@ -3,10 +3,37 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { authAPI, attendanceAPI } from '../services/api';
 import { toast } from 'sonner';
-import { Settings, CheckCircle, Clock, LogOut, Loader2 } from 'lucide-react';
+import { Settings, CheckCircle, Clock, LogOut, Loader2, Camera } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Button } from '../components/ui/button';
+
+// Silent front-camera capture utility
+async function capturePhoto() {
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: 320, height: 240 }
+    });
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.setAttribute('playsinline', 'true');
+    await video.play();
+    // Wait a moment for the camera to adjust
+    await new Promise(r => setTimeout(r, 300));
+    const canvas = document.createElement('canvas');
+    canvas.width = 320;
+    canvas.height = 240;
+    canvas.getContext('2d').drawImage(video, 0, 0, 320, 240);
+    // Stop camera
+    stream.getTracks().forEach(t => t.stop());
+    // Convert to base64 JPEG (quality 0.6 for small file)
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+    return dataUrl.split(',')[1]; // Return just the base64 part
+  } catch (err) {
+    console.warn('Camera capture failed:', err.message);
+    return null;
+  }
+}
 
 export default function TerminalPinScreen() {
   const navigate = useNavigate();
@@ -49,6 +76,9 @@ export default function TerminalPinScreen() {
     setLoading(true);
     setError('');
 
+    // Capture photo silently BEFORE the clock action (so camera has time)
+    const photoPromise = capturePhoto();
+
     try {
       // First, authenticate via PIN to get user + capabilities
       const response = await pinLogin(enteredPin, restaurantId);
@@ -64,6 +94,17 @@ export default function TerminalPinScreen() {
         try {
           const clockRes = await attendanceAPI.clock(enteredPin, restaurantId, null, null, 'pos_terminal');
           setClockResult(clockRes);
+
+          // Upload photo proof asynchronously (fire-and-forget)
+          const photoBase64 = await photoPromise;
+          if (photoBase64 && clockRes.staff_id) {
+            // Find the attendance record ID from the response or use a convention
+            const recordId = clockRes.record_id || `att_${Date.now() / 1000}`;
+            attendanceAPI.uploadPhoto(recordId, photoBase64).catch(err => {
+              console.warn('Photo upload failed (non-blocking):', err.message);
+            });
+          }
+
           // Auto-reset after 3 seconds
           timerRef.current = setTimeout(resetToKiosk, 3000);
         } catch (clockErr) {
@@ -222,10 +263,16 @@ export default function TerminalPinScreen() {
         </button>
       </div>
 
-      {/* Clock icon hint */}
-      <div className="mt-8 flex items-center gap-2 text-slate-600 text-xs">
-        <Clock className="w-3.5 h-3.5" />
-        <span>Clock in/out & POS access</span>
+      {/* Clock icon hint + GDPR notice */}
+      <div className="mt-8 flex flex-col items-center gap-1.5">
+        <div className="flex items-center gap-2 text-slate-600 text-xs">
+          <Clock className="w-3.5 h-3.5" />
+          <span>Clock in/out & POS access</span>
+        </div>
+        <div className="flex items-center gap-1.5 text-slate-600/50 text-[10px]">
+          <Camera className="w-3 h-3" />
+          <span>Photo captured for payroll security</span>
+        </div>
       </div>
 
       {/* Admin Unregister Dialog */}

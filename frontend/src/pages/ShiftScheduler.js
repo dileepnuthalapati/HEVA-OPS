@@ -11,6 +11,7 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight, Plus, Copy, Send, Trash2, Edit2 } from 'lucide-react';
+import { Skeleton } from '../components/ui/skeleton';
 
 const ALL_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 function getDayLabels(startDay) {
@@ -223,6 +224,23 @@ export default function ShiftScheduler() {
                   </tr>
                 </thead>
                 <tbody>
+                  {loading && (
+                    <>
+                      {[...Array(4)].map((_, i) => (
+                        <tr key={`skel-${i}`} className="border-b">
+                          <td className="p-3">
+                            <Skeleton className="h-4 w-20 mb-1.5" />
+                            <Skeleton className="h-3 w-14" />
+                          </td>
+                          {weekDates.map((d) => (
+                            <td key={d} className="p-1.5">
+                              <Skeleton className="h-10 w-full rounded-lg" />
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </>
+                  )}
                   {staffIds.length === 0 && !loading && (
                     <tr><td colSpan={8} className="p-8 text-center text-muted-foreground text-sm">No staff members found. Add staff in Settings first.</td></tr>
                   )}
@@ -261,7 +279,9 @@ export default function ShiftScheduler() {
                               )}
                               {isSoftBlock && !isHardBlock && !isPendingLeave && (
                                 <div className="text-[9px] text-orange-400 text-center py-0.5 italic" data-testid={`unavail-${sid}-${date}`}>
-                                  {block.reason || 'Unavailable'}
+                                  {block.from && block.to
+                                    ? `Unavail: ${block.from} - ${block.to}`
+                                    : block.reason || 'Unavailable (All Day)'}
                                 </div>
                               )}
                               {dayShifts.map(sh => (

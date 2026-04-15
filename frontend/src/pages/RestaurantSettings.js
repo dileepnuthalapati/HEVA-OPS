@@ -8,8 +8,9 @@ import { Textarea } from '../components/ui/textarea';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Switch } from '../components/ui/switch';
 import { toast } from 'sonner';
-import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash, Monitor, Smartphone, MapPin, Loader2 } from 'lucide-react';
+import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash, Monitor, Smartphone, MapPin, Loader2, ShieldOff, Fingerprint, Camera } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -66,6 +67,10 @@ const RestaurantSettings = () => {
   const [pinSaving, setPinSaving] = useState(false);
   const [showPinFields, setShowPinFields] = useState({ password: false, pin: false, confirm: false });
 
+  // Security Settings
+  const [securitySettings, setSecuritySettings] = useState({ biometric_required: false, photo_audit_enabled: true, photo_retention_days: 90 });
+  const [securitySaving, setSecuritySaving] = useState(false);
+
   // Geolocation for lat/lng
   const [geoLoading, setGeoLoading] = useState(false);
   const handleUseMyLocation = () => {
@@ -87,7 +92,26 @@ const RestaurantSettings = () => {
   useEffect(() => { loadRestaurant(); }, []);
   useEffect(() => { if (activeTab === 'staff') loadStaff(); }, [activeTab]);
   useEffect(() => { if (activeTab === 'stripe') loadStripeStatus(); }, [activeTab]);
-  useEffect(() => { if (activeTab === 'security') loadManagerPinStatus(); }, [activeTab]);
+  useEffect(() => { if (activeTab === 'security') { loadManagerPinStatus(); loadSecuritySettings(); } }, [activeTab]);
+
+  const loadSecuritySettings = async () => {
+    try {
+      const data = await restaurantAPI.getSecuritySettings();
+      setSecuritySettings(data);
+    } catch {}
+  };
+
+  const handleSaveSecuritySettings = async (updates) => {
+    setSecuritySaving(true);
+    try {
+      const newSettings = { ...securitySettings, ...updates };
+      await restaurantAPI.updateSecuritySettings(newSettings);
+      setSecuritySettings(newSettings);
+      toast.success('Security settings updated');
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to update');
+    } finally { setSecuritySaving(false); }
+  };
 
   const loadRestaurant = async () => {
     try {
@@ -171,6 +195,7 @@ const RestaurantSettings = () => {
   const handleStaffSubmit = async (e) => {
     e.preventDefault();
     if (!staffForm.username.trim()) return toast.error('Username is required');
+    if (/\s/.test(staffForm.username)) return toast.error('Username cannot contain spaces');
     if (!staffForm.email.trim()) return toast.error('Email is required');
     if (!editingStaff && !staffForm.password.trim()) return toast.error('Password is required');
     setStaffSaving(true);
@@ -277,6 +302,16 @@ const RestaurantSettings = () => {
       setResetDialog({ open: false, staff: null });
       setNewPassword('');
     } catch (error) { toast.error('Failed to reset password'); }
+  };
+
+  const handleResetDevice = async (member) => {
+    if (!window.confirm(`Reset device binding for "${member.username}"? They will need to log in again on their phone.`)) return;
+    try {
+      await authAPI.resetDeviceBinding(member.id);
+      toast.success(`Device binding reset for "${member.username}"`);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to reset device');
+    }
   };
 
   const handleChangeOwnPassword = async (e) => {
@@ -639,6 +674,9 @@ const RestaurantSettings = () => {
                           <Button size="sm" variant="outline" data-testid={`reset-pwd-${member.id}`} onClick={() => { setResetDialog({ open: true, staff: member }); setNewPassword(''); }} title="Reset Password" className="h-8 w-8 p-0">
                             <KeyRound className="w-3.5 h-3.5" />
                           </Button>
+                          <Button size="sm" variant="outline" data-testid={`reset-device-${member.id}`} onClick={() => handleResetDevice(member)} title="Reset Device Binding" className="h-8 w-8 p-0 text-orange-500 hover:bg-orange-50">
+                            <ShieldOff className="w-3.5 h-3.5" />
+                          </Button>
                           <Button size="sm" variant="outline" data-testid={`edit-staff-${member.id}`} onClick={() => openEditStaff(member)} title="Edit" className="h-8 w-8 p-0">
                             <Edit className="w-3.5 h-3.5" />
                           </Button>
@@ -723,6 +761,58 @@ const RestaurantSettings = () => {
                       </Button>
                     </div>
                   )}
+                </CardContent>
+              </Card>
+
+              {/* Anti-Time Theft Security Card */}
+              <Card data-testid="anti-theft-card">
+                <CardHeader>
+                  <CardTitle className="text-xl font-semibold flex items-center gap-2"><Fingerprint className="w-5 h-5" /> Anti-Time Theft</CardTitle>
+                  <CardDescription>Bulletproof payroll — prevent buddy punching and time fraud</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  {/* Biometric Toggle */}
+                  <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <Fingerprint className="w-6 h-6 text-indigo-600 shrink-0" />
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">Require Biometric for Clock-In</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Staff must use FaceID or fingerprint before clocking in/out on their phone</p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={securitySettings.biometric_required}
+                      onCheckedChange={(v) => handleSaveSecuritySettings({ biometric_required: v })}
+                      disabled={securitySaving}
+                      data-testid="biometric-toggle"
+                    />
+                  </div>
+
+                  {/* Photo Audit Toggle */}
+                  <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div className="flex items-center gap-3">
+                      <Camera className="w-6 h-6 text-emerald-600 shrink-0" />
+                      <div>
+                        <p className="text-sm font-semibold text-slate-800">Terminal Photo Audit</p>
+                        <p className="text-xs text-slate-500 mt-0.5">Capture front-camera photo on every PIN clock-in/out at the terminal</p>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={securitySettings.photo_audit_enabled}
+                      onCheckedChange={(v) => handleSaveSecuritySettings({ photo_audit_enabled: v })}
+                      disabled={securitySaving}
+                      data-testid="photo-audit-toggle"
+                    />
+                  </div>
+
+                  {/* Device Binding Info */}
+                  <div className="flex items-center gap-3 p-4 bg-indigo-50 border border-indigo-200 rounded-xl">
+                    <ShieldOff className="w-6 h-6 text-indigo-600 shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-indigo-800">Device Binding: Active</p>
+                      <p className="text-xs text-indigo-600 mt-0.5">Each staff account is locked to one phone. Use the shield icon in User Management to reset if a staff member changes phone.</p>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
 
@@ -835,7 +925,7 @@ const RestaurantSettings = () => {
             <div className="grid grid-cols-2 gap-3">
               <div className="col-span-2">
                 <Label htmlFor="staff-username">Username *</Label>
-                <Input id="staff-username" data-testid="staff-username-input" value={staffForm.username} onChange={(e) => setStaffForm({ ...staffForm, username: e.target.value })} placeholder="e.g., john" required className="h-10" />
+                <Input id="staff-username" data-testid="staff-username-input" value={staffForm.username} onChange={(e) => setStaffForm({ ...staffForm, username: e.target.value.replace(/\s/g, '') })} placeholder="e.g., john" required className="h-10" />
               </div>
               <div className="col-span-2">
                 <Label htmlFor="staff-email">Email *</Label>

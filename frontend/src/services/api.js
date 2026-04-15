@@ -42,8 +42,10 @@ export const authAPI = {
     const response = await api.post('/auth/register', { username, password, role });
     return response.data;
   },
-  login: async (username, password) => {
-    const response = await api.post('/auth/login', { username, password });
+  login: async (username, password, deviceId) => {
+    const body = { username, password };
+    if (deviceId) body.device_id = deviceId;
+    const response = await api.post('/auth/login', body);
     if (response.data.access_token) {
       setAuthToken(response.data.access_token);
     }
@@ -85,6 +87,14 @@ export const authAPI = {
   },
   verifyManagerPin: async (pin, restaurantId) => {
     const response = await api.post('/auth/verify-manager-pin', { pin, restaurant_id: restaurantId });
+    return response.data;
+  },
+  resetDeviceBinding: async (userId) => {
+    const response = await api.delete(`/auth/reset-device/${userId}`);
+    return response.data;
+  },
+  getDeviceStatus: async (userId) => {
+    const response = await api.get(`/auth/device-status/${userId}`);
     return response.data;
   },
 };
@@ -345,6 +355,14 @@ export const restaurantAPI = {
     const response = await api.put(`/restaurants/${restaurantId}/features`, features);
     return response.data;
   },
+  getSecuritySettings: async () => {
+    const response = await api.get('/restaurants/my/security');
+    return response.data;
+  },
+  updateSecuritySettings: async (settings) => {
+    const response = await api.put('/restaurants/my/security', settings);
+    return response.data;
+  },
 };
 
 // Tables API
@@ -567,6 +585,18 @@ export const attendanceAPI = {
     const response = await api.post('/attendance/clock', body);
     return response.data;
   },
+  uploadPhoto: async (recordId, photoBase64) => {
+    const response = await api.post('/attendance/photo', { record_id: recordId, photo_base64: photoBase64 });
+    return response.data;
+  },
+  getPhotoBlob: async (path) => {
+    const token = getAuthToken();
+    const response = await api.get(`/attendance/photo/${path}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      responseType: 'blob'
+    });
+    return URL.createObjectURL(response.data);
+  },
   getAll: async (startDate, endDate) => {
     const response = await api.get(`/attendance?start_date=${startDate}&end_date=${endDate}`);
     return response.data;
@@ -587,10 +617,11 @@ export const attendanceAPI = {
     const response = await api.get('/attendance/dashboard-stats');
     return response.data;
   },
-  clockMe: async (latitude, longitude) => {
+  clockMe: async (latitude, longitude, biometricVerified) => {
     const body = {};
     if (latitude != null) body.latitude = latitude;
     if (longitude != null) body.longitude = longitude;
+    if (biometricVerified) body.biometric_verified = true;
     const response = await api.post('/attendance/clock-me', body);
     return response.data;
   },

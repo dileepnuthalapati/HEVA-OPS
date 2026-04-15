@@ -1,0 +1,106 @@
+{
+  "summary": "Iteration 47: Bug Fixes Testing - All 4 fixes verified. (1) Input text visibility fixed - white text on dark login page, dark text on light admin pages. (2) Availability delete button working with Trash2 icon. (3) Username space validation - frontend auto-strips, backend rejects with 400. (4) Skeleton loaders present in AdminDashboard, ShiftScheduler, StaffTimeOff. (5) Partial-day time display 'Unavail: 09:00 - 13:00' working in Shift Scheduler.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dashboard", "issues": ["Console warning about chart dimensions (-1x-1) - cosmetic only, charts render correctly"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration47_bug_fixes.py",
+    "/app/test_reports/pytest/pytest_results_iteration47.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "input.jsx: text-slate-900, caret-indigo-600, placeholder:text-slate-400 applied correctly",
+    "select.jsx: text-slate-900 on SelectTrigger and SelectContent",
+    "textarea.jsx: text-slate-900, caret-indigo-600 applied correctly",
+    "Login.js: Lines 107,121 have focus-visible:bg-slate-800/80 + text-white for dark theme inputs",
+    "StaffTimeOff.js: handleDeleteAvailRule() removes rule via PUT /api/availability/my, Trash2 icon visible",
+    "ShiftScheduler.js: Lines 281-285 show partial-day format 'Unavail: {from} - {to}' for soft blocks",
+    "RestaurantSettings.js: Line 839 uses .replace(/\\s/g, '') to auto-strip spaces from username input",
+    "auth.py: Line 16-17 validates username has no spaces, returns 400 if spaces found",
+    "staff.py: Line 24-25 validates username has no spaces, returns 400 if spaces found",
+    "AdminDashboard.js: Skeleton loader with data-testid='dashboard-skeleton' during loading state",
+    "ShiftScheduler.js: Skeleton rows in tbody during loading state",
+    "StaffTimeOff.js: Skeleton loader with data-testid='timeoff-skeleton' during loading state"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration47_bug_fixes.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "admin": {"username": "SKAdmin", "password": "saswata@123", "restaurant_id": "rest_demo_1"},
+    "staff": {"username": "user", "password": "user123"}
+  },
+  "seed_data_creation": "Test availability rules created and cleaned up during testing",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 47 verified all 4 bug fixes: (1) Input text visibility - Login page uses text-white on dark bg, admin pages use text-slate-900 on light bg. (2) Availability delete - Trash2 icon next to each rule, clicking removes via PUT /api/availability/my. (3) Username spaces - Frontend auto-strips via .replace(/\\s/g, ''), backend rejects with 400 'Username cannot contain spaces'. (4) Skeleton loaders - AdminDashboard, ShiftScheduler, StaffTimeOff all have skeleton states during data fetch. (5) Partial-day display - Shift Scheduler shows 'Unavail: 09:00 - 13:00' format for soft blocks with from/to times. Shift Scheduler URL is /workforce/shifts not /shift-scheduler.",
+  "features_verified": {
+    "login_text_visibility": {
+      "status": "VERIFIED",
+      "evidence": "Screenshot shows white text 'testuser' clearly visible on dark slate-800 background, text-white class confirmed in input"
+    },
+    "admin_input_visibility": {
+      "status": "VERIFIED",
+      "evidence": "Settings page inputs show dark text (text-slate-900) on light bg (bg-slate-100/80), all form fields readable"
+    },
+    "username_space_frontend": {
+      "status": "VERIFIED",
+      "evidence": "Typing 'test user with spaces' in staff dialog results in 'testuserwithspaces' - spaces auto-stripped"
+    },
+    "username_space_backend_register": {
+      "status": "VERIFIED",
+      "evidence": "POST /api/auth/register with 'test user' returns 400 'Username cannot contain spaces'"
+    },
+    "username_space_backend_staff": {
+      "status": "VERIFIED",
+      "evidence": "POST /api/restaurant/staff with 'staff with spaces' returns 400 'Username cannot contain spaces'"
+    },
+    "availability_delete_button": {
+      "status": "VERIFIED",
+      "evidence": "Trash2 icon visible next to availability rules, data-testid='delete-avail-rule-{i}' present"
+    },
+    "availability_delete_functionality": {
+      "status": "VERIFIED",
+      "evidence": "Clicking delete removes rule, toast shows 'Availability rule removed', page shows 'No recurring unavailability set'"
+    },
+    "partial_day_display": {
+      "status": "VERIFIED",
+      "evidence": "Shift Scheduler shows 'Unavail: 09:00 - 13:00' for partial-day availability blocks"
+    },
+    "dashboard_skeleton": {
+      "status": "VERIFIED",
+      "evidence": "data-testid='dashboard-skeleton' found during loading state"
+    },
+    "scheduler_skeleton": {
+      "status": "VERIFIED",
+      "evidence": "Skeleton rows visible in shift grid tbody during loading"
+    },
+    "timeoff_skeleton": {
+      "status": "VERIFIED",
+      "evidence": "data-testid='timeoff-skeleton' found during loading state"
+    },
+    "select_text_visibility": {
+      "status": "VERIFIED",
+      "evidence": "SelectTrigger has text-slate-900 class, dropdown content readable"
+    },
+    "textarea_text_visibility": {
+      "status": "VERIFIED",
+      "evidence": "Textarea component has text-slate-900 class in className"
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": true,
+    "mocked_apis_list": ["Firebase push notifications"]
+  }
+}

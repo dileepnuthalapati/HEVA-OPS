@@ -74,7 +74,7 @@
       "pos_order_placement": "PASSED - Added Margherita + Coca-Cola, total £12.49, Place Order works",
       "table_management_loads": "PASSED - 4 tables, stats cards, QR Codes button visible",
       "qr_codes_dialog": "PASSED - Shows 4 QR code cards with Download/Regen buttons",
-      "qr_url_format": "PASSED - URLs: https://revenue-dash-33.preview.emergentagent.com/menu/rest_demo_1/{hash}",
+      "qr_url_format": "PASSED - URLs: https://heva-one-preview.preview.emergentagent.com/menu/rest_demo_1/{hash}",
       "generate_missing_qr_button": "PASSED - Button visible and functional",
       "qr_guest_menu_loads": "PASSED - Pizza Palace Updated, Table 1, categories, products with GBP prices",
       "qr_add_to_cart": "PASSED - Floating cart bar shows '1 item · £9.99'",

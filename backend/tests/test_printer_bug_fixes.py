@@ -21,7 +21,7 @@ import requests
 import os
 import re
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://revenue-dash-33.preview.emergentagent.com')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://heva-one-preview.preview.emergentagent.com')
 
 
 class TestBackendPrinterAPIs:

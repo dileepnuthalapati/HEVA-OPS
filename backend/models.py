@@ -22,6 +22,7 @@ class UserCreate(BaseModel):
 class UserLogin(BaseModel):
     username: str
     password: str
+    device_id: Optional[str] = None
 
 
 class Token(BaseModel):

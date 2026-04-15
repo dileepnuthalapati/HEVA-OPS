@@ -80,9 +80,21 @@ export const AuthProvider = ({ children }) => {
       return { user: demoUser };
     }
     
+    // Generate or retrieve persistent device ID for binding
+    let deviceId = null;
+    const isTerminal = !!localStorage.getItem('heva_terminal');
+    if (!isTerminal) {
+      // Personal mode only: generate a unique device fingerprint
+      deviceId = localStorage.getItem('heva_device_id');
+      if (!deviceId) {
+        deviceId = 'dev_' + crypto.randomUUID();
+        localStorage.setItem('heva_device_id', deviceId);
+      }
+    }
+
     // Try online login first
     try {
-      const response = await authAPI.login(username, password);
+      const response = await authAPI.login(username, password, deviceId);
       const userData = {
         username: response.username,
         role: response.role,
@@ -103,6 +115,12 @@ export const AuthProvider = ({ children }) => {
       } catch {}
       return { user: userData, ...response };
     } catch (error) {
+      // Check for device binding block
+      if (error.response?.status === 403 && error.response?.data?.detail?.startsWith('device_blocked:')) {
+        const msg = error.response.data.detail.replace('device_blocked:', '');
+        error.response.data.detail = msg;
+        throw error;
+      }
       // If offline, try cached credentials
       if (!navigator.onLine) {
         try {

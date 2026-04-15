@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
-import { attendanceAPI } from '../services/api';
+import { attendanceAPI, restaurantAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
-import { LogIn, LogOut, MapPin, Loader2, AlertTriangle, Clock, CheckCircle } from 'lucide-react';
+import { LogIn, LogOut, MapPin, Loader2, AlertTriangle, Clock, CheckCircle, Fingerprint } from 'lucide-react';
+import { isBiometricAvailable, requestBiometric } from '../services/biometric';
 
 export default function StaffClockIn() {
   const { user } = useAuth();
@@ -17,6 +18,26 @@ export default function StaffClockIn() {
   const [resolving, setResolving] = useState(false);
   const [claimedTime, setClaimedTime] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [biometricRequired, setBiometricRequired] = useState(false);
+  const [biometricAvailable, setBiometricAvailable] = useState(false);
+
+  useEffect(() => {
+    const interval = setInterval(() => setCurrentTime(new Date()), 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  useEffect(() => {
+    // Check security settings and biometric availability
+    const init = async () => {
+      try {
+        const security = await restaurantAPI.getSecuritySettings();
+        setBiometricRequired(security.biometric_required);
+      } catch {}
+      const available = await isBiometricAvailable();
+      setBiometricAvailable(available);
+    };
+    init();
+  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => setCurrentTime(new Date()), 1000);
@@ -61,7 +82,19 @@ export default function StaffClockIn() {
         return;
       }
 
-      const res = await attendanceAPI.clockMe(lat, lng);
+      // Biometric check (only on native devices when required)
+      let biometricVerified = false;
+      if (biometricRequired && biometricAvailable) {
+        const passed = await requestBiometric('Verify your identity to clock in/out');
+        if (!passed) {
+          toast.error('Biometric verification cancelled. Clock action requires FaceID or fingerprint.');
+          setLoading(false);
+          return;
+        }
+        biometricVerified = true;
+      }
+
+      const res = await attendanceAPI.clockMe(lat, lng, biometricVerified);
 
       if (res.action === 'ghost_shift_pending') {
         setStatus('ghost_pending');
@@ -199,6 +232,13 @@ export default function StaffClockIn() {
               <MapPin className="w-3.5 h-3.5 inline-block mr-1 -mt-0.5" />
               GPS location will be captured automatically
             </p>
+
+            {biometricRequired && (
+              <div className="flex items-center justify-center gap-1.5 mb-3 text-xs text-indigo-600 font-medium" data-testid="biometric-badge">
+                <Fingerprint className="w-3.5 h-3.5" />
+                <span>{biometricAvailable ? 'Biometric required' : 'Biometric required (not available on this device)'}</span>
+              </div>
+            )}
 
             <Button
               onClick={handleClock}
