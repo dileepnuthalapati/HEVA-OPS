@@ -4,6 +4,7 @@ import { useAuth } from '../context/AuthContext';
 import { Calendar, Clock, ArrowRightLeft, LogOut, Wallet, Bell, X, CalendarDays } from 'lucide-react';
 import api from '../services/api';
 import { toast } from 'sonner';
+import PushPromptBanner from '../components/PushPromptBanner';
 
 export default function HevaOpsLayout() {
   const { user, logout } = useAuth();
@@ -109,6 +110,9 @@ export default function HevaOpsLayout() {
           </button>
         </div>
       </header>
+
+      {/* Push Notification Opt-in Banner */}
+      <PushPromptBanner />
 
       {/* Content */}
       <main className="flex-1 overflow-y-auto pb-20">

@@ -165,6 +165,8 @@ export const AuthProvider = ({ children }) => {
     if (lastRestId) {
       localStorage.setItem('last_restaurant_id', lastRestId);
     }
+    // Teardown push listeners
+    import('../services/push').then(m => m.teardownPushNotifications()).catch(() => {});
     setUser(null);
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user');

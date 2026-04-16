@@ -1,108 +1,85 @@
 /**
- * Push Notification Service
- * Works in Capacitor (native) and gracefully degrades in web browsers.
- * Registers device token with the backend on login.
+ * Push Notification Service — Heva One
  * 
- * IMPORTANT: All push operations are heavily wrapped to prevent app crashes.
- * Native push failures (missing google-services.json, etc.) must NEVER crash the app.
+ * Strategy: Push is initialized ONCE via a user-facing prompt banner.
+ * The banner appears in both staff (HevaOps) and admin (Dashboard) views.
+ * 
+ * Native (Capacitor): Uses @capacitor/push-notifications for FCM/APNs
+ * Web browser: Silently skips — uses in-app notification polling instead
  */
 import api from './api';
 
 let pushInitialized = false;
+let pushAvailable = null; // null=unchecked, true/false after check
 
 /**
- * Initialize push notifications.
- * Call this after the user logs in successfully.
- * Uses a delay to ensure the login flow completes before any native push calls.
+ * Check if native push is available (Capacitor + plugin installed)
  */
-export async function initPushNotifications() {
-  if (pushInitialized) return;
-
+export async function isPushAvailable() {
+  if (pushAvailable !== null) return pushAvailable;
   try {
-    const isCapacitor = window.Capacitor?.isNativePlatform?.();
-    if (!isCapacitor) {
-      console.log('[Push] Running in browser. Using in-app notifications only.');
-      pushInitialized = true;
-      return;
+    if (!window.Capacitor?.isNativePlatform()) {
+      pushAvailable = false;
+      return false;
     }
-
-    // Delay push init to prevent crashes from blocking the login flow.
-    // Even if push registration crashes the native layer, the user
-    // will have already seen the dashboard.
-    setTimeout(() => {
-      initCapacitorPush().catch(err => {
-        console.warn('[Push] Init failed (non-fatal):', err?.message || err);
-      });
-    }, 3000);
-
-    pushInitialized = true;
-  } catch (err) {
-    console.warn('[Push] Init failed:', err);
-    pushInitialized = true; // Don't retry endlessly
+    // Check if the plugin is actually registered
+    const plugins = window.Capacitor?.Plugins;
+    if (!plugins?.PushNotifications) {
+      pushAvailable = false;
+      return false;
+    }
+    pushAvailable = true;
+    return true;
+  } catch {
+    pushAvailable = false;
+    return false;
   }
 }
 
-async function initCapacitorPush() {
-  let PushNotifications;
-  try {
-    const mod = await import('@capacitor/push-notifications');
-    PushNotifications = mod.PushNotifications;
-  } catch (importErr) {
-    console.warn('[Push] Plugin not available:', importErr?.message);
-    return;
+/**
+ * Initialize push notifications.
+ * Call this from the notification prompt banner when user opts in.
+ * Returns { success: boolean, message: string }
+ */
+export async function initPushNotifications() {
+  if (pushInitialized) return { success: true, message: 'Already enabled' };
+
+  const available = await isPushAvailable();
+  if (!available) {
+    pushInitialized = true;
+    return { success: false, message: 'Push notifications are not available on this device' };
   }
 
-  // Step 1: Check permission
-  let permStatus;
   try {
-    permStatus = await PushNotifications.checkPermissions();
-  } catch (e) {
-    console.warn('[Push] checkPermissions failed:', e?.message);
-    return;
-  }
+    const { PushNotifications } = await import('@capacitor/push-notifications');
 
-  // Step 2: Request permission if needed
-  if (permStatus.receive === 'prompt') {
-    try {
+    // Check current permission
+    let permStatus = await PushNotifications.checkPermissions();
+
+    // Request if needed
+    if (permStatus.receive === 'prompt') {
       permStatus = await PushNotifications.requestPermissions();
-    } catch (e) {
-      console.warn('[Push] requestPermissions failed:', e?.message);
-      return;
     }
-  }
 
-  if (permStatus.receive !== 'granted') {
-    console.log('[Push] Permission not granted');
-    return;
-  }
+    if (permStatus.receive !== 'granted') {
+      return { success: false, message: 'Notification permission denied' };
+    }
 
-  // Step 3: Register — this is the call most likely to crash natively
-  // if Firebase isn't configured. We wrap it but native crashes bypass JS.
-  try {
+    // Register with platform push service (FCM/APNs)
     await PushNotifications.register();
-  } catch (e) {
-    console.warn('[Push] register() failed:', e?.message);
-    return;
-  }
 
-  // Step 4: Add listeners (safe — these just register JS callbacks)
-  try {
+    // Listen for token
     await PushNotifications.addListener('registration', async (token) => {
-      console.log('[Push] Token received');
       const platform = /iPad|iPhone|iPod/.test(navigator.userAgent) ? 'ios' : 'android';
       try {
         await api.post('/devices/register', { token: token.value, platform });
-      } catch (err) {
-        console.warn('[Push] Backend token save failed:', err?.message);
-      }
+      } catch {}
     });
 
-    await PushNotifications.addListener('registrationError', (err) => {
-      console.warn('[Push] Registration error:', err?.error);
-    });
+    await PushNotifications.addListener('registrationError', () => {});
 
     await PushNotifications.addListener('pushNotificationReceived', (notification) => {
-      console.log('[Push] Foreground:', notification.title);
+      console.log('[Push] Received:', notification.title);
     });
 
     await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
@@ -111,19 +88,30 @@ async function initCapacitorPush() {
         window.location.href = '/heva-ops/clock';
       }
     });
-  } catch (e) {
-    console.warn('[Push] Listener setup failed:', e?.message);
+
+    pushInitialized = true;
+    localStorage.setItem('heva_push_enabled', 'true');
+    return { success: true, message: 'Notifications enabled!' };
+  } catch (err) {
+    console.warn('[Push] Setup failed:', err?.message || err);
+    return { success: false, message: `Setup failed: ${err?.message || 'Unknown error'}. Please check your Firebase configuration.` };
   }
 }
 
 /**
- * Unregister push on logout.
+ * Check if push was previously enabled
+ */
+export function wasPushEnabled() {
+  return localStorage.getItem('heva_push_enabled') === 'true';
+}
+
+/**
+ * Teardown on logout
  */
 export async function teardownPushNotifications() {
   pushInitialized = false;
   try {
-    const isCapacitor = window.Capacitor?.isNativePlatform?.();
-    if (isCapacitor) {
+    if (window.Capacitor?.isNativePlatform() && window.Capacitor?.Plugins?.PushNotifications) {
       const { PushNotifications } = await import('@capacitor/push-notifications');
       await PushNotifications.removeAllListeners();
     }
