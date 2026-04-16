@@ -241,6 +241,10 @@ export const orderAPI = {
     const response = await api.put(`/orders/${orderId}/cancel`, payload);
     return response.data;
   },
+  markPrinted: async (orderId) => {
+    const response = await api.put(`/orders/${orderId}/mark-printed`);
+    return response.data;
+  },
   printKitchenReceipt: async (orderId) => {
     const response = await api.post(`/orders/${orderId}/print-kitchen-receipt`, {}, { responseType: 'blob' });
     return response.data;

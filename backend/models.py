@@ -79,6 +79,7 @@ class OrderItem(BaseModel):
     discount_amount: Optional[float] = 0.0
     discount_type: Optional[str] = None
     discount_value: Optional[float] = None
+    printed_to_kitchen: Optional[bool] = False
 
 
 class Order(BaseModel):
@@ -101,6 +102,7 @@ class Order(BaseModel):
     cancel_reason: Optional[str] = None
     table_id: Optional[str] = None
     table_name: Optional[str] = None
+    order_type: Optional[str] = "dine_in"
     source: Optional[str] = "pos"
     created_at: Optional[str] = None
     completed_at: Optional[str] = None
@@ -117,6 +119,7 @@ class OrderCreate(BaseModel):
     tip_percentage: Optional[float] = 0.0
     total_amount: float
     table_id: Optional[str] = None
+    order_type: Optional[str] = "dine_in"
 
 
 class OrderComplete(BaseModel):

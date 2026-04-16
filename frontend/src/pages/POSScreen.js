@@ -4,7 +4,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '../context/AuthContext';
 import { categoryAPI, productAPI, orderAPI, tableAPI, printerAPI, restaurantAPI, getAuthToken } from '../services/api';
 import printerService from '../services/printer';
-import { generateKitchenReceipt, generateCustomerReceipt } from '../services/receiptGenerator';
+import { generateKitchenReceipt, generateCustomerReceipt, generateDeltaKitchenReceipt } from '../services/receiptGenerator';
 import { connectSocket, disconnectSocket, startSafetyPoll, stopSafetyPoll } from '../services/socket';
 import { saveToIndexedDB, getUnsyncedOrders } from '../services/db';
 import { Button } from '../components/ui/button';
@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Sheet, SheetContent, SheetTitle } from '../components/ui/sheet';
 import { toast } from 'sonner';
-import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, CreditCard, Users, Percent, Tag, MessageSquare, Banknote, Search, PackagePlus, ArrowLeft, Calendar } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, CreditCard, Users, Percent, Tag, MessageSquare, Banknote, Search, PackagePlus, ArrowLeft, Calendar, ShoppingBag, UtensilsCrossed } from 'lucide-react';
 import VoidReasonModal from '../components/VoidReasonModal';
 
 // Currency helper
@@ -35,6 +35,7 @@ const POSScreen = () => {
   const [tables, setTables] = useState([]);
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [selectedTable, setSelectedTable] = useState(null);
+  const [orderType, setOrderType] = useState('takeaway');
   const [cart, setCart] = useState([]);
   const [loading, setLoading] = useState(true);
   const [pendingOrders, setPendingOrders] = useState([]);
@@ -508,18 +509,37 @@ const POSScreen = () => {
         subtotal: subtotal,
         total_amount: subtotal,
         table_id: selectedTable || null,
+        order_type: selectedTable ? 'dine_in' : orderType,
         order_notes: orderNotes || null,
         discount_type: discountType || null,
         discount_value: discountValue ? parseFloat(discountValue) : 0,
         discount_reason: discountReason || null,
       });
       
-      // Order updated - visual feedback via cart clearing
+      // Delta print: only print NEW items to kitchen
+      try {
+        let tableInfo = null;
+        if (selectedTable) {
+          const table = tables.find(t => t.id === selectedTable);
+          if (table) tableInfo = { number: table.number, name: table.name || `Table ${table.number}` };
+        }
+        const businessInfo = restaurantInfo?.business_info || {};
+        const deltaOrder = { ...updatedOrder, items: cart };
+        const commands = generateDeltaKitchenReceipt(deltaOrder, businessInfo, tableInfo);
+        if (commands) {
+          sendToPrinter(commands, 'kitchen-delta').catch(() => {});
+          // Mark items as printed after successful send
+          orderAPI.markPrinted(editingOrder.id).catch(() => {});
+        }
+      } catch (e) {
+        // silently skip print
+      }
       
       // Clear cart and states
       setCart([]);
       setEditingOrder(null);
       setSelectedTable(null);
+      setOrderType('takeaway');
       setOrderNotes('');
       setDiscountType('');
       setDiscountValue('');
@@ -567,6 +587,7 @@ const POSScreen = () => {
         subtotal: subtotal,
         total_amount: subtotal,
         table_id: selectedTable || null,
+        order_type: selectedTable ? 'dine_in' : orderType,
         order_notes: orderNotes || null,
         discount_type: discountType || null,
         discount_value: discountValue ? parseFloat(discountValue) : 0,
@@ -583,6 +604,8 @@ const POSScreen = () => {
         const businessInfo = restaurantInfo?.business_info || {};
         const commands = generateKitchenReceipt(order, businessInfo, tableInfo);
         sendToPrinter(commands, 'kitchen-auto').catch(() => {}); // fire-and-forget
+        // Mark all items as printed
+        orderAPI.markPrinted(order.id).catch(() => {});
       } catch (e) {
         // silently skip
       }
@@ -1220,17 +1243,31 @@ const POSScreen = () => {
               </div>
             </div>
 
-            {/* Table Selection */}
+            {/* Order Type & Table Selection */}
             <div className="px-4 py-2 border-b border-slate-100">
-              <Select value={selectedTable || "no-table"} onValueChange={(v) => setSelectedTable(v === "no-table" ? null : v)}>
+              <Select value={selectedTable || orderType || "takeaway"} onValueChange={(v) => {
+                if (v === "takeaway" || v === "eat_in") {
+                  setSelectedTable(null);
+                  setOrderType(v);
+                } else {
+                  setSelectedTable(v);
+                  setOrderType("dine_in");
+                }
+              }}>
                 <SelectTrigger data-testid="table-selector" className="w-full h-9 text-sm rounded-xl border-slate-200 bg-slate-50">
-                  <SelectValue placeholder="Select table (optional)" />
+                  <SelectValue placeholder="Select order type" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="no-table">
+                  <SelectItem value="takeaway">
                     <div className="flex items-center gap-2">
-                      <Users className="w-4 h-4 text-muted-foreground" />
+                      <ShoppingBag className="w-4 h-4 text-orange-500" />
                       Takeaway
+                    </div>
+                  </SelectItem>
+                  <SelectItem value="eat_in">
+                    <div className="flex items-center gap-2">
+                      <UtensilsCrossed className="w-4 h-4 text-emerald-500" />
+                      Eat In
                     </div>
                   </SelectItem>
                   {tables.filter(t => t.status === 'available' || t.status === 'occupied').map((table) => (

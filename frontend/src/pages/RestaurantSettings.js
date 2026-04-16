@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 import { toast } from 'sonner';
-import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash, Monitor, Smartphone, MapPin, Loader2, ShieldOff, Fingerprint, Camera, Bell, Mail } from 'lucide-react';
+import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash, Monitor, Smartphone, MapPin, Loader2, ShieldOff, Fingerprint, Camera, Bell, Mail, Printer } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -68,7 +68,7 @@ const RestaurantSettings = () => {
   const [showPinFields, setShowPinFields] = useState({ password: false, pin: false, confirm: false });
 
   // Security Settings
-  const [securitySettings, setSecuritySettings] = useState({ biometric_required: false, photo_audit_enabled: true, photo_retention_days: 90, device_binding_enabled: false });
+  const [securitySettings, setSecuritySettings] = useState({ biometric_required: false, photo_audit_enabled: true, photo_retention_days: 90, device_binding_enabled: false, print_kitchen_slip: true, print_customer_receipt: true, use_kds_skip_print: false });
   const [securitySaving, setSecuritySaving] = useState(false);
 
   // Geolocation for lat/lng
@@ -879,6 +879,52 @@ const RestaurantSettings = () => {
                     >
                       Enable
                     </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Print Settings Card */}
+              <Card data-testid="print-settings-card">
+                <CardHeader>
+                  <CardTitle className="text-xl font-semibold flex items-center gap-2"><Printer className="w-5 h-5" /> Print Settings</CardTitle>
+                  <CardDescription>Control what prints and when — for single-printer and KDS setups</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">Print Kitchen Slip</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Auto-print to kitchen when order is placed or updated</p>
+                    </div>
+                    <Switch
+                      checked={securitySettings.print_kitchen_slip}
+                      onCheckedChange={(v) => handleSaveSecuritySettings({ print_kitchen_slip: v })}
+                      disabled={securitySaving}
+                      data-testid="print-kitchen-toggle"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">Print Customer Receipt</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Auto-print receipt when order is completed/paid</p>
+                    </div>
+                    <Switch
+                      checked={securitySettings.print_customer_receipt}
+                      onCheckedChange={(v) => handleSaveSecuritySettings({ print_customer_receipt: v })}
+                      disabled={securitySaving}
+                      data-testid="print-customer-toggle"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <div>
+                      <p className="text-sm font-semibold text-slate-800">Use KDS (Skip Kitchen Print)</p>
+                      <p className="text-xs text-slate-500 mt-0.5">If using Kitchen Display, skip kitchen slip printing entirely</p>
+                    </div>
+                    <Switch
+                      checked={securitySettings.use_kds_skip_print}
+                      onCheckedChange={(v) => handleSaveSecuritySettings({ use_kds_skip_print: v })}
+                      disabled={securitySaving}
+                      data-testid="use-kds-toggle"
+                    />
                   </div>
                 </CardContent>
               </Card>
