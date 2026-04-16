@@ -555,10 +555,17 @@ async def workforce_dashboard_stats(current_user: User = Depends(require_feature
         {"_id": 0}
     ).to_list(200)
 
-    clocked_in = await db.attendance.find(
+    clocked_in_raw = await db.attendance.find(
         {"restaurant_id": current_user.restaurant_id, "clock_out": None, "is_operational": {"$ne": False}},
         {"_id": 0}
     ).to_list(100)
+
+    # Filter out records for deleted users
+    clocked_in = []
+    for record in clocked_in_raw:
+        user_exists = await db.users.find_one({"id": record.get("staff_id")}, {"_id": 0, "id": 1})
+        if user_exists:
+            clocked_in.append(record)
 
     # Unavailable count (sick leave, dropped shifts today)
     unavailable = await db.attendance.count_documents(
@@ -651,6 +658,36 @@ async def reject_adjustment(record_id: str, current_user: User = Depends(require
             "created_at": now.isoformat(),
         })
     return {"message": "Adjustment rejected. Staff will be asked to re-submit."}
+
+
+# ── Admin: Force-close stale shifts ──
+
+@router.post("/attendance/force-close-stale")
+async def force_close_stale_shifts(current_user: User = Depends(require_admin)):
+    """Admin force-closes any open attendance records for deleted or non-existent users."""
+    now = datetime.now(timezone.utc)
+    open_records = await db.attendance.find(
+        {"restaurant_id": current_user.restaurant_id, "clock_out": None},
+        {"_id": 0}
+    ).to_list(500)
+
+    closed = 0
+    for record in open_records:
+        staff_id = record.get("staff_id")
+        user = await db.users.find_one({"id": staff_id}, {"_id": 0, "id": 1})
+        if not user:
+            await db.attendance.update_one(
+                {"id": record["id"]},
+                {"$set": {
+                    "clock_out": now.isoformat(),
+                    "hours_worked": 0,
+                    "is_operational": False,
+                    "flagged": True,
+                    "flag_reason": "orphan_record_cleaned",
+                }}
+            )
+            closed += 1
+    return {"message": f"Force-closed {closed} stale shift(s) from deleted users", "closed": closed}
 
 
 

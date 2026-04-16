@@ -1,0 +1,101 @@
+{
+  "summary": "Iteration 53: Verified push notification opt-in system and ghost user fix. Push is NOT triggered during login - it's now opt-in via PushPromptBanner component. Staff deletion cascade-closes open attendance records. All backend tests pass (8/8). Frontend login flows verified - no push dialogs appear on login.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration53_push_optin.py",
+    "/app/test_reports/pytest/pytest_results_iteration53.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "push.js: isPushAvailable() correctly checks window.Capacitor.Plugins.PushNotifications before proceeding",
+    "push.js: initPushNotifications() returns {success, message} object as expected",
+    "push.js: wasPushEnabled() checks localStorage for heva_push_enabled",
+    "AuthContext.js: NO initPushNotifications import or call on login - verified via grep",
+    "AuthContext.js line 169: logout() calls teardownPushNotifications via dynamic import",
+    "HevaOpsLayout.js: PushPromptBanner imported (line 7) and rendered after header (line 115)",
+    "AdminDashboard.js: PushPromptBanner imported (line 18) and rendered before loading state (line 253)",
+    "PushPromptBanner.js: Only shows on native Capacitor devices (isPushAvailable check)",
+    "staff.py lines 197-213: delete_staff cascade-closes open attendance with flagged=True, flag_reason='user_deleted'",
+    "attendance.py lines 665-690: force_close_stale_shifts endpoint cleans orphan records",
+    "RestaurantSettings.js lines 827-857: Push Notifications card with Enable button (data-testid='enable-push-btn') exists as fallback"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration53_push_optin.py"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 tests passed)",
+    "frontend": "100% (login flows verified, no push dialogs)"
+  },
+  "test_credentials": {
+    "platform_owner": {"username": "platform_owner", "password": "admin123"},
+    "business_admin": {"username": "SKAdmin", "password": "saswata@123"},
+    "staff_user": {"username": "user", "password": "user123"}
+  },
+  "seed_data_creation": "Created and deleted TEST_cascade_staff_* for cascade delete testing",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 53 verified: (1) Push notification is now opt-in via PushPromptBanner component - NOT auto-triggered on login. (2) PushPromptBanner only shows on native Capacitor devices (not visible in web browser testing). (3) Staff sees banner in HevaOpsLayout, admin in AdminDashboard. (4) Settings > Security still has manual Enable button as fallback. (5) Staff deletion cascade-closes open attendance records with flag_reason='user_deleted'. (6) POST /api/attendance/force-close-stale cleans orphan records. (7) AuthContext logout calls teardownPushNotifications via dynamic import.",
+  "features_verified": {
+    "push_not_triggered_on_login": {
+      "status": "VERIFIED",
+      "evidence": "No initPushNotifications import in AuthContext.js. Staff and admin login tested - no push dialogs appeared."
+    },
+    "push_prompt_banner_in_heva_ops": {
+      "status": "VERIFIED",
+      "evidence": "HevaOpsLayout.js imports PushPromptBanner (line 7) and renders it after header (line 115)"
+    },
+    "push_prompt_banner_in_admin_dashboard": {
+      "status": "VERIFIED",
+      "evidence": "AdminDashboard.js imports PushPromptBanner (line 18) and renders it before loading state (line 253)"
+    },
+    "push_banner_only_on_native": {
+      "status": "VERIFIED",
+      "evidence": "PushPromptBanner uses isPushAvailable() which checks window.Capacitor.Plugins.PushNotifications - returns false on web"
+    },
+    "push_js_is_push_available": {
+      "status": "VERIFIED",
+      "evidence": "push.js line 18: export async function isPushAvailable() checks window.Capacitor.Plugins.PushNotifications"
+    },
+    "push_js_init_returns_object": {
+      "status": "VERIFIED",
+      "evidence": "push.js initPushNotifications() returns {success: boolean, message: string}"
+    },
+    "push_js_was_push_enabled": {
+      "status": "VERIFIED",
+      "evidence": "push.js line 104: wasPushEnabled() checks localStorage for heva_push_enabled"
+    },
+    "auth_context_no_push_init": {
+      "status": "VERIFIED",
+      "evidence": "grep for initPushNotifications in AuthContext.js returns empty - no import or call"
+    },
+    "auth_context_teardown_on_logout": {
+      "status": "VERIFIED",
+      "evidence": "AuthContext.js line 169: import('../services/push').then(m => m.teardownPushNotifications())"
+    },
+    "staff_delete_cascade_attendance": {
+      "status": "VERIFIED",
+      "evidence": "Backend test passed: DELETE /api/restaurant/staff/{id} returns closed_shifts count"
+    },
+    "force_close_stale_endpoint": {
+      "status": "VERIFIED",
+      "evidence": "Backend test passed: POST /api/attendance/force-close-stale returns {message, closed}"
+    },
+    "settings_security_push_card": {
+      "status": "VERIFIED",
+      "evidence": "RestaurantSettings.js lines 827-857: Push Notifications card with data-testid='enable-push-btn'"
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": [],
+    "note": "PushNotifications native plugin is not available in web preview - this is expected behavior, not a mock"
+  }
+}

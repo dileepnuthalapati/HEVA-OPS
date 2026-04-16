@@ -193,5 +193,24 @@ async def delete_staff(user_id: str, current_user: User = Depends(require_admin)
         raise HTTPException(status_code=404, detail="Staff not found")
     if user.get("username") == current_user.username:
         raise HTTPException(status_code=400, detail="Cannot delete yourself")
+
+    # Cascade: close any open attendance records for this user
+    now = datetime.now(timezone.utc)
+    open_records = await db.attendance.find(
+        {"staff_id": user_id, "restaurant_id": current_user.restaurant_id, "clock_out": None}
+    ).to_list(100)
+    if open_records:
+        await db.attendance.update_many(
+            {"staff_id": user_id, "restaurant_id": current_user.restaurant_id, "clock_out": None},
+            {"$set": {
+                "clock_out": now.isoformat(),
+                "hours_worked": 0,
+                "is_operational": False,
+                "flagged": True,
+                "flag_reason": "user_deleted",
+                "deleted_at": now.isoformat(),
+            }}
+        )
+
     await db.users.delete_one({"id": user_id})
-    return {"message": f"Staff '{user.get('username')}' deleted"}
+    return {"message": f"Staff '{user.get('username')}' deleted", "closed_shifts": len(open_records)}

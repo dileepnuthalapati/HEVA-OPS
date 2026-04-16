@@ -15,6 +15,7 @@ import {
   Users, UserCheck, Timer, CalendarClock, CheckCircle, ArrowRightLeft, X
 } from 'lucide-react';
 import { Skeleton } from '../components/ui/skeleton';
+import PushPromptBanner from '../components/PushPromptBanner';
 
 const getCurrencySymbol = (currency) => {
   const symbols = { 'GBP': '\u00a3', 'USD': '$', 'EUR': '\u20ac', 'INR': '\u20b9' };
@@ -247,6 +248,9 @@ const AdminDashboard = () => {
             </div>
             )}
           </div>
+
+          {/* Push Notification Opt-in Banner */}
+          <PushPromptBanner />
 
           {loading ? (
             <div className="space-y-6" data-testid="dashboard-skeleton">

@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 import { toast } from 'sonner';
-import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash, Monitor, Smartphone, MapPin, Loader2, ShieldOff, Fingerprint, Camera } from 'lucide-react';
+import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash, Monitor, Smartphone, MapPin, Loader2, ShieldOff, Fingerprint, Camera, Bell } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -820,6 +820,38 @@ const RestaurantSettings = () => {
                       disabled={securitySaving}
                       data-testid="device-binding-toggle"
                     />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Push Notifications Card */}
+              <Card data-testid="push-notifications-card">
+                <CardHeader>
+                  <CardTitle className="text-xl font-semibold flex items-center gap-2"><Bell className="w-5 h-5" /> Push Notifications</CardTitle>
+                  <CardDescription>Enable native push notifications for shift reminders and alerts</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-3 p-4 bg-slate-50 border border-slate-200 rounded-xl">
+                    <Bell className="w-6 h-6 text-blue-600 shrink-0" />
+                    <div className="flex-1">
+                      <p className="text-sm font-semibold text-slate-800">Enable Notifications</p>
+                      <p className="text-xs text-slate-500 mt-0.5">Get notified about long shifts, swap requests, and schedule changes</p>
+                    </div>
+                    <Button
+                      size="sm"
+                      data-testid="enable-push-btn"
+                      onClick={async () => {
+                        try {
+                          const { initPushNotifications } = await import('../services/push');
+                          await initPushNotifications();
+                          toast.success('Push notifications enabled!');
+                        } catch (err) {
+                          toast.error('Failed to enable notifications. Your device may not support this feature.');
+                        }
+                      }}
+                    >
+                      Enable
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
