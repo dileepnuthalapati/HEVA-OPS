@@ -465,7 +465,7 @@ const RestaurantSettings = () => {
                           {geoLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
                           {geoLoading ? 'Getting location...' : 'Use My Current Location'}
                         </Button>
-                        <p className="text-xs text-muted-foreground mt-1">Open this page on-site to auto-fill your business coordinates. Staff must clock in within 10m of this location.</p>
+                        <p className="text-xs text-muted-foreground mt-1">Open this page on-site to auto-fill your business coordinates. Staff must clock in within the geofence radius below.</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
