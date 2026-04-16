@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 import { toast } from 'sonner';
-import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash, Monitor, Smartphone, MapPin, Loader2, ShieldOff, Fingerprint, Camera, Bell } from 'lucide-react';
+import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash, Monitor, Smartphone, MapPin, Loader2, ShieldOff, Fingerprint, Camera, Bell, Mail } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -316,6 +316,19 @@ const RestaurantSettings = () => {
       toast.success(`Device binding reset for "${member.username}"`);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to reset device');
+    }
+  };
+
+  const handleResendEmail = async (member) => {
+    try {
+      const result = await staffAPI.resendEmail(member.id);
+      if (result.email_status === 'sent') {
+        toast.success(`Welcome email resent to ${member.email}`);
+      } else {
+        toast.error(`Email failed: ${result.error || 'unknown error'}`);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to resend email');
     }
   };
 
@@ -686,6 +699,11 @@ const RestaurantSettings = () => {
                           <Button size="sm" variant="outline" data-testid={`reset-device-${member.id}`} onClick={() => handleResetDevice(member)} title="Reset Device Binding" className="h-8 w-8 p-0 text-orange-500 hover:bg-orange-50">
                             <ShieldOff className="w-3.5 h-3.5" />
                           </Button>
+                          {member.email && !member.onboarding_completed && (
+                            <Button size="sm" variant="outline" data-testid={`resend-email-${member.id}`} onClick={() => handleResendEmail(member)} title="Resend Welcome Email" className="h-8 w-8 p-0 text-blue-500 hover:bg-blue-50">
+                              <Mail className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
                           <Button size="sm" variant="outline" data-testid={`edit-staff-${member.id}`} onClick={() => openEditStaff(member)} title="Edit" className="h-8 w-8 p-0">
                             <Edit className="w-3.5 h-3.5" />
                           </Button>

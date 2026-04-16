@@ -543,6 +543,10 @@ export const staffAPI = {
     const response = await api.delete(`/restaurant/staff/${id}`);
     return response.data;
   },
+  resendEmail: async (id) => {
+    const response = await api.post(`/restaurant/staff/${id}/resend-email`);
+    return response.data;
+  },
 };
 
 // Workforce Module APIs
