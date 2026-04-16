@@ -1,0 +1,75 @@
+{
+  "summary": "Iteration 52: Verified two critical bug fixes - (1) Push notification crash prevention by removing auto-init from login and making it opt-in from Settings > Security, (2) Ghost user prevention by cascade-closing attendance on staff deletion and filtering deleted users from dashboard stats.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration52_bug_fixes.py",
+    "/app/test_reports/pytest/pytest_results_iteration52.xml"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "AuthContext.js line 110: Comment confirms 'Push notifications are opt-in from Settings — not auto-initialized on login'",
+    "AuthContext.js lines 88-91: crypto.randomUUID fallback with try/catch - uses Date.now + Math.random if crypto.randomUUID fails",
+    "RestaurantSettings.js lines 828-857: Push Notifications card with Enable button that dynamically imports push.js",
+    "staff.py lines 197-213: delete_staff cascade-closes open attendance records with flagged=True, flag_reason='user_deleted'",
+    "attendance.py lines 564-568: dashboard-stats filters out deleted users by checking user existence before counting",
+    "attendance.py lines 665-690: force_close_stale_shifts endpoint for admin cleanup of orphan records"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration52_bug_fixes.py"
+  ],
+  "success_rate": {
+    "backend": "100% (8/8 tests passed)",
+    "frontend": "100%"
+  },
+  "test_credentials": {
+    "platform_owner": {"username": "platform_owner", "password": "admin123"},
+    "business_admin": {"username": "SKAdmin", "password": "saswata@123"},
+    "staff_user": {"username": "user", "password": "user123"}
+  },
+  "seed_data_creation": "Created and deleted TEST_temp_staff_* for cascade delete testing",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 52 verified: (1) Push notification init COMPLETELY removed from AuthContext login flow - no initPushNotifications() call. Push is now opt-in only from Settings > Security > Enable button. (2) Staff deletion cascade-closes open attendance records with flag_reason='user_deleted'. (3) Dashboard clocked_in query checks if user still exists before counting. (4) New endpoint POST /api/attendance/force-close-stale for admin cleanup. (5) crypto.randomUUID fallback uses Date.now + Math.random if crypto API unavailable.",
+  "features_verified": {
+    "push_notification_removed_from_login": {
+      "status": "VERIFIED",
+      "evidence": "No 'initPushNotifications' or 'push' references in AuthContext.js. Console logs show no push-related activity on login."
+    },
+    "push_notification_opt_in_settings": {
+      "status": "VERIFIED",
+      "evidence": "Settings > Security tab shows Push Notifications card with Enable button (data-testid='enable-push-btn')"
+    },
+    "crypto_randomUUID_fallback": {
+      "status": "VERIFIED",
+      "evidence": "AuthContext.js lines 88-91: try { crypto.randomUUID() } catch { Date.now() + Math.random() }"
+    },
+    "staff_delete_cascade_attendance": {
+      "status": "VERIFIED",
+      "evidence": "Backend test passed: DELETE /api/restaurant/staff/{id} returns closed_shifts count >= 1"
+    },
+    "dashboard_stats_filters_deleted_users": {
+      "status": "VERIFIED",
+      "evidence": "Backend test passed: GET /api/attendance/dashboard-stats returns clocked_in_count excluding deleted users"
+    },
+    "force_close_stale_endpoint": {
+      "status": "VERIFIED",
+      "evidence": "Backend test passed: POST /api/attendance/force-close-stale returns {message, closed} for orphan records"
+    },
+    "multiple_logins_no_crash": {
+      "status": "VERIFIED",
+      "evidence": "Backend test passed: Admin login, staff login, admin login again - all successful without crash"
+    }
+  },
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

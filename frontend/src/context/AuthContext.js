@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { authAPI } from '../services/api';
-import { initPushNotifications, teardownPushNotifications } from '../services/push';
 
 const AuthContext = createContext();
 
@@ -84,10 +83,13 @@ export const AuthProvider = ({ children }) => {
     let deviceId = null;
     const isTerminal = !!localStorage.getItem('heva_terminal');
     if (!isTerminal) {
-      // Personal mode only: generate a unique device fingerprint
       deviceId = localStorage.getItem('heva_device_id');
       if (!deviceId) {
-        deviceId = 'dev_' + crypto.randomUUID();
+        try {
+          deviceId = 'dev_' + crypto.randomUUID();
+        } catch {
+          deviceId = 'dev_' + Date.now() + '_' + Math.random().toString(36).slice(2);
+        }
         localStorage.setItem('heva_device_id', deviceId);
       }
     }
@@ -105,8 +107,7 @@ export const AuthProvider = ({ children }) => {
       };
       setUser(userData);
       localStorage.setItem('user', JSON.stringify(userData));
-      // Initialize push notifications after login
-      initPushNotifications().catch(() => {});
+      // Push notifications are opt-in from Settings — not auto-initialized on login
       // Cache credentials for offline login
       try {
         const hash = btoa(username + ':' + password);
@@ -160,12 +161,10 @@ export const AuthProvider = ({ children }) => {
   };
 
   const logout = () => {
-    // Preserve restaurant_id for PIN login after logout
     const lastRestId = user?.restaurant_id;
     if (lastRestId) {
       localStorage.setItem('last_restaurant_id', lastRestId);
     }
-    teardownPushNotifications().catch(() => {});
     setUser(null);
     localStorage.removeItem('auth_token');
     localStorage.removeItem('user');
