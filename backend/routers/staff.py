@@ -61,6 +61,7 @@ async def create_restaurant_staff(staff: StaffCreate, current_user: User = Depen
     await db.users.insert_one(user_doc)
 
     # Send welcome email with onboarding link
+    email_status = None
     if staff.email:
         try:
             from services.email import send_email, staff_welcome_html
@@ -70,15 +71,20 @@ async def create_restaurant_staff(staff: StaffCreate, current_user: User = Depen
             base_url = os.environ.get("FRONTEND_URL") or os.environ.get("REACT_APP_BACKEND_URL", "")
             onboarding_url = f"{base_url}/onboarding/{onboarding_token}"
             html = staff_welcome_html(staff.username, biz_name, staff.position or "", onboarding_url)
-            await send_email(staff.email, f"Welcome to {biz_name} — Set up your account", html)
+            email_result = await send_email(staff.email, f"Welcome to {biz_name} — Set up your account", html)
+            email_status = email_result.get("status", "unknown")
+            if email_status == "failed":
+                email_status = f"failed: {email_result.get('error', 'unknown error')}"
         except Exception as e:
             import logging
             logging.getLogger("staff").warning(f"Welcome email failed for {staff.email}: {e}")
+            email_status = f"failed: {str(e)}"
 
     return {
         "message": f"Staff '{staff.username}' created",
         "id": user_doc["id"],
         "onboarding_token": onboarding_token,
+        "email_status": email_status,
     }
 
 

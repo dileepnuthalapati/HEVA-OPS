@@ -30,7 +30,7 @@ const RestaurantSettings = () => {
   const [formData, setFormData] = useState({
     name: '', address_line1: '', address_line2: '', city: '', postcode: '',
     phone: '', email: '', website: '', vat_number: '', receipt_footer: '',
-    latitude: null, longitude: null, week_start_day: 1,
+    latitude: null, longitude: null, week_start_day: 1, geofence_radius: 50,
   });
 
   // Staff state
@@ -226,6 +226,11 @@ const RestaurantSettings = () => {
           });
         }
         toast.success(`Staff "${staffForm.username}" created`);
+        if (result.email_status === 'sent') {
+          toast.success(`Welcome email sent to ${staffForm.email}`);
+        } else if (result.email_status && result.email_status !== 'skipped') {
+          toast.error(`Email issue: ${result.email_status}. You may have hit your daily email quota.`);
+        }
       }
       loadStaff();
     } catch (error) {
@@ -450,6 +455,10 @@ const RestaurantSettings = () => {
                       <div>
                         <Label htmlFor="longitude" className="text-sm font-semibold">Longitude <span className="text-muted-foreground text-xs">(for geofence clock-in)</span></Label>
                         <Input id="longitude" data-testid="longitude-input" type="number" step="any" value={formData.longitude || ''} onChange={(e) => handleChange('longitude', parseFloat(e.target.value) || null)} placeholder="-0.1278" className="h-12" />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="geofence_radius" className="text-sm font-semibold">Geofence Radius <span className="text-muted-foreground text-xs">(meters — recommended 50m)</span></Label>
+                        <Input id="geofence_radius" data-testid="geofence-radius-input" type="number" min="10" max="500" value={formData.geofence_radius || 50} onChange={(e) => handleChange('geofence_radius', parseInt(e.target.value) || 50)} placeholder="50" className="h-12" />
                       </div>
                       <div className="md:col-span-2">
                         <Button type="button" variant="outline" data-testid="use-my-location-btn" onClick={handleUseMyLocation} disabled={geoLoading} className="h-10 gap-2 text-sm">

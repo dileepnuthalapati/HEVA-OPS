@@ -42,7 +42,7 @@ class ApproveAdjustmentRequest(BaseModel):
 
 # ── Constants ──
 
-GEOFENCE_RADIUS_METERS = 10
+DEFAULT_GEOFENCE_RADIUS = 50  # Default 50m — configurable per restaurant
 MAX_SHIFT_HOURS = 14  # Smart buffer: auto-flag after 14 hours
 
 
@@ -66,9 +66,10 @@ def _check_geofence(entry_source, biz_info, latitude, longitude):
         return
     if latitude is None or longitude is None:
         raise HTTPException(status_code=400, detail="Location required for clock in/out. Please enable GPS.")
+    radius = biz_info.get("geofence_radius", DEFAULT_GEOFENCE_RADIUS)
     distance = haversine_distance(biz_lat, biz_lng, latitude, longitude)
-    if distance > GEOFENCE_RADIUS_METERS:
-        raise HTTPException(status_code=403, detail=f"You are {int(distance)}m away. Clock in/out is only allowed within {GEOFENCE_RADIUS_METERS}m.")
+    if distance > radius:
+        raise HTTPException(status_code=403, detail=f"You are {int(distance)}m away. Clock in/out is only allowed within {radius}m.")
 
 
 def _detect_ghost_shift(open_record):
