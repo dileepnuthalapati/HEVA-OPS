@@ -883,51 +883,7 @@ const RestaurantSettings = () => {
                 </CardContent>
               </Card>
 
-              {/* Print Settings Card */}
-              <Card data-testid="print-settings-card">
-                <CardHeader>
-                  <CardTitle className="text-xl font-semibold flex items-center gap-2"><Printer className="w-5 h-5" /> Print Settings</CardTitle>
-                  <CardDescription>Control what prints and when — for single-printer and KDS setups</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">Print Kitchen Slip</p>
-                      <p className="text-xs text-slate-500 mt-0.5">Auto-print to kitchen when order is placed or updated</p>
-                    </div>
-                    <Switch
-                      checked={securitySettings.print_kitchen_slip}
-                      onCheckedChange={(v) => handleSaveSecuritySettings({ print_kitchen_slip: v })}
-                      disabled={securitySaving}
-                      data-testid="print-kitchen-toggle"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">Print Customer Receipt</p>
-                      <p className="text-xs text-slate-500 mt-0.5">Auto-print receipt when order is completed/paid</p>
-                    </div>
-                    <Switch
-                      checked={securitySettings.print_customer_receipt}
-                      onCheckedChange={(v) => handleSaveSecuritySettings({ print_customer_receipt: v })}
-                      disabled={securitySaving}
-                      data-testid="print-customer-toggle"
-                    />
-                  </div>
-                  <div className="flex items-center justify-between p-4 bg-slate-50 border border-slate-200 rounded-xl">
-                    <div>
-                      <p className="text-sm font-semibold text-slate-800">Use KDS (Skip Kitchen Print)</p>
-                      <p className="text-xs text-slate-500 mt-0.5">If using Kitchen Display, skip kitchen slip printing entirely</p>
-                    </div>
-                    <Switch
-                      checked={securitySettings.use_kds_skip_print}
-                      onCheckedChange={(v) => handleSaveSecuritySettings({ use_kds_skip_print: v })}
-                      disabled={securitySaving}
-                      data-testid="use-kds-toggle"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
+              {/* Print settings moved to Printers page */}
 
               {/* Change Password Card */}
               <Card data-testid="change-password-card">
