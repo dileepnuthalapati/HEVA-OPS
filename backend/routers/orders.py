@@ -44,6 +44,7 @@ async def create_order(order_data: OrderCreate, current_user: User = Depends(get
         "created_by": current_user.username,
         "table_id": order_data.table_id,
         "table_name": None,
+        "order_type": order_data.order_type or ("dine_in" if order_data.table_id else "takeaway"),
         "restaurant_id": current_user.restaurant_id,
         "source": "pos",
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -115,6 +116,7 @@ async def update_order(order_id: str, order_data: OrderCreate, current_user: Use
         "tip_percentage": order_data.tip_percentage or 0,
         "total_amount": order_data.total_amount,
         "table_id": order_data.table_id,
+        "order_type": order_data.order_type or existing.get("order_type", "dine_in"),
     }
     await db.orders.update_one({"id": order_id}, {"$set": update_dict})
 
@@ -141,6 +143,20 @@ async def update_order(order_id: str, order_data: OrderCreate, current_user: Use
 
     updated = await db.orders.find_one({"id": order_id}, {"_id": 0})
     return Order(**updated)
+
+
+
+@router.put("/orders/{order_id}/mark-printed")
+async def mark_items_printed(order_id: str, current_user: User = Depends(get_current_user)):
+    """Mark all items in an order as printed_to_kitchen = true."""
+    order = await db.orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    items = order.get("items", [])
+    for item in items:
+        item["printed_to_kitchen"] = True
+    await db.orders.update_one({"id": order_id}, {"$set": {"items": items}})
+    return {"message": "Items marked as printed", "count": len(items)}
 
 
 @router.put("/orders/{order_id}/complete", response_model=Order)

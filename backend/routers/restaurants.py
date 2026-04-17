@@ -167,6 +167,9 @@ class SecuritySettingsUpdate(PydanticBaseModel):
     photo_audit_enabled: bool = True
     photo_retention_days: int = 90
     device_binding_enabled: bool = False
+    print_kitchen_slip: bool = True
+    print_customer_receipt: bool = True
+    use_kds_skip_print: bool = False
 
 
 @router.get("/restaurants/my/security")
@@ -183,6 +186,9 @@ async def get_security_settings(current_user: User = Depends(get_current_user)):
         "photo_audit_enabled": security.get("photo_audit_enabled", True),
         "photo_retention_days": security.get("photo_retention_days", 90),
         "device_binding_enabled": security.get("device_binding_enabled", False),
+        "print_kitchen_slip": security.get("print_kitchen_slip", True),
+        "print_customer_receipt": security.get("print_customer_receipt", True),
+        "use_kds_skip_print": security.get("use_kds_skip_print", False),
     }
 
 
@@ -200,6 +206,9 @@ async def update_security_settings(data: SecuritySettingsUpdate, current_user: U
             "photo_audit_enabled": data.photo_audit_enabled,
             "photo_retention_days": data.photo_retention_days,
             "device_binding_enabled": data.device_binding_enabled,
+            "print_kitchen_slip": data.print_kitchen_slip,
+            "print_customer_receipt": data.print_customer_receipt,
+            "use_kds_skip_print": data.use_kds_skip_print,
         }}}
     )
     return {"message": "Security settings updated", "biometric_required": data.biometric_required}

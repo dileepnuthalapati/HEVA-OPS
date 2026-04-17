@@ -61,6 +61,7 @@ async def create_restaurant_staff(staff: StaffCreate, current_user: User = Depen
     await db.users.insert_one(user_doc)
 
     # Send welcome email with onboarding link
+    email_status = None
     if staff.email:
         try:
             from services.email import send_email, staff_welcome_html
@@ -70,16 +71,51 @@ async def create_restaurant_staff(staff: StaffCreate, current_user: User = Depen
             base_url = os.environ.get("FRONTEND_URL") or os.environ.get("REACT_APP_BACKEND_URL", "")
             onboarding_url = f"{base_url}/onboarding/{onboarding_token}"
             html = staff_welcome_html(staff.username, biz_name, staff.position or "", onboarding_url)
-            await send_email(staff.email, f"Welcome to {biz_name} — Set up your account", html)
+            email_result = await send_email(staff.email, f"Welcome to {biz_name} — Set up your account", html)
+            email_status = email_result.get("status", "unknown")
+            if email_status == "failed":
+                email_status = f"failed: {email_result.get('error', 'unknown error')}"
         except Exception as e:
             import logging
             logging.getLogger("staff").warning(f"Welcome email failed for {staff.email}: {e}")
+            email_status = f"failed: {str(e)}"
 
     return {
         "message": f"Staff '{staff.username}' created",
         "id": user_doc["id"],
         "onboarding_token": onboarding_token,
+        "email_status": email_status,
     }
+
+
+@router.post("/restaurant/staff/{user_id}/resend-email")
+async def resend_welcome_email(user_id: str, current_user: User = Depends(require_admin)):
+    """Admin resends the welcome/onboarding email to a staff member."""
+    user = await db.users.find_one({"id": user_id, "restaurant_id": current_user.restaurant_id}, {"_id": 0})
+    if not user:
+        raise HTTPException(status_code=404, detail="Staff not found")
+    if not user.get("email"):
+        raise HTTPException(status_code=400, detail="Staff has no email address")
+    if user.get("onboarding_completed"):
+        raise HTTPException(status_code=400, detail="Staff already completed onboarding")
+
+    token = user.get("onboarding_token")
+    if not token:
+        token = secrets.token_urlsafe(32)
+        await db.users.update_one({"id": user_id}, {"$set": {"onboarding_token": token}})
+
+    try:
+        from services.email import send_email, staff_welcome_html
+        restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0})
+        biz_name = restaurant.get("business_info", {}).get("name", restaurant.get("name", "")) if restaurant else ""
+        import os
+        base_url = os.environ.get("FRONTEND_URL") or os.environ.get("REACT_APP_BACKEND_URL", "")
+        onboarding_url = f"{base_url}/onboarding/{token}"
+        result = await send_email(user["email"], f"Welcome to {biz_name} — Set up your account", staff_welcome_html(user["username"], biz_name, user.get("position", ""), onboarding_url))
+        return {"message": f"Email resent to {user['email']}", "email_status": result.get("status"), "error": result.get("error")}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Email failed: {str(e)}")
+
 
 
 # --- Public onboarding endpoints (no auth required) ---

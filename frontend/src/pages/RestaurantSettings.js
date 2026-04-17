@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 import { toast } from 'sonner';
-import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash, Monitor, Smartphone, MapPin, Loader2, ShieldOff, Fingerprint, Camera, Bell } from 'lucide-react';
+import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash, Monitor, Smartphone, MapPin, Loader2, ShieldOff, Fingerprint, Camera, Bell, Mail, Printer } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
@@ -30,7 +30,7 @@ const RestaurantSettings = () => {
   const [formData, setFormData] = useState({
     name: '', address_line1: '', address_line2: '', city: '', postcode: '',
     phone: '', email: '', website: '', vat_number: '', receipt_footer: '',
-    latitude: null, longitude: null, week_start_day: 1,
+    latitude: null, longitude: null, week_start_day: 1, geofence_radius: 50,
   });
 
   // Staff state
@@ -68,7 +68,7 @@ const RestaurantSettings = () => {
   const [showPinFields, setShowPinFields] = useState({ password: false, pin: false, confirm: false });
 
   // Security Settings
-  const [securitySettings, setSecuritySettings] = useState({ biometric_required: false, photo_audit_enabled: true, photo_retention_days: 90, device_binding_enabled: false });
+  const [securitySettings, setSecuritySettings] = useState({ biometric_required: false, photo_audit_enabled: true, photo_retention_days: 90, device_binding_enabled: false, print_kitchen_slip: true, print_customer_receipt: true, use_kds_skip_print: false });
   const [securitySaving, setSecuritySaving] = useState(false);
 
   // Geolocation for lat/lng
@@ -226,6 +226,11 @@ const RestaurantSettings = () => {
           });
         }
         toast.success(`Staff "${staffForm.username}" created`);
+        if (result.email_status === 'sent') {
+          toast.success(`Welcome email sent to ${staffForm.email}`);
+        } else if (result.email_status && result.email_status !== 'skipped') {
+          toast.error(`Email issue: ${result.email_status}. You may have hit your daily email quota.`);
+        }
       }
       loadStaff();
     } catch (error) {
@@ -311,6 +316,19 @@ const RestaurantSettings = () => {
       toast.success(`Device binding reset for "${member.username}"`);
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to reset device');
+    }
+  };
+
+  const handleResendEmail = async (member) => {
+    try {
+      const result = await staffAPI.resendEmail(member.id);
+      if (result.email_status === 'sent') {
+        toast.success(`Welcome email resent to ${member.email}`);
+      } else {
+        toast.error(`Email failed: ${result.error || 'unknown error'}`);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to resend email');
     }
   };
 
@@ -451,12 +469,16 @@ const RestaurantSettings = () => {
                         <Label htmlFor="longitude" className="text-sm font-semibold">Longitude <span className="text-muted-foreground text-xs">(for geofence clock-in)</span></Label>
                         <Input id="longitude" data-testid="longitude-input" type="number" step="any" value={formData.longitude || ''} onChange={(e) => handleChange('longitude', parseFloat(e.target.value) || null)} placeholder="-0.1278" className="h-12" />
                       </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="geofence_radius" className="text-sm font-semibold">Geofence Radius <span className="text-muted-foreground text-xs">(meters — recommended 50m)</span></Label>
+                        <Input id="geofence_radius" data-testid="geofence-radius-input" type="number" min="10" max="500" value={formData.geofence_radius || 50} onChange={(e) => handleChange('geofence_radius', parseInt(e.target.value) || 50)} placeholder="50" className="h-12" />
+                      </div>
                       <div className="md:col-span-2">
                         <Button type="button" variant="outline" data-testid="use-my-location-btn" onClick={handleUseMyLocation} disabled={geoLoading} className="h-10 gap-2 text-sm">
                           {geoLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <MapPin className="w-4 h-4" />}
                           {geoLoading ? 'Getting location...' : 'Use My Current Location'}
                         </Button>
-                        <p className="text-xs text-muted-foreground mt-1">Open this page on-site to auto-fill your business coordinates. Staff must clock in within 10m of this location.</p>
+                        <p className="text-xs text-muted-foreground mt-1">Open this page on-site to auto-fill your business coordinates. Staff must clock in within the geofence radius below.</p>
                       </div>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -677,6 +699,11 @@ const RestaurantSettings = () => {
                           <Button size="sm" variant="outline" data-testid={`reset-device-${member.id}`} onClick={() => handleResetDevice(member)} title="Reset Device Binding" className="h-8 w-8 p-0 text-orange-500 hover:bg-orange-50">
                             <ShieldOff className="w-3.5 h-3.5" />
                           </Button>
+                          {member.email && !member.onboarding_completed && (
+                            <Button size="sm" variant="outline" data-testid={`resend-email-${member.id}`} onClick={() => handleResendEmail(member)} title="Resend Welcome Email" className="h-8 w-8 p-0 text-blue-500 hover:bg-blue-50">
+                              <Mail className="w-3.5 h-3.5" />
+                            </Button>
+                          )}
                           <Button size="sm" variant="outline" data-testid={`edit-staff-${member.id}`} onClick={() => openEditStaff(member)} title="Edit" className="h-8 w-8 p-0">
                             <Edit className="w-3.5 h-3.5" />
                           </Button>
@@ -855,6 +882,8 @@ const RestaurantSettings = () => {
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Print settings moved to Printers page */}
 
               {/* Change Password Card */}
               <Card data-testid="change-password-card">

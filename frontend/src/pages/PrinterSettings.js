@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import Sidebar from '../components/Sidebar';
-import { printerAPI, getAuthToken } from '../services/api';
+import { printerAPI, restaurantAPI, getAuthToken } from '../services/api';
 import printerService from '../services/printer';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -32,7 +32,28 @@ const PrinterSettings = () => {
   const [scanProgress, setScanProgress] = useState('');
   const isNativeApp = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
 
-  useEffect(() => { loadPrinters(); }, []);
+  // Print behavior settings
+  const [printSettings, setPrintSettings] = useState({ print_kitchen_slip: true, print_customer_receipt: true });
+  const [printSaving, setPrintSaving] = useState(false);
+
+  useEffect(() => { loadPrinters(); loadPrintSettings(); }, []);
+
+  const loadPrintSettings = async () => {
+    try {
+      const data = await restaurantAPI.getSecuritySettings();
+      setPrintSettings({ print_kitchen_slip: data.print_kitchen_slip !== false, print_customer_receipt: data.print_customer_receipt !== false });
+    } catch {}
+  };
+
+  const handlePrintSettingChange = async (key, value) => {
+    setPrintSaving(true);
+    try {
+      await restaurantAPI.updateSecuritySettings({ ...printSettings, [key]: value });
+      setPrintSettings(prev => ({ ...prev, [key]: value }));
+      toast.success('Print setting updated');
+    } catch { toast.error('Failed to update'); }
+    finally { setPrintSaving(false); }
+  };
 
   const loadPrinters = async () => {
     try { setPrinters(await printerAPI.getAll()); }
@@ -364,6 +385,30 @@ const PrinterSettings = () => {
               </Dialog>
             </div>
           </div>
+
+          {/* Print Behavior Settings */}
+          <Card className="mb-6" data-testid="print-behavior-card">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base font-semibold">Print Behavior</CardTitle>
+              <CardDescription className="text-xs">Control what prints automatically when orders are placed or completed</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                <div>
+                  <p className="text-sm font-medium text-slate-800">Kitchen Slip</p>
+                  <p className="text-[11px] text-slate-500">Auto-print to kitchen when order is placed or updated</p>
+                </div>
+                <Switch checked={printSettings.print_kitchen_slip} onCheckedChange={(v) => handlePrintSettingChange('print_kitchen_slip', v)} disabled={printSaving} data-testid="print-kitchen-toggle" />
+              </div>
+              <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+                <div>
+                  <p className="text-sm font-medium text-slate-800">Customer Receipt</p>
+                  <p className="text-[11px] text-slate-500">Auto-print receipt when order is paid/completed</p>
+                </div>
+                <Switch checked={printSettings.print_customer_receipt} onCheckedChange={(v) => handlePrintSettingChange('print_customer_receipt', v)} disabled={printSaving} data-testid="print-customer-toggle" />
+              </div>
+            </CardContent>
+          </Card>
 
           {/* Printers List */}
           {printers.length === 0 ? (
