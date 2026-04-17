@@ -30,8 +30,6 @@ next-env.d.ts
 dist/
 dist
 
-# Environment files (comprehensive coverage)
-
 *token.json*
 *credentials.json*
 
@@ -78,445 +76,140 @@ agenthub/agents/youtube/db
 
 # Mobile development
 android-sdk/ -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 frontend/node_modules/.cache/default-development/0.pack
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 frontend/node_modules/.cache/default-development/3.pack
 frontend/node_modules/.cache/default-development/3.pack
 frontend/node_modules/.cache/default-development/5.pack
 frontend/node_modules/.cache/default-development/6.pack
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 frontend/node_modules/.cache/default-development/11.pack
 frontend/node_modules/.cache/default-development/11.pack
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 frontend/node_modules/.cache/default-development/14.pack
 -e 
-# Environment files
-*.env
-*.env.*
 frontend/node_modules/.cache/default-development/1.pack
 -e 
-# Environment files
-*.env
-*.env.*
 frontend/node_modules/.cache/default-development/9.pack
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 frontend/node_modules/.cache/default-development/17.pack
 frontend/node_modules/.cache/default-development/4.pack
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 frontend/node_modules/.cache/default-development/16.pack
 frontend/node_modules/.cache/default-development/16.pack
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 frontend/node_modules/.cache/default-development/20.pack
 frontend/node_modules/.cache/default-development/21.pack
 frontend/node_modules/.cache/default-development/21.pack
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 frontend/node_modules/.cache/default-development/12.pack
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 frontend/node_modules/.cache/default-development/25.pack
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 frontend/node_modules/.cache/default-development/2.pack
 frontend/node_modules/.cache/default-development/6.pack_
 frontend/node_modules/.cache/default-development/6.pack_
 frontend/node_modules/.cache/default-development/7.pack
 frontend/node_modules/.cache/default-development/8.pack
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 frontend/node_modules/.cache/default-development/13.pack
 frontend/node_modules/.cache/default-development/13.pack
 frontend/node_modules/.cache/default-development/15.pack
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 frontend/node_modules/.cache/default-development/23.pack
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 frontend/node_modules/.cache/default-development/26.pack
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 frontend/node_modules/.cache/default-development/29.pack
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment files
-*.env
-*.env.*
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
@@ -524,55 +217,31 @@ credentials.json
 frontend/node_modules/.cache/default-development/18.pack
 frontend/node_modules/.cache/default-development/18.pack
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
@@ -582,19 +251,11 @@ frontend/node_modules/.cache/default-development/24.pack
 frontend/node_modules/.cache/default-development/27.pack
 frontend/node_modules/.cache/default-development/28.pack
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
@@ -602,28 +263,16 @@ credentials.json
 frontend/node_modules/.cache/default-development/33.pack
 frontend/node_modules/.cache/default-development/34.pack
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
@@ -631,19 +280,11 @@ credentials.json
 frontend/node_modules/.cache/default-development/36.pack
 frontend/node_modules/.cache/default-development/36.pack
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
@@ -651,19 +292,11 @@ credentials.json
 frontend/node_modules/.cache/default-development/38.pack
 frontend/node_modules/.cache/default-development/38.pack
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
@@ -673,119 +306,67 @@ frontend/node_modules/.cache/default-development/44.pack
 frontend/node_modules/.cache/default-development/44.pack
 frontend/node_modules/.cache/default-development/46.pack
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 frontend/node_modules/.cache/default-development/10.pack
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
 .credentials
 -e 
-# Environment and credential files
-.env
-.env.*
-*.env
 credentials.json
 *.pem
 *.key
