@@ -412,3 +412,12 @@ credentials.json
 # Test files with credentials
 backend/tests/
 RAILWAY_DEPLOYMENT.md
+-e 
+# Environment and credential files
+.env
+.env.*
+*.env
+credentials.json
+*.pem
+*.key
+.credentials
