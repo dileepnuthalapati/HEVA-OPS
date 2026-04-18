@@ -74,6 +74,8 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 
 ## Upcoming
 - Customer Order Board ("Digital Display" on TV via /display/{venue_id} — real-time order status via Socket.io)
+- Weekly pay view for employees (show rate × approved hours = weekly pay)
+- Employee self-service timesheet correction after manager rejection
 - Bulk "Week Off" tool (right-click/quick-action on Shift Scheduler to mark off for entire week)
 - Annual leave balance tracking & year-end report logic
 - iOS App Build Prep (Capacitor config for iOS deployment)
