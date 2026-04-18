@@ -132,7 +132,7 @@ export default function StaffOnboarding() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Min 6 characters"
                   required
-                  className="h-12 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 rounded-xl pr-12"
+                  className="h-12 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 rounded-xl focus-visible:bg-slate-800/80 pr-12"
                   data-testid="onboard-password"
                 />
                 <button type="button" onClick={() => setShowPwd(!showPwd)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300">
@@ -149,7 +149,7 @@ export default function StaffOnboarding() {
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="Re-enter password"
                 required
-                className="h-12 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 rounded-xl"
+                className="h-12 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 rounded-xl focus-visible:bg-slate-800/80"
                 data-testid="onboard-confirm-password"
               />
             </div>
@@ -163,7 +163,7 @@ export default function StaffOnboarding() {
                 value={posPin}
                 onChange={(e) => setPosPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
                 placeholder="e.g. 1234"
-                className="h-12 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 rounded-xl tracking-[0.3em] text-center text-xl font-mono"
+                className="h-12 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-500 rounded-xl focus-visible:bg-slate-800/80 tracking-[0.3em] text-center text-xl font-mono"
                 data-testid="onboard-pin"
               />
               <p className="text-xs text-slate-500 mt-1">Used for quick login on shared terminals</p>

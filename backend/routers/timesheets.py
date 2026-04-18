@@ -143,3 +143,22 @@ async def edit_hours(record_id: str, hours_worked: float, current_user: User = D
         {"$set": {"hours_worked": hours_worked, "manually_edited": True, "edited_by": current_user.username}}
     )
     return {"message": "Hours updated"}
+
+
+
+@router.put("/timesheets/reject")
+async def reject_timesheet(staff_id: str, start_date: str, end_date: str, reason: str = "", current_user: User = Depends(require_admin)):
+    """Manager rejects a timesheet — sends it back to employee for correction."""
+    rest_id = current_user.restaurant_id
+
+    # Mark records as rejected
+    await db.attendance.update_many(
+        {"restaurant_id": rest_id, "staff_id": staff_id, "date": {"$gte": start_date, "$lte": end_date}},
+        {"$set": {"approved": False, "rejected": True, "reject_reason": reason, "rejected_by": current_user.username, "rejected_at": datetime.now(timezone.utc).isoformat()}}
+    )
+
+    # Remove lock if exists
+    lock_id = f"lock_{rest_id}_{staff_id}_{start_date}"
+    await db.timesheet_locks.delete_one({"id": lock_id})
+
+    return {"message": "Timesheet rejected. Employee can now update their records."}

@@ -668,6 +668,10 @@ export const timesheetAPI = {
     const response = await api.put(`/timesheets/edit-hours?record_id=${recordId}&hours_worked=${hoursWorked}`);
     return response.data;
   },
+  reject: async (staffId, startDate, endDate, reason) => {
+    const response = await api.put(`/timesheets/reject?staff_id=${staffId}&start_date=${startDate}&end_date=${endDate}&reason=${encodeURIComponent(reason || '')}`);
+    return response.data;
+  },
 };
 
 export const payrollAPI = {

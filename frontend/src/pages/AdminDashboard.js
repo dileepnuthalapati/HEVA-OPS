@@ -111,7 +111,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     loadAll();
     // Auto-refresh every 60s for live data
-    const interval = setInterval(loadAll, 60000);
+    const interval = setInterval(loadAll, 15000);
     return () => clearInterval(interval);
   }, [loadAll]);
 
