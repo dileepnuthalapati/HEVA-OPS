@@ -513,6 +513,29 @@ async def get_my_hours_summary(current_user: User = Depends(require_feature("wor
         {"_id": 0}
     ).sort("date", -1).to_list(100)
 
+    # Weekly breakdown: each day's hours + status
+    weekly_breakdown = []
+    for i in range(7):
+        d = (datetime.strptime(week_start, "%Y-%m-%d") + timedelta(days=i)).strftime("%Y-%m-%d")
+        day_records = [r for r in week_records if r.get("date") == d]
+        day_hours = sum(r.get("hours_worked", 0) or 0 for r in day_records)
+        rejected = any(r.get("rejected") for r in day_records)
+        approved = all(r.get("approved") for r in day_records) if day_records else False
+        weekly_breakdown.append({
+            "date": d,
+            "day_name": datetime.strptime(d, "%Y-%m-%d").strftime("%a"),
+            "hours": round(day_hours, 1),
+            "sessions": len(day_records),
+            "approved": approved,
+            "rejected": rejected,
+            "reject_reason": next((r.get("reject_reason") for r in day_records if r.get("rejected")), None),
+            "record_ids": [r["id"] for r in day_records],
+        })
+
+    # Check if the whole week is rejected
+    week_rejected = any(d["rejected"] for d in weekly_breakdown)
+    week_approved = all(d["approved"] for d in weekly_breakdown if d["sessions"] > 0)
+
     # Pay calculation
     pay_type = staff.get("pay_type", "hourly")
     hourly_rate = staff.get("hourly_rate", 0) or 0
@@ -541,8 +564,53 @@ async def get_my_hours_summary(current_user: User = Depends(require_feature("wor
         "month_pay": round(month_pay, 2),
         "week_sessions": len(week_records),
         "month_sessions": len(month_records),
+        "week_approved": week_approved,
+        "week_rejected": week_rejected,
+        "weekly_breakdown": weekly_breakdown,
         "recent_records": recent,
     }
+
+
+class EmployeeCorrectionRequest(BaseModel):
+    record_id: str
+    claimed_hours: float
+    notes: Optional[str] = None
+
+
+@router.put("/attendance/my-correction")
+async def employee_correction(data: EmployeeCorrectionRequest, current_user: User = Depends(require_feature("workforce"))):
+    """Employee corrects their hours after manager rejection."""
+    staff = await db.users.find_one({"username": current_user.username}, {"_id": 0, "id": 1})
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff not found")
+
+    record = await db.attendance.find_one(
+        {"id": data.record_id, "staff_id": staff["id"]},
+        {"_id": 0}
+    )
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found")
+    if record.get("approved"):
+        raise HTTPException(status_code=400, detail="Record already approved — cannot edit")
+    if not record.get("rejected"):
+        raise HTTPException(status_code=400, detail="Record was not rejected — no correction needed")
+
+    # Calculate new clock_out based on claimed hours
+    clock_in = datetime.fromisoformat(record["clock_in"])
+    new_clock_out = clock_in + timedelta(hours=data.claimed_hours)
+
+    await db.attendance.update_one(
+        {"id": data.record_id},
+        {"$set": {
+            "clock_out": new_clock_out.isoformat(),
+            "hours_worked": round(data.claimed_hours, 2),
+            "rejected": False,
+            "employee_corrected": True,
+            "correction_notes": data.notes,
+            "corrected_at": datetime.now(timezone.utc).isoformat(),
+        }}
+    )
+    return {"message": f"Hours updated to {data.claimed_hours:.1f}h. Awaiting manager approval."}
 
 
 @router.get("/attendance/dashboard-stats")

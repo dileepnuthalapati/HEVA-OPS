@@ -649,6 +649,10 @@ export const attendanceAPI = {
     const response = await api.get('/attendance/my-summary');
     return response.data;
   },
+  myCorrection: async (recordId, claimedHours, notes) => {
+    const response = await api.put('/attendance/my-correction', { record_id: recordId, claimed_hours: claimedHours, notes });
+    return response.data;
+  },
 };
 
 export const timesheetAPI = {
