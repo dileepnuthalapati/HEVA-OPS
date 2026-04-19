@@ -433,11 +433,12 @@ class ThermalPrinterService {
     const results = [];
     const found = new Set();
 
-    // Priority IPs: common printer address ranges
+    // Priority IPs: common printer address ranges (including common static assignments)
     const priorityIps = [];
     for (let i = 100; i <= 120; i++) priorityIps.push(i);
+    for (let i = 150; i <= 180; i++) priorityIps.push(i);
     for (let i = 200; i <= 220; i++) priorityIps.push(i);
-    [1, 2, 50, 150, 250, 254].forEach(i => { if (!priorityIps.includes(i)) priorityIps.push(i); });
+    [1, 2, 10, 20, 30, 50, 99, 249, 250, 251, 252, 253, 254].forEach(i => { if (!priorityIps.includes(i)) priorityIps.push(i); });
 
     const remaining = [];
     for (let i = 1; i <= 254; i++) {
@@ -466,8 +467,8 @@ class ThermalPrinterService {
     // Phase 1: Priority IPs (common printer addresses)
     await scanBatch(priorityIps, `Checking common printer addresses...`);
 
-    // Phase 2: Remaining IPs in batches of 30 (scanning 3 ports each)
-    const batchSize = 30;
+    // Phase 2: Remaining IPs in batches of 15 (to avoid network flooding)
+    const batchSize = 15;
     for (let i = 0; i < remaining.length; i += batchSize) {
       const batch = remaining.slice(i, i + batchSize);
       await scanBatch(batch, `Scanning ${subnet}.${batch[0]}-${batch[batch.length - 1]}...`);
@@ -493,12 +494,12 @@ class ThermalPrinterService {
     }
   }
 
-  // Probe a single IP with a 2.5 second timeout (covers Ethernet printers on busy networks)
+  // Probe a single IP with a 3 second timeout (covers Ethernet printers on busy networks)
   async _probeWifiPrinter(ip, port) {
     try {
       const connectPromise = TcpSocket.connect({ ipAddress: ip, port: port });
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 2500)
+        setTimeout(() => reject(new Error('timeout')), 3000)
       );
       const result = await Promise.race([connectPromise, timeoutPromise]);
       try { await TcpSocket.disconnect({ client: result.client }); } catch {}

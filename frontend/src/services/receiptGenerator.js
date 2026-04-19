@@ -114,9 +114,18 @@ function getOrderTypeHeader(order, tableInfo) {
 }
 
 /**
+ * Get character width based on paper size.
+ * 58mm ≈ 32 chars, 80mm ≈ 42 chars
+ */
+function getCharWidth(paperWidth) {
+  if (paperWidth === 58) return 32;
+  return 42; // 80mm default
+}
+
+/**
  * Generate ESC/POS Kitchen Receipt (full order)
  */
-export function generateKitchenReceipt(order, businessInfo = {}, tableInfo = null) {
+export function generateKitchenReceipt(order, businessInfo = {}, tableInfo = null, paperWidth = 80) {
   const orderTypeLabel = getOrderTypeHeader(order, tableInfo);
 
   const bytes = buildCommands(
@@ -141,22 +150,21 @@ export function generateKitchenReceipt(order, businessInfo = {}, tableInfo = nul
     `Server: ${order.created_by || 'N/A'}\n`,
     `Time: ${(order.created_at || '').substring(11, 16)}\n`,
     '================================\n',
-    CMD.BOLD_ON,
   );
 
   const itemBytes = [];
   for (const item of (order.items || [])) {
     const qty = item.quantity || 1;
     const name = item.product_name || 'Unknown';
+    // Items: BOLD + DOUBLE WIDTH for kitchen readability
     itemBytes.push(...buildCommands(
-      CMD.DOUBLE_W,
-      `${qty}x `,
-      CMD.NORMAL,
       CMD.BOLD_ON,
-      `${name}\n`,
+      CMD.DOUBLE_W,
+      `${qty}x ${name}\n`,
+      CMD.NORMAL,
     ));
     if (item.notes) {
-      itemBytes.push(...buildCommands(CMD.BOLD_OFF, `  >> ${item.notes}\n`, CMD.BOLD_ON));
+      itemBytes.push(...buildCommands(CMD.BOLD_OFF, `   >> ${item.notes}\n`));
     }
   }
 
@@ -179,9 +187,9 @@ export function generateKitchenReceipt(order, businessInfo = {}, tableInfo = nul
  * Generate Delta Kitchen Receipt (NEW items only — for order updates)
  * Only prints items where printed_to_kitchen !== true
  */
-export function generateDeltaKitchenReceipt(order, businessInfo = {}, tableInfo = null) {
+export function generateDeltaKitchenReceipt(order, businessInfo = {}, tableInfo = null, paperWidth = 80) {
   const newItems = (order.items || []).filter(item => !item.printed_to_kitchen);
-  if (newItems.length === 0) return null; // Nothing new to print
+  if (newItems.length === 0) return null;
 
   const orderTypeLabel = getOrderTypeHeader(order, tableInfo);
 
@@ -206,7 +214,6 @@ export function generateDeltaKitchenReceipt(order, businessInfo = {}, tableInfo 
     `Server: ${order.created_by || 'N/A'}\n`,
     `Time: ${(order.created_at || '').substring(11, 16)}\n`,
     '================================\n',
-    CMD.BOLD_ON,
   );
 
   const itemBytes = [];
@@ -214,14 +221,13 @@ export function generateDeltaKitchenReceipt(order, businessInfo = {}, tableInfo 
     const qty = item.quantity || 1;
     const name = item.product_name || 'Unknown';
     itemBytes.push(...buildCommands(
-      CMD.DOUBLE_W,
-      `${qty}x `,
-      CMD.NORMAL,
       CMD.BOLD_ON,
-      `${name}\n`,
+      CMD.DOUBLE_W,
+      `${qty}x ${name}\n`,
+      CMD.NORMAL,
     ));
     if (item.notes) {
-      itemBytes.push(...buildCommands(CMD.BOLD_OFF, `  >> ${item.notes}\n`, CMD.BOLD_ON));
+      itemBytes.push(...buildCommands(CMD.BOLD_OFF, `   >> ${item.notes}\n`));
     }
   }
 
@@ -241,9 +247,9 @@ export function generateDeltaKitchenReceipt(order, businessInfo = {}, tableInfo 
  * Generate ESC/POS Customer Receipt — with fixed layout for thermal printers
  * Uses monospaced formatting to prevent text overlap.
  */
-export function generateCustomerReceipt(order, businessInfo = {}, tableInfo = null, currency = 'GBP') {
+export function generateCustomerReceipt(order, businessInfo = {}, tableInfo = null, currency = 'GBP', paperWidth = 80) {
   const sym = getCurrencySymbol(currency);
-  const CHAR_WIDTH = 32; // 58mm printer = ~32 chars. 80mm = ~42 chars.
+  const CHAR_WIDTH = getCharWidth(paperWidth);
   const line = '-'.repeat(CHAR_WIDTH);
   const orderTypeLabel = getOrderTypeHeader(order, tableInfo);
 

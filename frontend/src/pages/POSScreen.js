@@ -18,7 +18,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Sheet, SheetContent, SheetTitle } from '../components/ui/sheet';
 import { toast } from 'sonner';
-import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, CreditCard, Users, Percent, Tag, MessageSquare, Banknote, Search, PackagePlus, ArrowLeft, Calendar, ShoppingBag, UtensilsCrossed } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, CreditCard, Users, Percent, Tag, MessageSquare, Banknote, Search, PackagePlus, ArrowLeft, Calendar, ShoppingBag, UtensilsCrossed, Clock } from 'lucide-react';
 import VoidReasonModal from '../components/VoidReasonModal';
 
 // Currency helper
@@ -95,6 +95,7 @@ const POSScreen = () => {
   // Printer status indicator
   const [printerStatus, setPrinterStatus] = useState('unknown'); // 'online', 'offline', 'unknown', 'none'
   const [defaultPrinterName, setDefaultPrinterName] = useState(null);
+  const [defaultPaperWidth, setDefaultPaperWidth] = useState(80);
 
   // Void modal state
   const [voidModal, setVoidModal] = useState({ open: false, orderId: null, orderNumber: null });
@@ -143,6 +144,7 @@ const POSScreen = () => {
         return;
       }
       setDefaultPrinterName(printer.name);
+      setDefaultPaperWidth(printer.paper_width || 80);
       if (printer.type === 'wifi') {
         const parts = printer.address.split(':');
         const ip = parts[0];
@@ -255,7 +257,7 @@ const POSScreen = () => {
         if (table) tableInfo = { number: table.number, name: table.name || `Table ${table.number}` };
       }
       const businessInfo = restaurantInfo?.business_info || {};
-      const commands = generateKitchenReceipt(order, businessInfo, tableInfo);
+      const commands = generateKitchenReceipt(order, businessInfo, tableInfo, defaultPaperWidth);
       await sendToPrinter(commands, 'kitchen-manual');
       toast.success(`Order #${orderNumber} sent to printer`, { id: toastId });
     } catch (err) {
@@ -533,7 +535,7 @@ const POSScreen = () => {
         }
         const businessInfo = restaurantInfo?.business_info || {};
         const deltaOrder = { ...updatedOrder, items: cart };
-        const commands = generateDeltaKitchenReceipt(deltaOrder, businessInfo, tableInfo);
+        const commands = generateDeltaKitchenReceipt(deltaOrder, businessInfo, tableInfo, defaultPaperWidth);
         if (commands && printSettings.print_kitchen_slip) {
           sendToPrinter(commands, 'kitchen-delta').catch(() => {});
           orderAPI.markPrinted(editingOrder.id).catch(() => {});
@@ -609,7 +611,7 @@ const POSScreen = () => {
           if (table) tableInfo = { number: table.number, name: table.name || `Table ${table.number}` };
         }
         const businessInfo = restaurantInfo?.business_info || {};
-        const commands = generateKitchenReceipt(order, businessInfo, tableInfo);
+      const commands = generateKitchenReceipt(order, businessInfo, tableInfo, defaultPaperWidth);
         if (printSettings.print_kitchen_slip) {
           sendToPrinter(commands, 'kitchen-auto').catch(() => {});
         }
@@ -665,7 +667,7 @@ const POSScreen = () => {
             if (table) tableInfo = { number: table.number, name: table.name || `Table ${table.number}` };
           }
           const businessInfo = restaurantInfo?.business_info || {};
-          const commands = generateKitchenReceipt(offlineOrder, businessInfo, tableInfo);
+          const commands = generateKitchenReceipt(offlineOrder, businessInfo, tableInfo, defaultPaperWidth);
           await sendToPrinter(commands, 'kitchen-offline');
         } catch {}
         setLastOrderNumber(offlineOrder.order_number);
@@ -784,7 +786,8 @@ const POSScreen = () => {
           { ...selectedOrderToComplete, payment_method: paymentMethod, tip_amount: tipAmount, total_amount: grandTotal },
           businessInfo,
           tableInfo,
-          currency
+          currency,
+          defaultPaperWidth
         );
         if (printSettings.print_customer_receipt) {
           await sendToPrinter(commands, 'customer-auto');
@@ -923,6 +926,18 @@ const POSScreen = () => {
             </div>
           </div>
           <div className="flex gap-1.5 md:gap-2 shrink-0">
+            {/* Switch to Workforce for dual-access users */}
+            {user?.capabilities?.includes('workforce.clock_in') && (
+              <button
+                data-testid="switch-to-workforce-btn"
+                onClick={() => navigate('/heva-ops/shifts')}
+                className="flex items-center gap-1.5 px-2.5 md:px-3 py-2 rounded-xl bg-indigo-50 text-indigo-600 hover:bg-indigo-100 text-xs md:text-sm font-medium transition-colors"
+                title="Switch to Clock In / Shifts"
+              >
+                <Clock className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">My Shifts</span>
+              </button>
+            )}
             <button
               data-testid="pending-orders-button"
               onClick={() => {
