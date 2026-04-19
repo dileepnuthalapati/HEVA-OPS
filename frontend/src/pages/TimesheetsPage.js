@@ -1,25 +1,27 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
-import { timesheetAPI, payrollAPI, attendanceAPI } from '../services/api';
+import { timesheetAPI, payrollAPI, attendanceAPI, restaurantAPI } from '../services/api';
 import { getAuthToken } from '../services/api';
+import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
-import { Receipt, Lock, Unlock, CheckCircle, DollarSign, TrendingUp, Camera, X } from 'lucide-react';
+import { Receipt, Lock, Unlock, CheckCircle, DollarSign, TrendingUp, Camera, X, XCircle } from 'lucide-react';
 import { Dialog, DialogContent } from '../components/ui/dialog';
 
-function getWeekRange(offset = 0) {
+function getWeekRange(offset = 0, weekStartDay = 1) {
   const now = new Date();
   const day = now.getDay();
-  const monday = new Date(now);
-  monday.setDate(now.getDate() - (day === 0 ? 6 : day - 1) + offset * 7);
-  const sunday = new Date(monday);
-  sunday.setDate(monday.getDate() + 6);
+  const diff = (day - weekStartDay + 7) % 7;
+  const weekStart = new Date(now);
+  weekStart.setDate(now.getDate() - diff + offset * 7);
+  const weekEnd = new Date(weekStart);
+  weekEnd.setDate(weekStart.getDate() + 6);
   return {
-    start: monday.toISOString().split('T')[0],
-    end: sunday.toISOString().split('T')[0],
+    start: weekStart.toISOString().split('T')[0],
+    end: weekEnd.toISOString().split('T')[0],
   };
 }
 
@@ -32,10 +34,23 @@ export default function TimesheetsPage() {
   const [loading, setLoading] = useState(true);
   const [photoPreview, setPhotoPreview] = useState(null);
   const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [weekStartDay, setWeekStartDay] = useState(1);
 
-  const { start, end } = getWeekRange(weekOffset);
+  const { start, end } = getWeekRange(weekOffset, weekStartDay);
 
   const showPosEfficiency = hasFeature('pos');
+
+  // Load week start day from restaurant settings
+  useEffect(() => {
+    const loadWeekStart = async () => {
+      try {
+        const res = await api.get('/restaurants/my');
+        const wsd = res.data?.business_info?.week_start_day;
+        if (wsd !== undefined) setWeekStartDay(wsd);
+      } catch {}
+    };
+    loadWeekStart();
+  }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -95,6 +110,19 @@ export default function TimesheetsPage() {
       toast.error(e.response?.data?.detail || 'Failed to unlock');
     }
   };
+
+  const handleReject = async (staffId) => {
+    const reason = window.prompt('Reason for rejection (optional):');
+    if (reason === null) return;
+    try {
+      await timesheetAPI.reject(staffId, start, end, reason);
+      toast.success('Timesheet rejected — employee can update their records');
+      loadData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to reject');
+    }
+  };
+
 
   const weekLabel = `${new Date(start).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} - ${new Date(end).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
 
@@ -211,9 +239,14 @@ export default function TimesheetsPage() {
                           ) : r.has_flagged ? (
                             <span className="text-xs text-amber-600 font-medium">Has Flags</span>
                           ) : (
-                            <Button size="sm" onClick={() => handleApprove(r.staff_id)} className="text-xs h-7 bg-emerald-600 hover:bg-emerald-700" data-testid={`approve-${r.staff_id}`}>
-                              <CheckCircle className="w-3 h-3 mr-1" /> Approve
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button size="sm" onClick={() => handleApprove(r.staff_id)} className="text-xs h-7 bg-emerald-600 hover:bg-emerald-700" data-testid={`approve-${r.staff_id}`}>
+                                <CheckCircle className="w-3 h-3 mr-1" /> Approve
+                              </Button>
+                              <Button size="sm" variant="outline" onClick={() => handleReject(r.staff_id)} className="text-xs h-7 text-red-500 hover:bg-red-50" data-testid={`reject-${r.staff_id}`}>
+                                <XCircle className="w-3 h-3" />
+                              </Button>
+                            </div>
                           )}
                         </td>
                       </tr>

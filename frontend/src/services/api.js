@@ -652,6 +652,10 @@ export const attendanceAPI = {
     const response = await api.get('/attendance/my-summary');
     return response.data;
   },
+  myCorrection: async (recordId, claimedHours, notes) => {
+    const response = await api.put('/attendance/my-correction', { record_id: recordId, claimed_hours: claimedHours, notes });
+    return response.data;
+  },
 };
 
 export const timesheetAPI = {
@@ -669,6 +673,10 @@ export const timesheetAPI = {
   },
   editHours: async (recordId, hoursWorked) => {
     const response = await api.put(`/timesheets/edit-hours?record_id=${recordId}&hours_worked=${hoursWorked}`);
+    return response.data;
+  },
+  reject: async (staffId, startDate, endDate, reason) => {
+    const response = await api.put(`/timesheets/reject?staff_id=${staffId}&start_date=${startDate}&end_date=${endDate}&reason=${encodeURIComponent(reason || '')}`);
     return response.data;
   },
 };
