@@ -84,6 +84,7 @@ const POSScreen = () => {
   // Completed orders for today (visible in pending orders panel)
   const [completedOrders, setCompletedOrders] = useState([]);
   const [isPrinting, setIsPrinting] = useState(false); // Prevent duplicate prints
+  const [printSettings, setPrintSettings] = useState({ print_kitchen_slip: true, print_customer_receipt: true });
 
   // WebSocket / QR Alert states
   const [qrAlert, setQrAlert] = useState(null);
@@ -210,6 +211,8 @@ const POSScreen = () => {
       return;
     }
     setIsPrinting(true);
+    // Safety: auto-reset after 10 seconds to prevent stuck state
+    const safetyTimer = setTimeout(() => setIsPrinting(false), 10000);
     try {
       const defaultPrinter = await printerAPI.getDefault();
       if (!defaultPrinter) {
@@ -222,11 +225,11 @@ const POSScreen = () => {
       console.log(`[POS] ${label} print sent successfully`);
     } catch (printErr) {
       console.warn(`[POS] ${label} print failed:`, printErr.message);
-      // Show error only for user-initiated prints (not auto-prints)
-      if (label !== 'kitchen-auto' && label !== 'customer-auto') {
+      if (label !== 'kitchen-auto' && label !== 'customer-auto' && label !== 'kitchen-delta') {
         toast.error(`Print failed: ${printErr.message}`);
       }
     } finally {
+      clearTimeout(safetyTimer);
       setIsPrinting(false);
     }
   };
@@ -297,6 +300,11 @@ const POSScreen = () => {
     } catch (error) {
       // Use default currency
     }
+    // Load print settings
+    try {
+      const sec = await restaurantAPI.getSecuritySettings();
+      setPrintSettings({ print_kitchen_slip: sec.print_kitchen_slip !== false, print_customer_receipt: sec.print_customer_receipt !== false });
+    } catch {}
   };
 
   useEffect(() => {
@@ -526,9 +534,8 @@ const POSScreen = () => {
         const businessInfo = restaurantInfo?.business_info || {};
         const deltaOrder = { ...updatedOrder, items: cart };
         const commands = generateDeltaKitchenReceipt(deltaOrder, businessInfo, tableInfo);
-        if (commands) {
+        if (commands && printSettings.print_kitchen_slip) {
           sendToPrinter(commands, 'kitchen-delta').catch(() => {});
-          // Mark items as printed after successful send
           orderAPI.markPrinted(editingOrder.id).catch(() => {});
         }
       } catch (e) {
@@ -603,7 +610,9 @@ const POSScreen = () => {
         }
         const businessInfo = restaurantInfo?.business_info || {};
         const commands = generateKitchenReceipt(order, businessInfo, tableInfo);
-        sendToPrinter(commands, 'kitchen-auto').catch(() => {}); // fire-and-forget
+        if (printSettings.print_kitchen_slip) {
+          sendToPrinter(commands, 'kitchen-auto').catch(() => {});
+        }
         // Mark all items as printed
         orderAPI.markPrinted(order.id).catch(() => {});
       } catch (e) {
@@ -777,7 +786,9 @@ const POSScreen = () => {
           tableInfo,
           currency
         );
-        await sendToPrinter(commands, 'customer-auto');
+        if (printSettings.print_customer_receipt) {
+          await sendToPrinter(commands, 'customer-auto');
+        }
       } catch (printError) {
         console.log('Receipt printing skipped:', printError.message);
       }

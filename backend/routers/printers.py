@@ -14,6 +14,40 @@ import concurrent.futures
 router = APIRouter(dependencies=[Depends(require_feature("pos"))])
 
 
+class ProbeRequest(BaseModel):
+    ip: str
+    port: int = 9100
+
+
+@router.post("/printers/probe")
+async def probe_printer(data: ProbeRequest, current_user: User = Depends(get_current_user)):
+    """Test if a printer is reachable at a specific IP:port."""
+    try:
+        loop = asyncio.get_event_loop()
+        with concurrent.futures.ThreadPoolExecutor() as pool:
+            result = await loop.run_in_executor(pool, _tcp_probe, data.ip, data.port)
+        if result:
+            return {"reachable": True, "ip": data.ip, "port": data.port}
+        raise HTTPException(status_code=404, detail="Printer not reachable")
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+def _tcp_probe(ip: str, port: int, timeout: float = 3.0) -> bool:
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(timeout)
+        s.connect((ip, port))
+        s.close()
+        return True
+    except Exception:
+        return False
+
+
+
+
 @router.get("/printers", response_model=List[Printer])
 async def get_printers(current_user: User = Depends(require_admin)):
     query = {}

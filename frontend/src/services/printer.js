@@ -446,16 +446,19 @@ class ThermalPrinterService {
 
     const scanBatch = async (ips, label) => {
       if (onProgress) onProgress(label);
+      const ports = [9100, 515, 631];
       const promises = ips.map(i => {
         const ip = `${subnet}.${i}`;
-        return this._probeWifiPrinter(ip, 9100).then(ok => {
-          if (ok && !found.has(ip)) {
-            found.add(ip);
-            const device = { ip, port: 9100, name: `Printer at ${ip}` };
-            results.push(device);
-            onPrinterFound(device);
-          }
-        });
+        return Promise.all(ports.map(port =>
+          this._probeWifiPrinter(ip, port).then(ok => {
+            if (ok && !found.has(ip)) {
+              found.add(ip);
+              const device = { ip, port, name: `Printer at ${ip}:${port}` };
+              results.push(device);
+              onPrinterFound(device);
+            }
+          })
+        ));
       });
       await Promise.all(promises);
     };
@@ -463,8 +466,8 @@ class ThermalPrinterService {
     // Phase 1: Priority IPs (common printer addresses)
     await scanBatch(priorityIps, `Checking common printer addresses...`);
 
-    // Phase 2: Remaining IPs in batches of 60
-    const batchSize = 60;
+    // Phase 2: Remaining IPs in batches of 30 (scanning 3 ports each)
+    const batchSize = 30;
     for (let i = 0; i < remaining.length; i += batchSize) {
       const batch = remaining.slice(i, i + batchSize);
       await scanBatch(batch, `Scanning ${subnet}.${batch[0]}-${batch[batch.length - 1]}...`);
@@ -490,12 +493,12 @@ class ThermalPrinterService {
     }
   }
 
-  // Probe a single IP with a 1.2 second timeout (balanced for Ethernet-connected printers)
+  // Probe a single IP with a 2.5 second timeout (covers Ethernet printers on busy networks)
   async _probeWifiPrinter(ip, port) {
     try {
       const connectPromise = TcpSocket.connect({ ipAddress: ip, port: port });
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 1200)
+        setTimeout(() => reject(new Error('timeout')), 2500)
       );
       const result = await Promise.race([connectPromise, timeoutPromise]);
       try { await TcpSocket.disconnect({ client: result.client }); } catch {}

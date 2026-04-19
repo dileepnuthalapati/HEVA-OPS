@@ -30,6 +30,7 @@ const PrinterSettings = () => {
   const [discoveredDevices, setDiscoveredDevices] = useState([]);
   const [scanError, setScanError] = useState('');
   const [scanProgress, setScanProgress] = useState('');
+  const [manualIp, setManualIp] = useState('');
   const isNativeApp = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
 
   // Print behavior settings
@@ -53,6 +54,40 @@ const PrinterSettings = () => {
       toast.success('Print setting updated');
     } catch { toast.error('Failed to update'); }
     finally { setPrintSaving(false); }
+  };
+
+  const handleQuickConnect = async () => {
+    if (!manualIp) return;
+    const ip = manualIp.trim();
+    setScanError('');
+    setScanning(true);
+    setScanProgress(`Testing ${ip} on ports 9100, 515, 631...`);
+    try {
+      const ports = [9100, 515, 631];
+      let foundPort = null;
+      for (const port of ports) {
+        try {
+          const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/printers/probe`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAuthToken()}` },
+            body: JSON.stringify({ ip, port }),
+          });
+          if (res.ok) { foundPort = port; break; }
+        } catch {}
+      }
+      if (foundPort) {
+        const device = { ip, port: foundPort, name: `Printer at ${ip}:${foundPort}` };
+        setDiscoveredDevices(prev => [...prev, device]);
+        toast.success(`Printer found at ${ip}:${foundPort}!`);
+      } else {
+        setScanError(`No printer responded at ${ip}. Check the IP and make sure the printer is on.`);
+      }
+    } catch (e) {
+      setScanError(`Connection failed: ${e.message}`);
+    } finally {
+      setScanning(false);
+      setScanProgress('');
+    }
   };
 
   const loadPrinters = async () => {
@@ -567,10 +602,29 @@ const PrinterSettings = () => {
             {discoveryType === 'wifi' && (
               <>
                 <div className="p-3 bg-muted rounded-lg text-sm">
-                  <p>Make sure your printer is <strong>powered on</strong> and connected to the <strong>same WiFi network</strong> as this device, then tap Scan.</p>
+                  <p>Make sure your printer is <strong>powered on</strong> and connected to the <strong>same network</strong> as this device.</p>
                 </div>
+
+                {/* Quick Connect - Manual IP */}
+                <div className="p-3 border border-dashed border-slate-300 rounded-lg space-y-2" data-testid="quick-connect">
+                  <p className="text-xs font-semibold text-slate-600">Quick Connect — Enter IP directly</p>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="e.g. 192.168.1.100"
+                      value={manualIp}
+                      onChange={(e) => setManualIp(e.target.value)}
+                      className="h-9 text-sm font-mono"
+                      data-testid="manual-ip-input"
+                    />
+                    <Button size="sm" onClick={handleQuickConnect} disabled={scanning || !manualIp} data-testid="quick-connect-btn" className="h-9 px-4 shrink-0">
+                      Connect
+                    </Button>
+                  </div>
+                  <p className="text-[10px] text-muted-foreground">Check your printer's network settings or router admin page for the IP. Ports 9100, 515, 631 are checked automatically.</p>
+                </div>
+
                 <Button onClick={startScan} disabled={scanning} data-testid="start-scan-btn" className="w-full">
-                  {scanning ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Scanning your network...</> : <><Search className="w-4 h-4 mr-2" /> Scan for Printers</>}
+                  {scanning ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Scanning your network...</> : <><Search className="w-4 h-4 mr-2" /> Scan Full Network</>}
                 </Button>
                 {scanProgress && (
                   <div className="text-xs text-muted-foreground text-center animate-pulse">{scanProgress}</div>
