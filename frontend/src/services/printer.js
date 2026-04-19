@@ -398,15 +398,49 @@ class ThermalPrinterService {
   async getDeviceSubnet() {
     if (!this.isNative) return null;
     try {
-      const result = await CapacitorWifi.getIpAddress();
-      const ip = result.ipAddress;
-      if (!ip) return null;
-      const parts = ip.split('.');
-      if (parts.length === 4) {
-        const subnet = `${parts[0]}.${parts[1]}.${parts[2]}`;
-        console.log(`[Printer] Device IP: ${ip}, Subnet: ${subnet}`);
-        return subnet;
-      }
+      // Try CapacitorWifi first
+      try {
+        const { CapacitorWifi } = await import('@capgo/capacitor-wifi');
+        const result = await CapacitorWifi.getIpAddress();
+        const ip = result.ipAddress;
+        if (ip) {
+          const parts = ip.split('.');
+          if (parts.length === 4) {
+            const subnet = `${parts[0]}.${parts[1]}.${parts[2]}`;
+            console.log(`[Printer] Device IP: ${ip}, Subnet: ${subnet}`);
+            return subnet;
+          }
+        }
+      } catch {}
+
+      // Fallback: Use WebRTC to get local IP (works without any plugin)
+      try {
+        const pc = new RTCPeerConnection({ iceServers: [] });
+        pc.createDataChannel('');
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        const ip = await new Promise((resolve) => {
+          const timeout = setTimeout(() => resolve(null), 3000);
+          pc.onicecandidate = (e) => {
+            if (!e.candidate) return;
+            const match = e.candidate.candidate.match(/(\d+\.\d+\.\d+\.\d+)/);
+            if (match && !match[1].startsWith('0.') && match[1] !== '0.0.0.0') {
+              clearTimeout(timeout);
+              resolve(match[1]);
+            }
+          };
+        });
+        pc.close();
+        if (ip) {
+          const parts = ip.split('.');
+          if (parts.length === 4) {
+            const subnet = `${parts[0]}.${parts[1]}.${parts[2]}`;
+            console.log(`[Printer] WebRTC IP: ${ip}, Subnet: ${subnet}`);
+            return subnet;
+          }
+        }
+      } catch {}
+
       return null;
     } catch (error) {
       console.warn('[Printer] Failed to get device IP:', error.message);
