@@ -5,7 +5,7 @@ import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
@@ -444,6 +444,9 @@ export default function ShiftScheduler() {
                   <CalendarX className="w-5 h-5 text-amber-600" />
                   Mark Week Off
                 </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground">
+                  Give the selected staff member a full week off. Existing shifts in this week will be removed and the scheduler will show a hard block.
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 mt-2">
                 <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm">
