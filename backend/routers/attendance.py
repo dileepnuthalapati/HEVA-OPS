@@ -478,8 +478,8 @@ async def get_live_attendance(current_user: User = Depends(require_admin)):
 
 
 @router.get("/attendance/my-summary")
-async def get_my_hours_summary(current_user: User = Depends(require_feature("workforce"))):
-    """Get current user's hours and pay summary."""
+async def get_my_hours_summary(week_offset: int = 0, current_user: User = Depends(require_feature("workforce"))):
+    """Get current user's hours and pay summary. Supports week navigation via week_offset."""
     staff = await db.users.find_one(
         {"username": current_user.username, "restaurant_id": current_user.restaurant_id},
         {"_id": 0, "password_hash": 0, "pos_pin_hash": 0, "manager_pin_hash": 0}
@@ -490,10 +490,20 @@ async def get_my_hours_summary(current_user: User = Depends(require_feature("wor
     staff_id = staff.get("id")
     now = datetime.now(timezone.utc)
 
-    # This week (Mon-Sun)
-    week_start = (now - timedelta(days=now.weekday())).strftime("%Y-%m-%d")
+    # Get restaurant week start day
+    restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0, "business_info.week_start_day": 1})
+    week_start_day = restaurant.get("business_info", {}).get("week_start_day", 1) if restaurant else 1  # default Monday
+
+    # Calculate week range using restaurant's week_start_day + offset
+    current_day = now.weekday()  # 0=Mon
+    diff = (current_day - week_start_day + 7) % 7
+    week_start_date = now - timedelta(days=diff) + timedelta(weeks=week_offset)
+    week_end_date = week_start_date + timedelta(days=6)
+    week_start = week_start_date.strftime("%Y-%m-%d")
+    week_end = week_end_date.strftime("%Y-%m-%d")
+
     week_records = await db.attendance.find(
-        {"staff_id": staff_id, "restaurant_id": current_user.restaurant_id, "date": {"$gte": week_start}, "clock_out": {"$ne": None}},
+        {"staff_id": staff_id, "restaurant_id": current_user.restaurant_id, "date": {"$gte": week_start, "$lte": week_end}, "clock_out": {"$ne": None}},
         {"_id": 0}
     ).to_list(100)
     week_hours = sum(r.get("hours_worked", 0) or 0 for r in week_records)
@@ -516,7 +526,7 @@ async def get_my_hours_summary(current_user: User = Depends(require_feature("wor
     # Weekly breakdown: each day's hours + status
     weekly_breakdown = []
     for i in range(7):
-        d = (datetime.strptime(week_start, "%Y-%m-%d") + timedelta(days=i)).strftime("%Y-%m-%d")
+        d = (week_start_date + timedelta(days=i)).strftime("%Y-%m-%d")
         day_records = [r for r in week_records if r.get("date") == d]
         day_hours = sum(r.get("hours_worked", 0) or 0 for r in day_records)
         rejected = any(r.get("rejected") for r in day_records)
@@ -558,6 +568,9 @@ async def get_my_hours_summary(current_user: User = Depends(require_feature("wor
         "hourly_rate": hourly_rate,
         "monthly_salary": monthly_salary,
         "currency": currency,
+        "week_start": week_start,
+        "week_end": week_end,
+        "week_offset": week_offset,
         "week_hours": round(week_hours, 1),
         "month_hours": round(month_hours, 1),
         "week_pay": round(week_pay, 2),

@@ -645,8 +645,8 @@ export const attendanceAPI = {
     const response = await api.put(`/attendance/${recordId}/approve-adjustment`, body);
     return response.data;
   },
-  getMySummary: async () => {
-    const response = await api.get('/attendance/my-summary');
+  getMySummary: async (weekOffset = 0) => {
+    const response = await api.get(`/attendance/my-summary?week_offset=${weekOffset}`);
     return response.data;
   },
   myCorrection: async (recordId, claimedHours, notes) => {
