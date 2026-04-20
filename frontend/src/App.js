@@ -132,10 +132,18 @@ const AppRoutes = () => {
             ) : isRestaurantAdmin ? (
               <Navigate to="/dashboard" replace />
             ) : (
-              // Staff: route based on capabilities first, then features
-              (user.capabilities?.includes('pos.access') || user.features?.pos ? <Navigate to="/pos" replace /> :
-               user.features?.workforce ? <Navigate to="/heva-ops/shifts" replace /> :
-               <Navigate to="/dashboard" replace />)
+              // Staff: route based on capabilities
+              (() => {
+                const caps = user.capabilities || [];
+                const hasPOS = caps.includes('pos.access');
+                const hasWorkforce = caps.includes('workforce.clock_in');
+                if (hasPOS) return <Navigate to="/pos" replace />;
+                if (hasWorkforce) return <Navigate to="/heva-ops/shifts" replace />;
+                // Fallback to features check
+                if (user.features?.pos) return <Navigate to="/pos" replace />;
+                if (user.features?.workforce) return <Navigate to="/heva-ops/shifts" replace />;
+                return <Navigate to="/login" replace />;
+              })()
             )
           ) : (
             isTerminal ? <Navigate to="/terminal" replace /> : <Navigate to="/login" replace />

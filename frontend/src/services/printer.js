@@ -398,15 +398,49 @@ class ThermalPrinterService {
   async getDeviceSubnet() {
     if (!this.isNative) return null;
     try {
-      const result = await CapacitorWifi.getIpAddress();
-      const ip = result.ipAddress;
-      if (!ip) return null;
-      const parts = ip.split('.');
-      if (parts.length === 4) {
-        const subnet = `${parts[0]}.${parts[1]}.${parts[2]}`;
-        console.log(`[Printer] Device IP: ${ip}, Subnet: ${subnet}`);
-        return subnet;
-      }
+      // Try CapacitorWifi first
+      try {
+        const { CapacitorWifi } = await import('@capgo/capacitor-wifi');
+        const result = await CapacitorWifi.getIpAddress();
+        const ip = result.ipAddress;
+        if (ip) {
+          const parts = ip.split('.');
+          if (parts.length === 4) {
+            const subnet = `${parts[0]}.${parts[1]}.${parts[2]}`;
+            console.log(`[Printer] Device IP: ${ip}, Subnet: ${subnet}`);
+            return subnet;
+          }
+        }
+      } catch {}
+
+      // Fallback: Use WebRTC to get local IP (works without any plugin)
+      try {
+        const pc = new RTCPeerConnection({ iceServers: [] });
+        pc.createDataChannel('');
+        const offer = await pc.createOffer();
+        await pc.setLocalDescription(offer);
+        const ip = await new Promise((resolve) => {
+          const timeout = setTimeout(() => resolve(null), 3000);
+          pc.onicecandidate = (e) => {
+            if (!e.candidate) return;
+            const match = e.candidate.candidate.match(/(\d+\.\d+\.\d+\.\d+)/);
+            if (match && !match[1].startsWith('0.') && match[1] !== '0.0.0.0') {
+              clearTimeout(timeout);
+              resolve(match[1]);
+            }
+          };
+        });
+        pc.close();
+        if (ip) {
+          const parts = ip.split('.');
+          if (parts.length === 4) {
+            const subnet = `${parts[0]}.${parts[1]}.${parts[2]}`;
+            console.log(`[Printer] WebRTC IP: ${ip}, Subnet: ${subnet}`);
+            return subnet;
+          }
+        }
+      } catch {}
+
       return null;
     } catch (error) {
       console.warn('[Printer] Failed to get device IP:', error.message);
@@ -421,7 +455,7 @@ class ThermalPrinterService {
    */
   async scanWifiPrinters(onPrinterFound, onProgress) {
     if (!this.isNative) {
-      throw new Error('WiFi scanning from browser not supported. Enter the printer IP manually.');
+      throw new Error('Use Quick Connect to enter the printer IP directly.');
     }
 
     const subnet = await this.getDeviceSubnet();
@@ -433,72 +467,60 @@ class ThermalPrinterService {
     const results = [];
     const found = new Set();
 
-    // Priority IPs: common printer address ranges
-    const priorityIps = [];
-    for (let i = 100; i <= 120; i++) priorityIps.push(i);
-    for (let i = 200; i <= 220; i++) priorityIps.push(i);
-    [1, 2, 50, 150, 250, 254].forEach(i => { if (!priorityIps.includes(i)) priorityIps.push(i); });
-
-    const remaining = [];
-    for (let i = 1; i <= 254; i++) {
-      if (!priorityIps.includes(i)) remaining.push(i);
-    }
-
     const scanBatch = async (ips, label) => {
       if (onProgress) onProgress(label);
-      const ports = [9100, 515, 631];
       const promises = ips.map(i => {
         const ip = `${subnet}.${i}`;
-        return Promise.all(ports.map(port =>
-          this._probeWifiPrinter(ip, port).then(ok => {
-            if (ok && !found.has(ip)) {
-              found.add(ip);
-              const device = { ip, port, name: `Printer at ${ip}:${port}` };
-              results.push(device);
-              onPrinterFound(device);
-            }
-          })
-        ));
+        return this._probeWifiPrinter(ip, 9100).then(ok => {
+          if (ok && !found.has(ip)) {
+            found.add(ip);
+            const device = { ip, port: 9100, name: `Printer at ${ip}` };
+            results.push(device);
+            onPrinterFound(device);
+          }
+        });
       });
       await Promise.all(promises);
     };
 
-    // Phase 1: Priority IPs (common printer addresses)
-    await scanBatch(priorityIps, `Checking common printer addresses...`);
+    // Wave 1: Most common printer IPs (50 IPs, ~1.5s)
+    const wave1 = [];
+    for (let i = 100; i <= 120; i++) wave1.push(i);
+    for (let i = 150; i <= 180; i++) wave1.push(i);
+    [1, 2, 10, 50, 99, 200, 250, 254].forEach(i => { if (!wave1.includes(i)) wave1.push(i); });
+    await scanBatch(wave1, 'Checking common addresses...');
+    if (results.length > 0) { if (onProgress) onProgress(''); return results; }
 
-    // Phase 2: Remaining IPs in batches of 30 (scanning 3 ports each)
-    const batchSize = 30;
-    for (let i = 0; i < remaining.length; i += batchSize) {
-      const batch = remaining.slice(i, i + batchSize);
+    // Wave 2: 200-254 (~1.5s)
+    const wave2 = [];
+    for (let i = 200; i <= 254; i++) { if (!wave1.includes(i)) wave2.push(i); }
+    await scanBatch(wave2, 'Scanning upper range...');
+    if (results.length > 0) { if (onProgress) onProgress(''); return results; }
+
+    // Wave 3: Everything else in batches of 50 (~3 batches, 4.5s)
+    const scanned = new Set([...wave1, ...wave2]);
+    const remaining = [];
+    for (let i = 1; i <= 254; i++) { if (!scanned.has(i)) remaining.push(i); }
+    for (let i = 0; i < remaining.length; i += 50) {
+      const batch = remaining.slice(i, i + 50);
       await scanBatch(batch, `Scanning ${subnet}.${batch[0]}-${batch[batch.length - 1]}...`);
+      if (results.length > 0) break;
     }
 
     if (onProgress) onProgress('');
     return results;
   }
 
-  // Quick TCP reachability check from the tablet (not via backend)
   async checkPrinterReachable(ip, port = 9100) {
-    if (!this.isNative) return null; // Can't check from browser
-    try {
-      const connectPromise = TcpSocket.connect({ ipAddress: ip, port: port });
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 2000)
-      );
-      const result = await Promise.race([connectPromise, timeoutPromise]);
-      try { await TcpSocket.disconnect({ client: result.client }); } catch {}
-      return true;
-    } catch {
-      return false;
-    }
+    if (!this.isNative) return null;
+    return this._probeWifiPrinter(ip, port);
   }
 
-  // Probe a single IP with a 2.5 second timeout (covers Ethernet printers on busy networks)
   async _probeWifiPrinter(ip, port) {
     try {
       const connectPromise = TcpSocket.connect({ ipAddress: ip, port: port });
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('timeout')), 2500)
+        setTimeout(() => reject(new Error('timeout')), 1500)
       );
       const result = await Promise.race([connectPromise, timeoutPromise]);
       try { await TcpSocket.disconnect({ client: result.client }); } catch {}

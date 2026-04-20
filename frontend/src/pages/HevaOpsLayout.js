@@ -53,6 +53,16 @@ export default function HevaOpsLayout() {
           <p className="text-[10px] text-slate-400 uppercase tracking-wider">Staff Portal</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Switch to POS for dual-access users */}
+          {user?.capabilities?.includes('pos.access') && (
+            <button
+              data-testid="switch-to-pos-btn"
+              onClick={() => window.location.href = '/pos'}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 hover:text-white text-xs font-medium transition-colors"
+            >
+              <span className="text-[10px]">POS</span>
+            </button>
+          )}
           {/* Notification Bell */}
           <div className="relative">
             <button
