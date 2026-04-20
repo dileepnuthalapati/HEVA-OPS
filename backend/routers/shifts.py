@@ -86,6 +86,25 @@ async def update_shift(shift_id: str, data: ShiftUpdate, current_user: User = De
     return {"message": "Shift updated"}
 
 
+@router.delete("/shifts/clear-week-off")
+async def clear_week_off(staff_id: str, week_start_date: str, current_user: User = Depends(require_admin)):
+    """Undo a 'week off' marking for a staff. Removes the bulk-week-off leave record."""
+    try:
+        start_dt = datetime.strptime(week_start_date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid week_start_date format. Use YYYY-MM-DD.")
+    end_str = (start_dt + timedelta(days=6)).strftime("%Y-%m-%d")
+
+    result = await db.leave_requests.delete_many({
+        "restaurant_id": current_user.restaurant_id,
+        "staff_id": staff_id,
+        "bulk_week_off": True,
+        "start_date": week_start_date,
+        "end_date": end_str,
+    })
+    return {"message": f"Cleared week off ({result.deleted_count} leave record(s) removed)"}
+
+
 @router.delete("/shifts/{shift_id}")
 async def delete_shift(shift_id: str, current_user: User = Depends(require_admin)):
     shift = await db.shifts.find_one({"id": shift_id, "restaurant_id": current_user.restaurant_id})
@@ -151,3 +170,86 @@ async def publish_shifts(start_date: str, end_date: str, current_user: User = De
         {"$set": {"published": True}},
     )
     return {"message": f"Published {result.modified_count} shifts"}
+
+
+class MarkWeekOffRequest(BaseModel):
+    staff_id: str
+    week_start_date: str  # YYYY-MM-DD (inclusive start of 7-day span)
+    reason: Optional[str] = "personal"  # vacation | sick | personal | public_holiday
+    note: Optional[str] = None
+
+
+@router.post("/shifts/mark-week-off")
+async def mark_week_off(data: MarkWeekOffRequest, current_user: User = Depends(require_admin)):
+    """Manager marks a staff as off for the entire week.
+    - Deletes any existing shifts for that staff in the given week.
+    - Creates an auto-approved leave entry so the scheduler shows a hard block.
+    """
+    staff = await db.users.find_one(
+        {"id": data.staff_id, "restaurant_id": current_user.restaurant_id},
+        {"_id": 0, "id": 1, "username": 1}
+    )
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+
+    try:
+        start_dt = datetime.strptime(data.week_start_date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid week_start_date format. Use YYYY-MM-DD.")
+    end_dt = start_dt + timedelta(days=6)
+    start_str = start_dt.strftime("%Y-%m-%d")
+    end_str = end_dt.strftime("%Y-%m-%d")
+
+    # Remove any existing shifts for this staff in the week
+    shift_result = await db.shifts.delete_many({
+        "restaurant_id": current_user.restaurant_id,
+        "staff_id": data.staff_id,
+        "date": {"$gte": start_str, "$lte": end_str},
+    })
+
+    # Remove any conflicting existing leave for this staff overlapping this week
+    await db.leave_requests.delete_many({
+        "restaurant_id": current_user.restaurant_id,
+        "staff_id": data.staff_id,
+        "status": {"$in": ["pending", "approved"]},
+        "start_date": {"$lte": end_str},
+        "end_date": {"$gte": start_str},
+    })
+
+    now = datetime.now(timezone.utc)
+    leave_doc = {
+        "id": f"leave_{now.timestamp()}_{data.staff_id}",
+        "restaurant_id": current_user.restaurant_id,
+        "staff_id": data.staff_id,
+        "staff_name": staff.get("username", ""),
+        "start_date": start_str,
+        "end_date": end_str,
+        "days": 7,
+        "leave_type": data.reason or "personal",
+        "note": data.note or f"Week off marked by {current_user.username}",
+        "status": "approved",
+        "bulk_week_off": True,
+        "approved_by": current_user.username,
+        "approved_at": now.isoformat(),
+        "created_at": now.isoformat(),
+    }
+    await db.leave_requests.insert_one(leave_doc)
+
+    # Notify the staff
+    await db.notifications.insert_one({
+        "id": f"notif_{now.timestamp()}_{data.staff_id}",
+        "restaurant_id": current_user.restaurant_id,
+        "staff_id": data.staff_id,
+        "type": "week_off_assigned",
+        "ref_id": leave_doc["id"],
+        "title": "Week Off",
+        "message": f"You have been marked off for the week of {start_str} to {end_str}.",
+        "read": False,
+        "created_at": now.isoformat(),
+    })
+
+    return {
+        "message": f"{staff['username']} marked off for {start_str} → {end_str}. Removed {shift_result.deleted_count} shift(s).",
+        "shifts_removed": shift_result.deleted_count,
+        "leave_id": leave_doc["id"],
+    }

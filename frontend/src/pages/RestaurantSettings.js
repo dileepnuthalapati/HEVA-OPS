@@ -527,6 +527,38 @@ const RestaurantSettings = () => {
                       <p className="text-xs text-muted-foreground mt-1">Controls the shift scheduler weekly view. Some businesses prefer Saturday–Friday.</p>
                     </div>
                     )}
+                    {hasFeature('workforce') && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="overtime_warn_hours" className="text-sm font-semibold">Overtime Warning <span className="text-muted-foreground text-xs">(hours/week)</span></Label>
+                        <Input
+                          id="overtime_warn_hours"
+                          data-testid="overtime-warn-hours-input"
+                          type="number"
+                          min="20"
+                          max="80"
+                          value={formData.overtime_warn_hours ?? 40}
+                          onChange={(e) => handleChange('overtime_warn_hours', parseInt(e.target.value) || 40)}
+                          className="h-12"
+                        />
+                        <p className="text-[11px] text-muted-foreground mt-1">Alerts appear when staff reach this many hours (default 40h).</p>
+                      </div>
+                      <div>
+                        <Label htmlFor="overtime_limit_hours" className="text-sm font-semibold">Overtime Hard Limit <span className="text-muted-foreground text-xs">(hours/week)</span></Label>
+                        <Input
+                          id="overtime_limit_hours"
+                          data-testid="overtime-limit-hours-input"
+                          type="number"
+                          min="24"
+                          max="99"
+                          value={formData.overtime_limit_hours ?? 48}
+                          onChange={(e) => handleChange('overtime_limit_hours', parseInt(e.target.value) || 48)}
+                          className="h-12"
+                        />
+                        <p className="text-[11px] text-muted-foreground mt-1">Red alert threshold — UK WTD default is 48h.</p>
+                      </div>
+                    </div>
+                    )}
                     <div className="pt-4">
                       <Button type="submit" data-testid="save-settings-button" disabled={saving} className="w-full md:w-auto h-12 px-8">
                         <Save className="w-4 h-4 mr-2" /> {saving ? 'Saving...' : 'Save Settings'}

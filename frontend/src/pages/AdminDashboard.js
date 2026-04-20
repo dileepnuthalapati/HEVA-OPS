@@ -12,7 +12,7 @@ import {
   TrendingUp, ShoppingBag, Coins, Calendar,
   AlertTriangle, Clock, CreditCard, Banknote, QrCode,
   MonitorSmartphone, UtensilsCrossed, ChefHat,
-  Users, UserCheck, Timer, CalendarClock, CheckCircle, ArrowRightLeft, X
+  Users, UserCheck, Timer, CalendarClock, CheckCircle, ArrowRightLeft, X, Flame
 } from 'lucide-react';
 import { Skeleton } from '../components/ui/skeleton';
 import PushPromptBanner from '../components/PushPromptBanner';
@@ -680,6 +680,60 @@ const AdminDashboard = () => {
                               </span>
                             </div>
                           ))}
+                        </div>
+                      </CardContent>
+                    </Card>
+                  )}
+
+                  {/* Overtime Alerts — staff approaching/exceeding weekly limits */}
+                  {workforceStats.overtime_alerts?.length > 0 && (
+                    <Card className="mb-4 md:mb-6 bg-white border-orange-200/60 shadow-sm" data-testid="wf-overtime-alerts">
+                      <CardHeader className="px-4 md:px-6 py-3 md:pb-2">
+                        <CardTitle className="text-xs md:text-base font-bold text-orange-800 flex items-center gap-2">
+                          <Flame className="w-4 h-4 text-orange-600" />
+                          Overtime Alerts
+                          <span className="ml-auto px-2 py-0.5 rounded-full text-[10px] font-bold bg-orange-100 text-orange-700">
+                            {workforceStats.overtime_alerts.length}
+                          </span>
+                        </CardTitle>
+                      </CardHeader>
+                      <CardContent className="px-4 md:px-6 pb-4">
+                        <div className="space-y-2">
+                          {workforceStats.overtime_alerts.map((a) => {
+                            const warn = a.warn_threshold || 40;
+                            const limit = a.limit_threshold || 48;
+                            const pct = Math.min(100, (a.hours / limit) * 100);
+                            const isOver = a.over_limit;
+                            return (
+                              <div
+                                key={a.staff_id}
+                                className={`p-3 rounded-lg border ${isOver ? 'border-red-300 bg-red-50/40' : 'border-orange-200 bg-orange-50/30'}`}
+                                data-testid={`overtime-${a.staff_id}`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex items-center justify-between mb-1">
+                                      <span className="text-sm font-semibold text-slate-800 truncate">{a.name}</span>
+                                      <span className={`text-xs font-bold font-mono shrink-0 ml-2 ${isOver ? 'text-red-600' : 'text-orange-600'}`}>
+                                        {a.hours}h / {limit}h
+                                      </span>
+                                    </div>
+                                    <div className="h-1.5 rounded-full bg-slate-200 overflow-hidden">
+                                      <div
+                                        className={`h-full transition-all ${isOver ? 'bg-red-500' : 'bg-orange-400'}`}
+                                        style={{ width: `${pct}%` }}
+                                      />
+                                    </div>
+                                    <div className="text-[10px] text-slate-500 mt-1">
+                                      {isOver
+                                        ? `Exceeded ${limit}h limit — review and redistribute`
+                                        : `Approaching ${limit}h weekly limit (alert from ${warn}h)`}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </CardContent>
                     </Card>

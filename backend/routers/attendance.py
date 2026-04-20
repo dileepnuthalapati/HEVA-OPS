@@ -671,6 +671,57 @@ async def workforce_dashboard_stats(current_user: User = Depends(require_feature
             {"restaurant_id": current_user.restaurant_id, "pending_manager_approval": True}
         )
 
+    # Overtime alerts: configurable warning + limit thresholds per restaurant
+    restaurant = await db.restaurants.find_one(
+        {"id": current_user.restaurant_id},
+        {"_id": 0, "business_info": 1}
+    )
+    biz_info = (restaurant or {}).get("business_info", {}) or {}
+    week_start_day = biz_info.get("week_start_day", 1)  # default Monday
+    overtime_warn = biz_info.get("overtime_warn_hours", 40)
+    overtime_limit = biz_info.get("overtime_limit_hours", 48)
+
+    # Compute week range honoring week_start_day
+    current_dow = now.weekday()  # 0=Mon..6=Sun (Python)
+    # Convert week_start_day (0=Sun, 1=Mon, 6=Sat) to Python weekday
+    py_week_start = (week_start_day - 1) % 7
+    diff = (current_dow - py_week_start) % 7
+    week_start_dt = now - timedelta(days=diff)
+    week_end_dt = week_start_dt + timedelta(days=6)
+    week_start = week_start_dt.strftime("%Y-%m-%d")
+    week_end = week_end_dt.strftime("%Y-%m-%d")
+
+    all_staff = await db.users.find(
+        {"restaurant_id": current_user.restaurant_id, "role": {"$in": ["user", "admin"]}},
+        {"_id": 0, "id": 1, "username": 1}
+    ).to_list(200)
+    overtime_alerts = []
+    for s in all_staff:
+        week_records = await db.attendance.find(
+            {"staff_id": s["id"], "restaurant_id": current_user.restaurant_id, "date": {"$gte": week_start, "$lte": week_end}, "clock_out": {"$ne": None}},
+            {"_id": 0, "hours_worked": 1}
+        ).to_list(100)
+        total = sum(r.get("hours_worked", 0) or 0 for r in week_records)
+        # Also add hours from open shifts
+        open_shift = await db.attendance.find_one(
+            {"staff_id": s["id"], "restaurant_id": current_user.restaurant_id, "clock_out": None, "is_operational": {"$ne": False}},
+            {"_id": 0, "clock_in": 1}
+        )
+        if open_shift and open_shift.get("clock_in"):
+            ci = datetime.fromisoformat(open_shift["clock_in"])
+            total += (now - ci).total_seconds() / 3600
+        if total >= overtime_warn:
+            overtime_alerts.append({
+                "staff_id": s["id"],
+                "name": s["username"],
+                "hours": round(total, 1),
+                "over_limit": total >= overtime_limit,
+                "warn_threshold": overtime_warn,
+                "limit_threshold": overtime_limit,
+            })
+    # Sort by hours desc so the most critical ones are first
+    overtime_alerts.sort(key=lambda x: x["hours"], reverse=True)
+
     return {
         "scheduled_shifts": len(shifts_today),
         "clocked_in_count": len(clocked_in),
@@ -680,6 +731,7 @@ async def workforce_dashboard_stats(current_user: User = Depends(require_feature
         "total_hours_today": round(total_hours, 1),
         "total_staff": staff_count,
         "pending_adjustments_count": pending_count,
+        "overtime_alerts": overtime_alerts,
         "shifts": [{"staff_name": s.get("staff_name", ""), "start_time": s.get("start_time"), "end_time": s.get("end_time"), "position": s.get("position", "")} for s in shifts_today],
     }
 

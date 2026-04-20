@@ -10,7 +10,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { ChevronLeft, ChevronRight, Plus, Copy, Send, Trash2, Edit2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Plus, Copy, Send, Trash2, Edit2, CalendarX, RotateCcw } from 'lucide-react';
 import { Skeleton } from '../components/ui/skeleton';
 
 const ALL_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -55,6 +55,10 @@ export default function ShiftScheduler() {
   const [saving, setSaving] = useState(false);
   const [weekStartDay, setWeekStartDay] = useState(1);
   const [blocks, setBlocks] = useState({}); // 0=Sun, 1=Mon, 6=Sat
+  const [weekOffDialog, setWeekOffDialog] = useState(null); // staff object
+  const [weekOffReason, setWeekOffReason] = useState('personal');
+  const [weekOffNote, setWeekOffNote] = useState('');
+  const [weekOffSaving, setWeekOffSaving] = useState(false);
 
   const weekDates = getWeekDates(weekOffset, weekStartDay);
   const startDate = weekDates[0];
@@ -144,6 +148,34 @@ export default function ShiftScheduler() {
       loadData();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to publish');
+    }
+  };
+
+  const handleMarkWeekOff = async () => {
+    if (!weekOffDialog) return;
+    setWeekOffSaving(true);
+    try {
+      const res = await shiftAPI.markWeekOff(weekOffDialog.id, startDate, weekOffReason, weekOffNote || null);
+      toast.success(res.message);
+      setWeekOffDialog(null);
+      setWeekOffReason('personal');
+      setWeekOffNote('');
+      loadData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to mark week off');
+    } finally {
+      setWeekOffSaving(false);
+    }
+  };
+
+  const handleClearWeekOff = async (staffId, staffName) => {
+    if (!window.confirm(`Undo week off for ${staffName}?`)) return;
+    try {
+      const res = await shiftAPI.clearWeekOff(staffId, startDate);
+      toast.success(res.message);
+      loadData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to clear week off');
     }
   };
 
@@ -246,11 +278,39 @@ export default function ShiftScheduler() {
                   )}
                   {staffIds.map(sid => {
                     const staff = staffMap[sid];
+                    // Detect "week off" — any hard block flagged bulk_week_off in this week span
+                    const staffBlocks = blocks[sid] || {};
+                    const isWholeWeekOff = weekDates.every(d => staffBlocks[d]?.block_type === 'hard' && staffBlocks[d]?.bulk_week_off);
                     return (
                       <tr key={sid} className="border-b hover:bg-slate-50/50">
                         <td className="p-3">
-                          <div className="text-sm font-medium truncate">{staff?.username || 'Unknown'}</div>
-                          <div className="text-[11px] text-slate-400">{staff?.position || ''}</div>
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium truncate">{staff?.username || 'Unknown'}</div>
+                              <div className="text-[11px] text-slate-400">{staff?.position || ''}</div>
+                            </div>
+                            {user?.role === 'admin' && staff && (
+                              isWholeWeekOff ? (
+                                <button
+                                  onClick={() => handleClearWeekOff(sid, staff.username)}
+                                  className="shrink-0 p-1.5 rounded-md text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                                  title="Undo week off"
+                                  data-testid={`clear-week-off-${sid}`}
+                                >
+                                  <RotateCcw className="w-3.5 h-3.5" />
+                                </button>
+                              ) : (
+                                <button
+                                  onClick={() => { setWeekOffDialog(staff); setWeekOffReason('personal'); setWeekOffNote(''); }}
+                                  className="shrink-0 p-1.5 rounded-md text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                  title="Mark this week off"
+                                  data-testid={`mark-week-off-${sid}`}
+                                >
+                                  <CalendarX className="w-3.5 h-3.5" />
+                                </button>
+                              )
+                            )}
+                          </div>
                         </td>
                         {weekDates.map(date => {
                           const dayShifts = shifts.filter(s => s.staff_id === sid && s.date === date);
@@ -373,6 +433,56 @@ export default function ShiftScheduler() {
                   {saving ? 'Saving...' : editingShift ? 'Update Shift' : 'Add Shift'}
                 </Button>
               </form>
+            </DialogContent>
+          </Dialog>
+
+          {/* Bulk Week Off Dialog */}
+          <Dialog open={!!weekOffDialog} onOpenChange={(open) => { if (!open) setWeekOffDialog(null); }}>
+            <DialogContent className="max-w-sm" data-testid="week-off-dialog">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <CalendarX className="w-5 h-5 text-amber-600" />
+                  Mark Week Off
+                </DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 mt-2">
+                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm">
+                  <div className="font-semibold text-slate-800">{weekOffDialog?.username}</div>
+                  <div className="text-xs text-slate-600 mt-0.5">
+                    {new Date(startDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} → {new Date(endDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                  </div>
+                  <div className="text-[11px] text-amber-700 mt-2">Any existing shifts for this person in this week will be removed.</div>
+                </div>
+                <div>
+                  <Label>Reason</Label>
+                  <Select value={weekOffReason} onValueChange={setWeekOffReason}>
+                    <SelectTrigger data-testid="week-off-reason"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="personal">Personal</SelectItem>
+                      <SelectItem value="vacation">Vacation</SelectItem>
+                      <SelectItem value="sick">Sick</SelectItem>
+                      <SelectItem value="public_holiday">Public Holiday</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Note (optional)</Label>
+                  <Input
+                    value={weekOffNote}
+                    onChange={e => setWeekOffNote(e.target.value)}
+                    placeholder="e.g. Family trip"
+                    data-testid="week-off-note"
+                  />
+                </div>
+                <Button
+                  className="w-full bg-amber-600 hover:bg-amber-700"
+                  disabled={weekOffSaving}
+                  onClick={handleMarkWeekOff}
+                  data-testid="confirm-week-off-btn"
+                >
+                  {weekOffSaving ? 'Saving...' : 'Confirm Week Off'}
+                </Button>
+              </div>
             </DialogContent>
           </Dialog>
         </div>
