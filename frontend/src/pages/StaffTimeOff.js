@@ -25,15 +25,24 @@ const STATUS_STYLES = {
   declined: 'bg-red-100 text-red-700',
 };
 
-const DAYS_OF_WEEK = [
+const ALL_DAYS = [
+  { value: 0, label: 'Sunday' },
   { value: 1, label: 'Monday' },
   { value: 2, label: 'Tuesday' },
   { value: 3, label: 'Wednesday' },
   { value: 4, label: 'Thursday' },
   { value: 5, label: 'Friday' },
   { value: 6, label: 'Saturday' },
-  { value: 0, label: 'Sunday' },
 ];
+
+function orderDaysByStart(startDay = 1) {
+  // startDay: 0=Sun, 1=Mon, 6=Sat
+  const ordered = [];
+  for (let i = 0; i < 7; i++) {
+    ordered.push(ALL_DAYS[(startDay + i) % 7]);
+  }
+  return ordered;
+}
 
 export default function StaffTimeOff() {
   const { user } = useAuth();
@@ -44,6 +53,8 @@ export default function StaffTimeOff() {
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [tab, setTab] = useState('requests');
+  const [weekStartDay, setWeekStartDay] = useState(1);
+  const DAYS_OF_WEEK = orderDaysByStart(weekStartDay);
 
   // Leave form
   const [leaveType, setLeaveType] = useState('vacation');
@@ -57,13 +68,16 @@ export default function StaffTimeOff() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      const [leaves, avail] = await Promise.all([
+      const [leaves, avail, restaurant] = await Promise.all([
         api.get('/leave-requests').then(r => r.data).catch(() => []),
         api.get('/availability/my').then(r => r.data).catch(() => ({ rules: [] })),
+        api.get('/restaurants/my').then(r => r.data).catch(() => null),
       ]);
       setLeaveRequests(leaves);
       setAvailability(avail.rules || []);
       setAvailRules(avail.rules || []);
+      const wsd = restaurant?.business_info?.week_start_day;
+      if (wsd !== undefined && wsd !== null) setWeekStartDay(wsd);
     } catch {} finally { setLoading(false); }
   }, []);
 
