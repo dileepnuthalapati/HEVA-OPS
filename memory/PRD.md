@@ -92,6 +92,10 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 - Split monolithic server.py into modular routers
 - Deliverect / Middleware API Integration
 - Self-service module upgrade (Stripe-powered)
+- **"Preview as role" impersonation** on platform owner dashboard — generate a short-lived JWT for a chosen business_admin/staff user so support can debug customer issues without knowing their password (standard SaaS practice à la Stripe/Intercom)
+- Keyboard shortcuts ⌘1/⌘2/⌘3 for workspace switching
+- One-time onboarding tooltip for POS edge-hover nav ("Hover the left edge for quick nav")
+- Workspace badge next to Heva One logo on every page (e.g. `HevaOne · Workforce`) for clearer "where am I?" even in deep modals
 
 ## Production Checklist
 - [ ] Replace sk_test_emergent with real Stripe Platform key
