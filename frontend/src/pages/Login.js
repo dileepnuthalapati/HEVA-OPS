@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
 import { Eye, EyeOff, WifiOff, ArrowRight } from 'lucide-react';
+import InstallAppButton from '../components/InstallAppButton';
 
 const Login = () => {
   const navigate = useNavigate();
@@ -152,9 +153,12 @@ const Login = () => {
         </div>
 
         {/* Footer */}
-        <p className="text-center text-xs text-slate-500 mt-6">
-          Powered by Heva One
-        </p>
+        <div className="flex flex-col items-center gap-3 mt-6">
+          <InstallAppButton variant="compact" />
+          <p className="text-center text-xs text-slate-500">
+            Powered by Heva One
+          </p>
+        </div>
       </div>
     </div>
   );
