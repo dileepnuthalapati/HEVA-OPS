@@ -1,15 +1,19 @@
 # Nixpacks configuration for Heva One monorepo
 #
-# Declaring `providers = ["node", "python"]` is ENOUGH — nixpacks auto-installs
-# Node.js and Python from them. Do NOT also list them under [phases.setup].nixPkgs —
-# that causes a duplicate Python install and the build fails with a
-# `python.pc file conflict` error.
+# The Node.js provider AUTO-DETECTS based on a root-level package.json.
+# Ours lives at frontend/package.json, so auto-detect fails and Node never
+# gets installed. We force it explicitly here.
 #
-# The actual build + start commands live in railway.toml.
-# railway.toml's buildCommand runs `npm install -g yarn` explicitly so yarn is
-# available regardless of whether nixpacks auto-detected the packageManager field.
+# The Python provider correctly auto-detects backend/requirements.txt and
+# installs python3 + gcc without any help from us.
+#
+# yarn is the nixpkgs-provided binary (Yarn Classic 1.x), so it's on PATH
+# immediately — no corepack / npm-global dance required.
 
-providers = ["node", "python"]
+providers = ["python"]
+
+[phases.setup]
+nixPkgs = ["nodejs_20", "yarn"]
 
 [variables]
 # React dev deps (webpack, babel, etc.) must be installed for `yarn build`.
