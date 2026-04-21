@@ -398,9 +398,14 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
           />
         )}
 
-        {/* Dashboard — always pinned at the top of the link list */}
+        {/* Dashboard / Overview — always pinned at the top of the link list.
+            Labelled "Overview" for workforce-only businesses, "Dashboard" otherwise. */}
         <div className="space-y-0.5">
-          <SidebarLink item={{ path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' }} />
+          <SidebarLink item={{
+            path: '/dashboard',
+            icon: LayoutDashboard,
+            label: (enabled.length === 1 && enabled[0].key === 'workforce') ? 'Overview' : 'Dashboard',
+          }} />
         </div>
 
         {/* Dynamic module section for current workspace */}

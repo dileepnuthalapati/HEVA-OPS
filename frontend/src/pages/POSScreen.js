@@ -19,6 +19,7 @@ import { Sheet, SheetContent, SheetTitle } from '../components/ui/sheet';
 import { toast } from 'sonner';
 import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, CreditCard, Users, Percent, Tag, MessageSquare, Banknote, Search, PackagePlus, ArrowLeft, Calendar, ShoppingBag, UtensilsCrossed, Clock } from 'lucide-react';
 import VoidReasonModal from '../components/VoidReasonModal';
+import POSEdgeNav from '../components/POSEdgeNav';
 
 // Currency helper
 const getCurrencySymbol = (currency) => {
@@ -762,6 +763,8 @@ const POSScreen = () => {
 
   return (
     <div className="flex h-screen pos-screen relative overflow-x-hidden">
+      {/* Edge-hover quick nav (desktop only) */}
+      <POSEdgeNav currentPath="/pos" />
       {/* QR Order Flash Overlay */}
       {flashActive && (
         <div

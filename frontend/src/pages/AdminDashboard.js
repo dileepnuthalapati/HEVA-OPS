@@ -219,7 +219,7 @@ const AdminDashboard = () => {
         <div className="max-w-7xl mx-auto">
           <div className="mb-4 md:mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 md:gap-3">
             <div>
-              <h1 className="font-heading text-xl md:text-3xl font-bold tracking-tight text-slate-900 mb-0.5" data-testid="dashboard-heading">Dashboard</h1>
+              <h1 className="font-heading text-xl md:text-3xl font-bold tracking-tight text-slate-900 mb-0.5" data-testid="dashboard-heading">{(!hasPOS && hasWorkforce) ? 'Overview' : 'Dashboard'}</h1>
               <p className="text-[10px] md:text-sm text-slate-400 flex items-center gap-1.5 font-medium">
                 <Calendar className="w-3.5 h-3.5 md:w-4 md:h-4 shrink-0" />
                 <span>{today}</span>
