@@ -1,15 +1,15 @@
 # Railway deploy config
 # ─────────────────────
-# Uses a Dockerfile at repo root instead of Nixpacks auto-detection.
-# Nixpacks fought monorepo layouts — Dockerfile is deterministic and
-# matches Capacitor 8's Node 22 requirement exactly.
+# Uses a Dockerfile at repo root. The Dockerfile's WORKDIR + CMD handle
+# the runtime startup — we don't override startCommand here because
+# Railway runs startCommand in exec mode (not shell mode), which fails
+# on `cd /app/backend && ...` since `cd` isn't an executable.
 
 [build]
 builder = "dockerfile"
 dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "cd /app/backend && uvicorn server:app --host 0.0.0.0 --port ${PORT:-5000}"
 healthcheckPath = "/api/"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
