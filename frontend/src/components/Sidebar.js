@@ -185,15 +185,15 @@ function WorkspaceSwitcher({ workspaces, activeKey, onSelect, lockedWorkspaces, 
   if (!hasMultiple) {
     return (
       <div
-        className="flex items-center gap-2.5 w-full px-3 py-2.5 mb-4 rounded-xl bg-slate-800/50 border border-slate-700/50"
+        className="flex items-center gap-2 w-full px-2.5 py-2 mb-3 rounded-lg bg-slate-800/50 border border-slate-700/50"
         data-testid="workspace-static"
       >
-        <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-300">
-          <ActiveIcon className="w-4 h-4" />
+        <div className="w-7 h-7 rounded-md bg-indigo-500/20 flex items-center justify-center text-indigo-300">
+          <ActiveIcon className="w-3.5 h-3.5" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold text-white truncate">{active.label}</p>
-          <p className="text-[11px] text-slate-400 truncate">{active.subtitle}</p>
+          <p className="text-xs font-semibold text-white truncate">{active.label}</p>
+          <p className="text-[10px] text-slate-400 truncate">{active.subtitle}</p>
         </div>
       </div>
     );
@@ -203,17 +203,17 @@ function WorkspaceSwitcher({ workspaces, activeKey, onSelect, lockedWorkspaces, 
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <button
-          className="flex items-center gap-2.5 w-full px-3 py-2.5 mb-4 rounded-xl bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700/50 transition-all group"
+          className="flex items-center gap-2 w-full px-2.5 py-2 mb-3 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700/50 transition-all group"
           data-testid="workspace-switcher"
         >
-          <div className="w-8 h-8 rounded-lg bg-indigo-500/20 flex items-center justify-center text-indigo-300 shrink-0">
-            <ActiveIcon className="w-4 h-4" />
+          <div className="w-7 h-7 rounded-md bg-indigo-500/20 flex items-center justify-center text-indigo-300 shrink-0">
+            <ActiveIcon className="w-3.5 h-3.5" />
           </div>
           <div className="flex-1 min-w-0 text-left">
-            <p className="text-sm font-semibold text-white truncate">{active.label}</p>
-            <p className="text-[11px] text-slate-400 truncate">{active.subtitle}</p>
+            <p className="text-xs font-semibold text-white truncate">{active.label}</p>
+            <p className="text-[10px] text-slate-400 truncate">{active.subtitle}</p>
           </div>
-          <ChevronsUpDown className="w-4 h-4 text-slate-400 shrink-0 group-hover:text-slate-200 transition-colors" />
+          <ChevronsUpDown className="w-3.5 h-3.5 text-slate-400 shrink-0 group-hover:text-slate-200 transition-colors" />
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent
@@ -419,8 +419,8 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
         {/* Dynamic module section for current workspace */}
         {visibleItems.length > 0 && (
           <>
-            <div className="mt-4 mb-1 px-3">
-              <span className="text-[10px] tracking-[0.15em] uppercase font-bold text-slate-500">
+            <div className="mt-3 mb-0.5 px-3">
+              <span className="text-[9px] tracking-[0.15em] uppercase font-bold text-slate-500">
                 {activeWorkspace?.label}
               </span>
             </div>
@@ -453,43 +453,43 @@ function SidebarShell({ user, onLogout, onOpenSearch, children }) {
   const isPlatform = user?.role === 'platform_owner';
   return (
     <div className="flex flex-col h-full">
-      <div className="mb-4" data-testid="sidebar-logo">
-        <h1 className="font-heading text-xl font-bold tracking-tight text-white">Heva One</h1>
-        <p className="text-[11px] tracking-[0.15em] uppercase text-slate-400 mt-0.5 font-medium">
+      <div className="mb-3" data-testid="sidebar-logo">
+        <h1 className="font-heading text-lg font-bold tracking-tight text-white">Heva One</h1>
+        <p className="text-[10px] tracking-[0.15em] uppercase text-slate-400 mt-0.5 font-medium">
           {isPlatform ? 'Platform' : user?.role === 'admin' ? 'Business' : 'Staff'}
         </p>
       </div>
       <button
         onClick={onOpenSearch}
-        className="flex items-center gap-2.5 w-full px-3 py-2.5 mb-4 rounded-xl bg-slate-800/50 hover:bg-slate-700/50 text-slate-400 text-sm transition-all border border-slate-700/50"
+        className="flex items-center gap-2 w-full px-2.5 py-2 mb-3 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 text-slate-400 text-xs transition-all border border-slate-700/50"
         data-testid="sidebar-search-trigger"
       >
-        <Search className="w-4 h-4" />
+        <Search className="w-3.5 h-3.5" />
         <span className="flex-1 text-left">Search...</span>
-        <kbd className="hidden sm:inline text-[10px] font-mono px-1.5 py-0.5 bg-slate-700 rounded text-slate-400 border border-slate-600">
+        <kbd className="hidden sm:inline text-[9px] font-mono px-1.5 py-0.5 bg-slate-700 rounded text-slate-400 border border-slate-600">
           Ctrl K
         </kbd>
       </button>
-      <nav className="flex-1 overflow-y-auto scrollbar-thin" data-testid="sidebar-nav">
+      <nav className="flex-1 overflow-y-auto scrollbar-thin min-h-0" data-testid="sidebar-nav">
         {children}
       </nav>
 
       {/* Settings — permanently pinned just above the user/logout block (admin only) */}
       {user?.role === 'admin' && (
-        <div className="pt-3 border-t border-slate-700/40">
+        <div className="pt-2 border-t border-slate-700/40">
           <SidebarLink item={{ path: '/settings', icon: Settings, label: 'Settings' }} />
         </div>
       )}
 
       {/* User + logout — pinned at the very bottom */}
-      <div className="mt-2 pt-3 border-t border-slate-700/40">
-        <div className="flex items-center gap-3 px-2 mb-3">
-          <div className="w-8 h-8 rounded-lg bg-indigo-600/30 flex items-center justify-center text-indigo-300 text-sm font-bold">
+      <div className="mt-1 pt-2 border-t border-slate-700/40">
+        <div className="flex items-center gap-2 px-2 mb-2">
+          <div className="w-7 h-7 rounded-lg bg-indigo-600/30 flex items-center justify-center text-indigo-300 text-xs font-bold">
             {(user?.username || 'U')[0].toUpperCase()}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-white truncate" data-testid="sidebar-username">{user?.username}</p>
-            <p className="text-[11px] text-slate-400 capitalize">{user?.role?.replace('_', ' ')}</p>
+            <p className="text-xs font-semibold text-white truncate" data-testid="sidebar-username">{user?.username}</p>
+            <p className="text-[10px] text-slate-400 capitalize">{user?.role?.replace('_', ' ')}</p>
           </div>
         </div>
         <button
@@ -497,7 +497,7 @@ function SidebarShell({ user, onLogout, onOpenSearch, children }) {
           className="sidebar-link w-full text-red-400 hover:text-red-300 hover:bg-red-500/10"
           data-testid="logout-button"
         >
-          <LogOut className="w-[18px] h-[18px]" />
+          <LogOut className="w-[16px] h-[16px]" />
           <span>Logout</span>
         </button>
       </div>
