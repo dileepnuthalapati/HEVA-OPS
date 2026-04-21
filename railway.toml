@@ -1,6 +1,12 @@
 [build]
 builder = "nixpacks"
-buildCommand = "cd backend && pip install -r requirements.txt"
+# Build the React SPA first (it lands at /app/frontend/build), then install
+# backend Python deps. Empty REACT_APP_BACKEND_URL makes the web frontend
+# call itself (same-origin) — simpler and more reliable than hardcoding a URL.
+# Native APK builds continue to bake in their own REACT_APP_BACKEND_URL
+# at `yarn build` time on the developer's machine; this value only affects
+# the web bundle served by Railway.
+buildCommand = "cd frontend && yarn install --frozen-lockfile && REACT_APP_BACKEND_URL='' yarn build && cd ../backend && pip install -r requirements.txt"
 
 [deploy]
 startCommand = "cd backend && uvicorn server:app --host 0.0.0.0 --port ${PORT:-5000}"
