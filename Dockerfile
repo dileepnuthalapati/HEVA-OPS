@@ -12,9 +12,11 @@ FROM node:24-slim AS frontend-builder
 
 WORKDIR /frontend
 
-# Install yarn 1.22.22 globally via npm (npm ships with node:24-slim).
-# Avoids corepack which was exiting silently in the previous build.
-RUN npm install -g --silent yarn@1.22.22 && yarn --version
+# Enable corepack (ships with Node 24) and pin yarn to the version
+# declared in package.json's `packageManager` field. This is more
+# reliable than `npm install -g yarn` which failed silently on earlier
+# attempts due to npm permission / cache edge cases inside node:24-slim.
+RUN corepack enable && corepack prepare yarn@1.22.22 --activate && yarn --version
 
 # Copy dependency manifest first so this layer is cached independently
 # from source changes.
