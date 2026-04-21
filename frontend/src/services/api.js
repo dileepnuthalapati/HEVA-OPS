@@ -582,6 +582,19 @@ export const shiftAPI = {
     const response = await api.post(`/shifts/publish?start_date=${startDate}&end_date=${endDate}`);
     return response.data;
   },
+  markWeekOff: async (staffId, weekStartDate, reason, note) => {
+    const response = await api.post('/shifts/mark-week-off', {
+      staff_id: staffId,
+      week_start_date: weekStartDate,
+      reason: reason || 'personal',
+      note: note || null,
+    });
+    return response.data;
+  },
+  clearWeekOff: async (staffId, weekStartDate) => {
+    const response = await api.delete(`/shifts/clear-week-off?staff_id=${staffId}&week_start_date=${weekStartDate}`);
+    return response.data;
+  },
 };
 
 export const attendanceAPI = {
@@ -648,8 +661,8 @@ export const attendanceAPI = {
     const response = await api.put(`/attendance/${recordId}/approve-adjustment`, body);
     return response.data;
   },
-  getMySummary: async () => {
-    const response = await api.get('/attendance/my-summary');
+  getMySummary: async (weekOffset = 0) => {
+    const response = await api.get(`/attendance/my-summary?week_offset=${weekOffset}`);
     return response.data;
   },
   myCorrection: async (recordId, claimedHours, notes) => {

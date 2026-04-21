@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { connectSocket, disconnectSocket, startSafetyPoll, stopSafetyPoll } from '../services/socket';
 import api from '../services/api';
+import POSEdgeNav from '../components/POSEdgeNav';
 import { Button } from '../components/ui/button';
 import { toast } from 'sonner';
 import {
@@ -178,6 +179,7 @@ export default function KitchenDisplay() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-white" data-testid="kds-page">
+      <POSEdgeNav currentPath="/kds" />
       {/* KDS Top Bar */}
       <div className="sticky top-0 z-50 bg-slate-900/95 backdrop-blur border-b border-slate-700 px-4 py-2.5 flex items-center justify-between">
         <div className="flex items-center gap-3">

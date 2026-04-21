@@ -2,9 +2,8 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from '../context/AuthContext';
-import { categoryAPI, productAPI, orderAPI, tableAPI, printerAPI, restaurantAPI, getAuthToken } from '../services/api';
-import printerService from '../services/printer';
-import { generateKitchenReceipt, generateCustomerReceipt, generateDeltaKitchenReceipt } from '../services/receiptGenerator';
+import { categoryAPI, productAPI, orderAPI, tableAPI, printerAPI, restaurantAPI } from '../services/api';
+import posPrintService from '../services/posPrintService';
 import { connectSocket, disconnectSocket, startSafetyPoll, stopSafetyPoll } from '../services/socket';
 import { saveToIndexedDB, getUnsyncedOrders } from '../services/db';
 import { Button } from '../components/ui/button';
@@ -20,6 +19,7 @@ import { Sheet, SheetContent, SheetTitle } from '../components/ui/sheet';
 import { toast } from 'sonner';
 import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, CreditCard, Users, Percent, Tag, MessageSquare, Banknote, Search, PackagePlus, ArrowLeft, Calendar, ShoppingBag, UtensilsCrossed, Clock } from 'lucide-react';
 import VoidReasonModal from '../components/VoidReasonModal';
+import POSEdgeNav from '../components/POSEdgeNav';
 
 // Currency helper
 const getCurrencySymbol = (currency) => {
@@ -134,56 +134,12 @@ const POSScreen = () => {
     loadPendingOrders();
   }, [playBeep]);
 
-  // Check printer reachability
+  // Check printer reachability (delegated to posPrintService)
   const checkPrinterStatus = useCallback(async () => {
-    try {
-      const printer = await printerAPI.getDefault();
-      if (!printer) {
-        setPrinterStatus('none');
-        setDefaultPrinterName(null);
-        return;
-      }
-      setDefaultPrinterName(printer.name);
-      setDefaultPaperWidth(printer.paper_width || 80);
-      if (printer.type === 'wifi') {
-        const parts = printer.address.split(':');
-        const ip = parts[0];
-        const port = parseInt(parts[1]) || 9100;
-        
-        // On native APK: check directly from tablet (required for local network printers)
-        // Backend can't reach local 192.168.x.x from Railway
-        const isNative = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
-        if (isNative) {
-          try {
-            const reachable = await printerService.checkPrinterReachable(ip, port);
-            setPrinterStatus(reachable ? 'online' : 'offline');
-          } catch {
-            setPrinterStatus('offline');
-          }
-        } else {
-          // Browser fallback: use backend TCP check (works in preview, not production)
-          try {
-            const apiUrl = process.env.REACT_APP_BACKEND_URL;
-            const token = getAuthToken();
-            const res = await fetch(`${apiUrl}/api/printer/check`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-              body: JSON.stringify({ ip, port }),
-              signal: AbortSignal.timeout(5000),
-            });
-            const data = await res.json();
-            setPrinterStatus(data.reachable ? 'online' : 'offline');
-          } catch {
-            setPrinterStatus('unknown');
-          }
-        }
-      } else {
-        // BT printers — mark as configured (can't ping them from web)
-        setPrinterStatus('online');
-      }
-    } catch {
-      setPrinterStatus('unknown');
-    }
+    const { status, name, paperWidth } = await posPrintService.checkDefaultPrinterStatus();
+    setPrinterStatus(status);
+    setDefaultPrinterName(name);
+    setDefaultPaperWidth(paperWidth);
   }, []);
 
   // Sync offline orders to the backend (with jitter to prevent reconnection storms)
@@ -206,62 +162,35 @@ const POSScreen = () => {
     }
   }, []);
 
-  // Helper: Send ESC/POS commands to the default printer (with duplicate prevention)
-  const sendToPrinter = async (escposCommands, label = 'receipt') => {
-    if (isPrinting) {
-      console.log('[POS] Print already in progress, skipping');
-      return;
-    }
-    setIsPrinting(true);
-    // Safety: auto-reset after 10 seconds to prevent stuck state
-    const safetyTimer = setTimeout(() => setIsPrinting(false), 10000);
-    try {
-      const defaultPrinter = await printerAPI.getDefault();
-      if (!defaultPrinter) {
-        console.log('[POS] No default printer configured, skipping print');
-        return;
-      }
-      const apiUrl = process.env.REACT_APP_BACKEND_URL;
-      const token = getAuthToken();
-      await printerService.printToDevice(defaultPrinter, escposCommands, apiUrl, token);
-      console.log(`[POS] ${label} print sent successfully`);
-    } catch (printErr) {
-      console.warn(`[POS] ${label} print failed:`, printErr.message);
-      if (label !== 'kitchen-auto' && label !== 'customer-auto' && label !== 'kitchen-delta') {
-        toast.error(`Print failed: ${printErr.message}`);
-      }
-    } finally {
-      clearTimeout(safetyTimer);
-      setIsPrinting(false);
-    }
-  };
-
-  // Helper: Print a specific order's kitchen receipt (LOCAL generation — no backend needed)
+  // Print a specific order's kitchen receipt (manual action on Orders list)
   const printOrderReceipt = async (orderId, orderNumber) => {
     if (isPrinting) {
       toast.warning('Already printing, please wait...');
       return;
     }
     const toastId = toast.loading(`Printing order #${orderNumber}...`);
+    setIsPrinting(true);
     try {
-      // Find the order from pending/completed orders
       const order = pendingOrders.find(o => o.id === orderId) || completedOrders.find(o => o.id === orderId);
       if (!order) {
         toast.error('Order not found', { id: toastId });
         return;
       }
-      // Get table info if assigned
-      let tableInfo = null;
-      if (order.table_id) {
-        const table = tables.find(t => t.id === order.table_id);
-        if (table) tableInfo = { number: table.number, name: table.name || `Table ${table.number}` };
+      const res = await posPrintService.reprintKitchenTicket({
+        order,
+        tables,
+        businessInfo: restaurantInfo?.business_info || {},
+        paperWidth: defaultPaperWidth,
+      });
+      if (res.ok) {
+        toast.success(`Order #${orderNumber} sent to printer`, { id: toastId });
+      } else {
+        toast.error(`Print failed: ${res.error || 'unknown'}`, { id: toastId });
       }
-      const businessInfo = restaurantInfo?.business_info || {};
-      const commands = generateKitchenReceipt(order, businessInfo, tableInfo, defaultPaperWidth);
-      await sendToPrinter(commands, 'kitchen-manual');
-      toast.success(`Order #${orderNumber} sent to printer`, { id: toastId });
     } catch (err) {
       toast.error('Failed to print: ' + (err.message || ''), { id: toastId });
+    } finally {
+      setIsPrinting(false);
     }
   };
 
@@ -528,16 +457,16 @@ const POSScreen = () => {
       
       // Delta print: only print NEW items to kitchen
       try {
-        let tableInfo = null;
-        if (selectedTable) {
-          const table = tables.find(t => t.id === selectedTable);
-          if (table) tableInfo = { number: table.number, name: table.name || `Table ${table.number}` };
-        }
-        const businessInfo = restaurantInfo?.business_info || {};
         const deltaOrder = { ...updatedOrder, items: cart };
-        const commands = generateDeltaKitchenReceipt(deltaOrder, businessInfo, tableInfo, defaultPaperWidth);
-        if (commands && printSettings.print_kitchen_slip) {
-          sendToPrinter(commands, 'kitchen-delta').catch(() => {});
+        const res = await posPrintService.printKitchenDelta({
+          order: deltaOrder,
+          cartItems: cart,
+          tables,
+          businessInfo: restaurantInfo?.business_info || {},
+          paperWidth: defaultPaperWidth,
+          settings: printSettings,
+        });
+        if (res.ok) {
           orderAPI.markPrinted(editingOrder.id).catch(() => {});
         }
       } catch (e) {
@@ -605,16 +534,14 @@ const POSScreen = () => {
       
       // Print kitchen receipt in BACKGROUND (fire-and-forget — no UI blocking)
       try {
-        let tableInfo = null;
-        if (selectedTable) {
-          const table = tables.find(t => t.id === selectedTable);
-          if (table) tableInfo = { number: table.number, name: table.name || `Table ${table.number}` };
-        }
-        const businessInfo = restaurantInfo?.business_info || {};
-      const commands = generateKitchenReceipt(order, businessInfo, tableInfo, defaultPaperWidth);
-        if (printSettings.print_kitchen_slip) {
-          sendToPrinter(commands, 'kitchen-auto').catch(() => {});
-        }
+        posPrintService.printKitchenTicket({
+          order,
+          tables,
+          businessInfo: restaurantInfo?.business_info || {},
+          paperWidth: defaultPaperWidth,
+          settings: printSettings,
+          label: 'kitchen-auto',
+        }).catch(() => {});
         // Mark all items as printed
         orderAPI.markPrinted(order.id).catch(() => {});
       } catch (e) {
@@ -659,16 +586,16 @@ const POSScreen = () => {
       try {
         await saveToIndexedDB('orders', offlineOrder);
         toast.info('Saved offline — will sync when connected');
-        // Still print locally
+        // Still print locally (offline path always attempts, ignoring kitchen toggle)
         try {
-          let tableInfo = null;
-          if (selectedTable) {
-            const table = tables.find(t => t.id === selectedTable);
-            if (table) tableInfo = { number: table.number, name: table.name || `Table ${table.number}` };
-          }
-          const businessInfo = restaurantInfo?.business_info || {};
-          const commands = generateKitchenReceipt(offlineOrder, businessInfo, tableInfo, defaultPaperWidth);
-          await sendToPrinter(commands, 'kitchen-offline');
+          await posPrintService.printKitchenTicket({
+            order: offlineOrder,
+            tables,
+            businessInfo: restaurantInfo?.business_info || {},
+            paperWidth: defaultPaperWidth,
+            settings: { print_kitchen_slip: true },
+            label: 'kitchen-offline',
+          });
         } catch {}
         setLastOrderNumber(offlineOrder.order_number);
         setCart([]);
@@ -776,22 +703,20 @@ const POSScreen = () => {
       
       // Try to print customer receipt LOCALLY (no backend needed — works offline)
       try {
-        let tableInfo = null;
-        if (selectedOrderToComplete.table_id) {
-          const table = tables.find(t => t.id === selectedOrderToComplete.table_id);
-          if (table) tableInfo = { number: table.number, name: table.name || `Table ${table.number}` };
-        }
-        const businessInfo = restaurantInfo?.business_info || {};
-        const commands = generateCustomerReceipt(
-          { ...selectedOrderToComplete, payment_method: paymentMethod, tip_amount: tipAmount, total_amount: grandTotal },
-          businessInfo,
-          tableInfo,
+        const receiptOrder = {
+          ...selectedOrderToComplete,
+          payment_method: paymentMethod,
+          tip_amount: tipAmount,
+          total_amount: grandTotal,
+        };
+        await posPrintService.printCustomerReceipt({
+          order: receiptOrder,
+          tables,
+          businessInfo: restaurantInfo?.business_info || {},
           currency,
-          defaultPaperWidth
-        );
-        if (printSettings.print_customer_receipt) {
-          await sendToPrinter(commands, 'customer-auto');
-        }
+          paperWidth: defaultPaperWidth,
+          settings: printSettings,
+        });
       } catch (printError) {
         console.log('Receipt printing skipped:', printError.message);
       }
@@ -838,6 +763,8 @@ const POSScreen = () => {
 
   return (
     <div className="flex h-screen pos-screen relative overflow-x-hidden">
+      {/* Edge-hover quick nav (desktop only) */}
+      <POSEdgeNav currentPath="/pos" />
       {/* QR Order Flash Overlay */}
       {flashActive && (
         <div
@@ -1161,8 +1088,9 @@ const POSScreen = () => {
                               try {
                                 const printResult = await printerAPI.printCustomerReceipt(order.id);
                                 if (printResult?.commands) {
-                                  await sendToPrinter(printResult.commands);
-                                  toast.success('Receipt sent to printer');
+                                  const res = await posPrintService.sendToDefaultPrinter(printResult.commands, 'customer-manual');
+                                  if (res.ok) toast.success('Receipt sent to printer');
+                                  else toast.error(`Print failed: ${res.error || 'unknown'}`);
                                 } else {
                                   toast.error('No print data generated');
                                 }

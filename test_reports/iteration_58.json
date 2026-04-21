@@ -1,0 +1,49 @@
+{
+  "summary": "Iteration 58: Verified manager workforce features — configurable overtime alerts, Bulk Mark/Clear Week Off, and scheduler bulk_week_off flag. All 6 backend pytest checks passed; all 11 UI checks (login, settings persistence, dialog, mark, undo, regression delete) passed.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Mark Week Off Dialog (ShiftScheduler)", "issues": ["Console warning: DialogContent missing 'Description' / aria-describedby (Radix a11y warning, not blocking)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration58_workforce.py",
+    "/app/test_reports/pytest/iter58.xml"
+  ],
+  "action_items": [
+    "(Optional/minor) Add a DialogDescription or aria-describedby to the Mark Week Off dialog to silence the Radix a11y console warning."
+  ],
+  "critical_code_review_comments": [
+    "shifts.py: route ordering is correct — /shifts/clear-week-off (line 89) is registered BEFORE /shifts/{shift_id} (line 108), so the literal path is not shadowed by the path param route. Verified by both unit test and by deleting a real shift after marking week off (returned 404 because mark-week-off had already removed it).",
+    "attendance.py L674-723: dashboard-stats correctly reads business_info.overtime_warn_hours / overtime_limit_hours with safe defaults (40/48). Week range respects business_info.week_start_day. Open shift hours included in computation.",
+    "leave.py L286: scheduler/blocks correctly attaches bulk_week_off boolean only to hard (approved) blocks, not pending leaves — matches frontend expectation in ShiftScheduler.js L283.",
+    "ShiftScheduler.js L283-311: isWholeWeekOff logic uses .every() across 7 weekDates and toggles between CalendarX (mark) and RotateCcw (clear) icons. Visually confirmed in screenshots.",
+    "RestaurantSettings.js L530-561: Overtime fields are correctly gated by hasFeature('workforce'). Persistence validated end-to-end (set 38/46, reload, values stick).",
+    "Minor: Mark Week Off dialog should include <DialogDescription> for Radix UI accessibility (currently warns in console)."
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration58_workforce.py"
+  ],
+  "success_rate": {
+    "backend": "100% (6/6 passed)",
+    "frontend": "100% (all 11 UI assertions passed; 1 non-blocking a11y console warning)"
+  },
+  "test_credentials": {
+    "business_admin": {"username": "SKAdmin", "password": "saswata@123"},
+    "staff_user": {"username": "user", "password": "user123"}
+  },
+  "seed_data_creation": "Created and removed a transient shift on the upcoming Monday to validate that mark-week-off deletes existing shifts. Created and removed a bulk_week_off leave for staff 'user'. Settings restored values: overtime_warn_hours=38, overtime_limit_hours=46 (test left these on the SKAdmin restaurant — main agent may revert if desired).",
+  "retest_needed": false,
+  "should_main_agent_self_test": false,
+  "context_for_next_testing_agent": "Iteration 58 verified all 3 manager workforce features end-to-end against the public preview URL: (1) GET /api/attendance/dashboard-stats returns overtime_alerts list; each entry has staff_id, name, hours, over_limit (bool), warn_threshold, limit_threshold. The card UI conditionally renders only when the list is non-empty (testid='wf-overtime-alerts'). (2) PUT /api/restaurants/my/settings persists business_info.overtime_warn_hours / overtime_limit_hours; UI inputs 'overtime-warn-hours-input' and 'overtime-limit-hours-input' on Business tab of /settings save and reload correctly. (3) POST /api/shifts/mark-week-off creates approved 7-day leave with bulk_week_off=true and removes shifts in the week. (4) DELETE /api/shifts/clear-week-off?staff_id=...&week_start_date=... removes only bulk_week_off leaves; route correctly registered BEFORE DELETE /api/shifts/{shift_id} so no shadowing. (5) GET /api/scheduler/blocks returns bulk_week_off=true on hard blocks for those leaves. (6) Regression: DELETE /api/shifts/{shift_id} still works (200 then 404 on second delete). UI: ShiftScheduler shows CalendarX icon (mark-week-off-<sid>) which opens week-off-dialog; after confirm the icon swaps to RotateCcw (clear-week-off-<sid>) and the row shows 'Personal' hard blocks across all 7 days. Undo (RotateCcw) successfully clears the bulk leave. Screenshots saved in .screenshots/.",
+  "rca_of_the_issue": "N/A — no bugs found. Only a minor Radix accessibility console warning on the Mark Week Off dialog (missing DialogDescription / aria-describedby).",
+  "mocked_apis": {
+    "has_mocked_apis": false,
+    "mocked_apis_list": []
+  }
+}

@@ -279,7 +279,12 @@ async def get_scheduler_blocks(start_date: str, end_date: str, current_user: Use
         while d <= end:
             ds = d.strftime("%Y-%m-%d")
             if start_date <= ds <= end_date:
-                blocks[sid][ds] = {"block_type": "hard", "reason": leave["leave_type"], "leave_id": leave["id"]}
+                blocks[sid][ds] = {
+                    "block_type": "hard",
+                    "reason": leave["leave_type"],
+                    "leave_id": leave["id"],
+                    "bulk_week_off": bool(leave.get("bulk_week_off")),
+                }
             d += timedelta(days=1)
 
     for leave in pending_leaves:

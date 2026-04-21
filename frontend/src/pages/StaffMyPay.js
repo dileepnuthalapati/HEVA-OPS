@@ -1,30 +1,31 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { attendanceAPI } from '../services/api';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
-import { Loader2, Clock, Banknote, CalendarDays, TrendingUp, CheckCircle, XCircle, AlertTriangle, Edit2 } from 'lucide-react';
+import { Loader2, Clock, Banknote, CalendarDays, TrendingUp, CheckCircle, XCircle, AlertTriangle, Edit2, ChevronLeft, ChevronRight } from 'lucide-react';
 
 const CURRENCY_SYMBOLS = { GBP: '£', USD: '$', EUR: '€', INR: '₹' };
 
 export default function StaffMyPay() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [weekOffset, setWeekOffset] = useState(0);
   const [correcting, setCorrecting] = useState(null); // { recordId, date }
   const [correctionHours, setCorrectionHours] = useState('');
   const [correctionNotes, setCorrectionNotes] = useState('');
   const [saving, setSaving] = useState(false);
 
-  const loadData = () => {
+  const loadData = useCallback(() => {
     setLoading(true);
-    attendanceAPI.getMySummary()
+    attendanceAPI.getMySummary(weekOffset)
       .then(setData)
       .catch(() => {})
       .finally(() => setLoading(false));
-  };
+  }, [weekOffset]);
 
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [loadData]);
 
   const handleCorrection = async () => {
     if (!correcting || !correctionHours) return;
@@ -62,6 +63,24 @@ export default function StaffMyPay() {
       <div className="mb-2">
         <h2 className="text-lg font-bold text-slate-900">{data.staff_name}</h2>
         <p className="text-xs text-muted-foreground">{data.position || 'Team Member'} &middot; {isMonthly ? 'Monthly' : 'Hourly'}</p>
+      </div>
+
+      {/* Week Navigation */}
+      <div className="flex items-center justify-between mb-3" data-testid="week-nav">
+        <Button variant="ghost" size="sm" onClick={() => setWeekOffset(w => w - 1)} className="h-8 w-8 p-0" data-testid="prev-week-btn">
+          <ChevronLeft className="w-4 h-4" />
+        </Button>
+        <div className="text-center">
+          <p className="text-xs font-bold text-slate-800">
+            {data?.week_start && data?.week_end
+              ? `${new Date(data.week_start + 'T00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} — ${new Date(data.week_end + 'T00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`
+              : 'This Week'}
+          </p>
+          {weekOffset !== 0 && <button onClick={() => setWeekOffset(0)} className="text-[10px] text-indigo-600 font-medium">Back to this week</button>}
+        </div>
+        <Button variant="ghost" size="sm" onClick={() => setWeekOffset(w => w + 1)} disabled={weekOffset >= 0} className="h-8 w-8 p-0" data-testid="next-week-btn">
+          <ChevronRight className="w-4 h-4" />
+        </Button>
       </div>
 
       {/* Summary Cards */}

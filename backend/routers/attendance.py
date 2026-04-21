@@ -478,8 +478,8 @@ async def get_live_attendance(current_user: User = Depends(require_admin)):
 
 
 @router.get("/attendance/my-summary")
-async def get_my_hours_summary(current_user: User = Depends(require_feature("workforce"))):
-    """Get current user's hours and pay summary."""
+async def get_my_hours_summary(week_offset: int = 0, current_user: User = Depends(require_feature("workforce"))):
+    """Get current user's hours and pay summary. Supports week navigation via week_offset."""
     staff = await db.users.find_one(
         {"username": current_user.username, "restaurant_id": current_user.restaurant_id},
         {"_id": 0, "password_hash": 0, "pos_pin_hash": 0, "manager_pin_hash": 0}
@@ -490,10 +490,20 @@ async def get_my_hours_summary(current_user: User = Depends(require_feature("wor
     staff_id = staff.get("id")
     now = datetime.now(timezone.utc)
 
-    # This week (Mon-Sun)
-    week_start = (now - timedelta(days=now.weekday())).strftime("%Y-%m-%d")
+    # Get restaurant week start day
+    restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0, "business_info.week_start_day": 1})
+    week_start_day = restaurant.get("business_info", {}).get("week_start_day", 1) if restaurant else 1  # default Monday
+
+    # Calculate week range using restaurant's week_start_day + offset
+    current_day = now.weekday()  # 0=Mon
+    diff = (current_day - week_start_day + 7) % 7
+    week_start_date = now - timedelta(days=diff) + timedelta(weeks=week_offset)
+    week_end_date = week_start_date + timedelta(days=6)
+    week_start = week_start_date.strftime("%Y-%m-%d")
+    week_end = week_end_date.strftime("%Y-%m-%d")
+
     week_records = await db.attendance.find(
-        {"staff_id": staff_id, "restaurant_id": current_user.restaurant_id, "date": {"$gte": week_start}, "clock_out": {"$ne": None}},
+        {"staff_id": staff_id, "restaurant_id": current_user.restaurant_id, "date": {"$gte": week_start, "$lte": week_end}, "clock_out": {"$ne": None}},
         {"_id": 0}
     ).to_list(100)
     week_hours = sum(r.get("hours_worked", 0) or 0 for r in week_records)
@@ -516,7 +526,7 @@ async def get_my_hours_summary(current_user: User = Depends(require_feature("wor
     # Weekly breakdown: each day's hours + status
     weekly_breakdown = []
     for i in range(7):
-        d = (datetime.strptime(week_start, "%Y-%m-%d") + timedelta(days=i)).strftime("%Y-%m-%d")
+        d = (week_start_date + timedelta(days=i)).strftime("%Y-%m-%d")
         day_records = [r for r in week_records if r.get("date") == d]
         day_hours = sum(r.get("hours_worked", 0) or 0 for r in day_records)
         rejected = any(r.get("rejected") for r in day_records)
@@ -558,6 +568,9 @@ async def get_my_hours_summary(current_user: User = Depends(require_feature("wor
         "hourly_rate": hourly_rate,
         "monthly_salary": monthly_salary,
         "currency": currency,
+        "week_start": week_start,
+        "week_end": week_end,
+        "week_offset": week_offset,
         "week_hours": round(week_hours, 1),
         "month_hours": round(month_hours, 1),
         "week_pay": round(week_pay, 2),
@@ -658,6 +671,57 @@ async def workforce_dashboard_stats(current_user: User = Depends(require_feature
             {"restaurant_id": current_user.restaurant_id, "pending_manager_approval": True}
         )
 
+    # Overtime alerts: configurable warning + limit thresholds per restaurant
+    restaurant = await db.restaurants.find_one(
+        {"id": current_user.restaurant_id},
+        {"_id": 0, "business_info": 1}
+    )
+    biz_info = (restaurant or {}).get("business_info", {}) or {}
+    week_start_day = biz_info.get("week_start_day", 1)  # default Monday
+    overtime_warn = biz_info.get("overtime_warn_hours", 40)
+    overtime_limit = biz_info.get("overtime_limit_hours", 48)
+
+    # Compute week range honoring week_start_day
+    current_dow = now.weekday()  # 0=Mon..6=Sun (Python)
+    # Convert week_start_day (0=Sun, 1=Mon, 6=Sat) to Python weekday
+    py_week_start = (week_start_day - 1) % 7
+    diff = (current_dow - py_week_start) % 7
+    week_start_dt = now - timedelta(days=diff)
+    week_end_dt = week_start_dt + timedelta(days=6)
+    week_start = week_start_dt.strftime("%Y-%m-%d")
+    week_end = week_end_dt.strftime("%Y-%m-%d")
+
+    all_staff = await db.users.find(
+        {"restaurant_id": current_user.restaurant_id, "role": {"$in": ["user", "admin"]}},
+        {"_id": 0, "id": 1, "username": 1}
+    ).to_list(200)
+    overtime_alerts = []
+    for s in all_staff:
+        week_records = await db.attendance.find(
+            {"staff_id": s["id"], "restaurant_id": current_user.restaurant_id, "date": {"$gte": week_start, "$lte": week_end}, "clock_out": {"$ne": None}},
+            {"_id": 0, "hours_worked": 1}
+        ).to_list(100)
+        total = sum(r.get("hours_worked", 0) or 0 for r in week_records)
+        # Also add hours from open shifts
+        open_shift = await db.attendance.find_one(
+            {"staff_id": s["id"], "restaurant_id": current_user.restaurant_id, "clock_out": None, "is_operational": {"$ne": False}},
+            {"_id": 0, "clock_in": 1}
+        )
+        if open_shift and open_shift.get("clock_in"):
+            ci = datetime.fromisoformat(open_shift["clock_in"])
+            total += (now - ci).total_seconds() / 3600
+        if total >= overtime_warn:
+            overtime_alerts.append({
+                "staff_id": s["id"],
+                "name": s["username"],
+                "hours": round(total, 1),
+                "over_limit": total >= overtime_limit,
+                "warn_threshold": overtime_warn,
+                "limit_threshold": overtime_limit,
+            })
+    # Sort by hours desc so the most critical ones are first
+    overtime_alerts.sort(key=lambda x: x["hours"], reverse=True)
+
     return {
         "scheduled_shifts": len(shifts_today),
         "clocked_in_count": len(clocked_in),
@@ -667,6 +731,7 @@ async def workforce_dashboard_stats(current_user: User = Depends(require_feature
         "total_hours_today": round(total_hours, 1),
         "total_staff": staff_count,
         "pending_adjustments_count": pending_count,
+        "overtime_alerts": overtime_alerts,
         "shifts": [{"staff_name": s.get("staff_name", ""), "start_time": s.get("start_time"), "end_time": s.get("end_time"), "position": s.get("position", "")} for s in shifts_today],
     }
 
