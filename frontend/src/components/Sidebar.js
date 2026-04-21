@@ -303,6 +303,7 @@ function SidebarLink({ item }) {
 function SidebarContent({ user, onLogout, onOpenSearch }) {
   const { hasFeature } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [upgradeModule, setUpgradeModule] = useState(null);
 
   const isPlatform = user?.role === 'platform_owner';
@@ -375,6 +376,13 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
   const handleSelectWorkspace = (key) => {
     setActiveKey(key);
     try { localStorage.setItem(WORKSPACE_STORAGE_KEY, key); } catch {}
+    // Navigate to the first link of the selected workspace so the user
+    // lands on a page that actually belongs to the new workspace.
+    const ws = enabled.find(w => w.key === key);
+    const firstItem = ws?.items?.find(it => !it.requires || hasFeature(it.requires));
+    if (firstItem?.path) {
+      navigate(firstItem.path);
+    }
   };
 
   const activeWorkspace = enabled.find(w => w.key === activeKey);

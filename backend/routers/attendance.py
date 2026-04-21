@@ -492,11 +492,15 @@ async def get_my_hours_summary(week_offset: int = 0, current_user: User = Depend
 
     # Get restaurant week start day
     restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0, "business_info.week_start_day": 1})
-    week_start_day = restaurant.get("business_info", {}).get("week_start_day", 1) if restaurant else 1  # default Monday
+    week_start_day = restaurant.get("business_info", {}).get("week_start_day", 1) if restaurant else 1  # 0=Sun, 1=Mon, 6=Sat (JS convention)
 
-    # Calculate week range using restaurant's week_start_day + offset
-    current_day = now.weekday()  # 0=Mon
-    diff = (current_day - week_start_day + 7) % 7
+    # Convert JS-convention week_start_day → Python weekday (Mon=0..Sun=6)
+    # Sun(0)→6, Mon(1)→0, Tue(2)→1, ..., Sat(6)→5
+    py_week_start = (week_start_day - 1) % 7
+
+    # Calculate week range
+    current_day = now.weekday()  # 0=Mon..6=Sun (Python)
+    diff = (current_day - py_week_start) % 7
     week_start_date = now - timedelta(days=diff) + timedelta(weeks=week_offset)
     week_end_date = week_start_date + timedelta(days=6)
     week_start = week_start_date.strftime("%Y-%m-%d")

@@ -108,6 +108,46 @@ fastapi_app.add_middleware(
     allow_headers=["*"],
 )
 
+# ──────────────────────────────────────────────────────────────────────
+# Serve the React SPA from /frontend/build (production only).
+# On Railway, railway.toml builds the React app and leaves the output at
+# /app/frontend/build. In local dev (where /app/frontend/build does not
+# exist) this block is silently skipped — Vite dev server handles the
+# frontend on port 3000 as before.
+# ──────────────────────────────────────────────────────────────────────
+_FRONTEND_BUILD_DIR = ROOT_DIR.parent / "frontend" / "build"
+if _FRONTEND_BUILD_DIR.exists() and (_FRONTEND_BUILD_DIR / "index.html").exists():
+    # Mount /static so React's hashed JS/CSS asset URLs resolve
+    _static_dir = _FRONTEND_BUILD_DIR / "static"
+    if _static_dir.exists():
+        fastapi_app.mount("/static", StaticFiles(directory=str(_static_dir)), name="static")
+
+    # Serve root and any client-side route that isn't /api, /menu, /kds-monitor,
+    # /socket.io, /static — everything else falls back to index.html so
+    # React Router handles the path.
+    @fastapi_app.get("/")
+    async def serve_root():
+        return FileResponse(str(_FRONTEND_BUILD_DIR / "index.html"), media_type="text/html")
+
+    @fastapi_app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        # Never intercept API / socket / template routes — those are already
+        # registered above and would have matched first. This catch-all only
+        # fires for paths that didn't hit any earlier route.
+        if full_path.startswith(("api/", "socket.io/", "menu/", "kds-monitor/", "static/")):
+            return JSONResponse({"detail": "Not Found"}, status_code=404)
+
+        # Serve static root-level assets (favicon, manifest, robots, etc.)
+        candidate = _FRONTEND_BUILD_DIR / full_path
+        if candidate.is_file():
+            return FileResponse(str(candidate))
+
+        # Everything else → SPA index (React Router takes over)
+        return FileResponse(str(_FRONTEND_BUILD_DIR / "index.html"), media_type="text/html")
+    logger_sf = logging.getLogger("static")
+    logger_sf.info(f"Serving React SPA from {_FRONTEND_BUILD_DIR}")
+# ──────────────────────────────────────────────────────────────────────
+
 # Wrap FastAPI with Socket.IO ASGI app
 # This handles both HTTP (FastAPI) and WebSocket (Socket.IO) traffic
 app = socketio.ASGIApp(sio, other_asgi_app=fastapi_app)
