@@ -1,15 +1,15 @@
+# Railway deploy config
+# ─────────────────────
+# Uses a Dockerfile at repo root instead of Nixpacks auto-detection.
+# Nixpacks fought monorepo layouts — Dockerfile is deterministic and
+# matches Capacitor 8's Node 22 requirement exactly.
+
 [build]
-builder = "nixpacks"
-# Simple, direct: yarn and python are both on PATH thanks to nixpacks.toml.
-# No need for corepack or `npm install -g yarn` hacks anymore.
-#
-# REACT_APP_BACKEND_URL='' makes the web bundle call itself (same-origin).
-# The native APK bakes its own URL at build time on the developer machine
-# and is not affected by this value.
-buildCommand = "cd frontend && yarn install --frozen-lockfile && REACT_APP_BACKEND_URL='' yarn build && cd ../backend && pip install -r requirements.txt"
+builder = "dockerfile"
+dockerfilePath = "Dockerfile"
 
 [deploy]
-startCommand = "cd backend && uvicorn server:app --host 0.0.0.0 --port ${PORT:-5000}"
+startCommand = "cd /app/backend && uvicorn server:app --host 0.0.0.0 --port ${PORT:-5000}"
 healthcheckPath = "/api/"
 healthcheckTimeout = 300
 restartPolicyType = "ON_FAILURE"
