@@ -1,5 +1,5 @@
 /**
- * Biometric authentication utility for Heva One.
+ * Biometric authentication utility for Heva ONE.
  * Uses @aparajita/capacitor-biometric-auth on native Capacitor devices.
  * Gracefully falls back to true (allowed) on web browsers.
  */

@@ -102,7 +102,7 @@ export default function POSEdgeNav({ currentPath = '/pos' }) {
       >
         <div className="p-5 flex flex-col h-full">
           <div className="mb-5">
-            <h1 className="font-heading text-lg font-bold tracking-tight text-white">Heva One</h1>
+            <h1 className="font-heading text-lg font-bold tracking-tight text-white">Heva ONE</h1>
             <p className="text-[10px] tracking-[0.15em] uppercase text-slate-400 mt-0.5 font-medium">Quick Nav</p>
           </div>
 

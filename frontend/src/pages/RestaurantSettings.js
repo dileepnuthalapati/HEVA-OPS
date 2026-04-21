@@ -593,7 +593,7 @@ const RestaurantSettings = () => {
                     <div className="border-t border-dashed pt-3 mt-3">
                       {formData.receipt_footer && <div className="text-center mb-2">{formData.receipt_footer}</div>}
                       {formData.website && <div className="text-center text-xs">Visit us at: {formData.website}</div>}
-                      <div className="text-center text-xs text-muted-foreground mt-3">Powered by Heva One</div>
+                      <div className="text-center text-xs text-muted-foreground mt-3">Powered by Heva ONE</div>
                     </div>
                   </div>
                 </CardContent>
@@ -805,7 +805,7 @@ const RestaurantSettings = () => {
                           const terminalData = {
                             device_mode: 'terminal',
                             restaurant_id: user?.restaurant_id,
-                            business_name: formData.name || 'Heva One',
+                            business_name: formData.name || 'Heva ONE',
                             registered_at: new Date().toISOString(),
                             registered_by: user?.username,
                           };

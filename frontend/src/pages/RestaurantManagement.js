@@ -303,7 +303,7 @@ const RestaurantManagement = () => {
           <div className="flex items-center justify-between mb-8">
             <div>
               <h1 className="text-2xl md:text-4xl font-bold tracking-tight mb-1 md:mb-2">Business Management</h1>
-              <p className="text-muted-foreground">Manage all your Heva One businesses</p>
+              <p className="text-muted-foreground">Manage all your Heva ONE businesses</p>
             </div>
             <Dialog open={showAddDialog} onOpenChange={(open) => {
               setShowAddDialog(open);

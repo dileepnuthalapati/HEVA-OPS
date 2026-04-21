@@ -1,5 +1,5 @@
 /**
- * Heva One Frontend ESC/POS Receipt Generator
+ * Heva ONE Frontend ESC/POS Receipt Generator
  * 
  * Generates ESC/POS thermal printer commands entirely on the frontend.
  * This makes the tablet the "brain" — receipts print even when offline.
@@ -321,7 +321,7 @@ export function generateCustomerReceipt(order, businessInfo = {}, tableInfo = nu
     '\n',
     CMD.ALIGN_CENTER,
     businessInfo.receipt_footer ? `${businessInfo.receipt_footer}\n` : 'Thank you for your visit!\n',
-    '\nPowered by Heva One\n',
+    '\nPowered by Heva ONE\n',
     CMD.FEED_5,
     CMD.CUT,
   );

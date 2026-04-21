@@ -13,7 +13,7 @@ import { Settings, Bell, Shield, CreditCard, Mail, Globe, Key, UserPlus, Trash2,
 
 const PlatformSettings = () => {
   const [settings, setSettings] = useState({
-    platformName: 'Heva One',
+    platformName: 'Heva ONE',
     supportEmail: 'support@hevaone.com',
     defaultTrialDays: 14,
     defaultPlanPrice: 19.99,
