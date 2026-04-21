@@ -1,0 +1,46 @@
+# Anything not needed to build the container — keeps image small and
+# avoids polluting Docker build context.
+
+# Version control
+.git
+.gitignore
+
+# Dev / IDE
+.vscode
+.idea
+.emergent
+
+# Test + docs artifacts
+test_reports
+memory
+*.md
+
+# Native mobile build outputs (they're built on the developer machine,
+# not on Railway, so they never need to go into the container).
+frontend/android/.gradle
+frontend/android/app/build
+frontend/android/build
+frontend/ios/App/build
+frontend/ios/Pods
+frontend/node_modules
+frontend/build
+
+# Python cache
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/.pytest_cache
+
+# Node cache
+**/node_modules
+.yarn/cache
+.yarn/install-state.gz
+
+# Environments (Railway injects these at runtime)
+.env
+**/.env
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
