@@ -1,37 +1,50 @@
 # ─────────────────────────────────────────────────────────────────────
 # Heva One — monorepo Dockerfile for Railway
 # ─────────────────────────────────────────────────────────────────────
-# Stage 1: build the React SPA with Node 22 (Capacitor 8 compatible)
-# Stage 2: Python 3.11 runtime with FastAPI + the built SPA
+# Node 24 matches developer's local env (where APK builds succeed).
+# Python 3.11 matches backend/requirements.txt compatibility.
+# Steps are split into individual RUNs so a failure shows the exact line
+# that died rather than hiding inside a chained shell command.
 # ─────────────────────────────────────────────────────────────────────
 
 # ── Stage 1: Frontend build ─────────────────────────────────────────
-FROM node:22-slim AS frontend-builder
+FROM node:24-slim AS frontend-builder
 
 WORKDIR /frontend
 
-# Install deps first (cached layer) — only invalidated when package.json
-# or yarn.lock change, not on every source edit.
+# Install yarn 1.22.22 globally via npm (npm ships with node:24-slim).
+# Avoids corepack which was exiting silently in the previous build.
+RUN npm install -g --silent yarn@1.22.22 && yarn --version
+
+# Copy dependency manifest first so this layer is cached independently
+# from source changes.
 COPY frontend/package.json frontend/yarn.lock ./
-RUN corepack enable \
- && yarn config set network-timeout 600000 \
- && yarn install --frozen-lockfile --network-concurrency 1
+
+# Split install step from source copy. Non-interactive + longer timeout
+# for Railway's sometimes-slow registry mirror.
+# --ignore-engines: Capacitor CLI declares ">=22.0.0" — since we're on
+# Node 24 this is unneeded in theory, but adding it makes us immune to
+# any future engine-range tightening by upstream packages.
+RUN yarn install --non-interactive --network-timeout 600000 --ignore-engines
 
 # Copy the rest of the frontend source
 COPY frontend/ ./
 
-# Build the production SPA. Empty REACT_APP_BACKEND_URL makes the web
-# bundle call itself (same-origin). Native APK builds bake their own URL
-# at build time on the developer machine and are NOT affected by this.
+# Build the production SPA.
+# - Empty REACT_APP_BACKEND_URL makes the web bundle call itself (same-
+#   origin). Native APK builds bake their own URL at `yarn build` time on
+#   the developer machine and are NOT affected by this value.
+# - CI=false prevents Create-React-App from failing on warnings.
 ENV REACT_APP_BACKEND_URL=""
 ENV NODE_OPTIONS="--max-old-space-size=2048"
+ENV CI=false
 RUN yarn build
 
 # ── Stage 2: Python runtime ─────────────────────────────────────────
 FROM python:3.11-slim
 
-# gcc + build-essential are needed by some Python deps (e.g. bcrypt).
-# Keep the image small by removing apt lists after install.
+# gcc + build-essential are required by some Python wheels (e.g. bcrypt,
+# aiohttp) that compile native extensions during pip install.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends gcc build-essential \
  && rm -rf /var/lib/apt/lists/*
