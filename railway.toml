@@ -1,13 +1,17 @@
 [build]
 builder = "nixpacks"
-# Step-by-step:
-# 1. npm install -g yarn        → guarantees yarn is on PATH (npm always is)
-# 2. cd frontend && yarn ...     → installs node_modules + builds the React SPA
-# 3. cd ../backend && pip ...    → installs Python deps
+# Use corepack (built into Node.js 18+) to activate yarn based on the
+# `packageManager` field in frontend/package.json. This avoids the
+# "yarn: command not found" issue we hit with `npm install -g yarn`,
+# where the global bin dir isn't on PATH in the same shell session.
 #
-# REACT_APP_BACKEND_URL='' makes the frontend call itself (same-origin).
-# The native APK bakes its own URL at build time and is unaffected.
-buildCommand = "npm install -g yarn && cd frontend && yarn install --frozen-lockfile && REACT_APP_BACKEND_URL='' yarn build && cd ../backend && pip install -r requirements.txt"
+# `corepack prepare --activate` downloads the exact yarn version pinned
+# in package.json and registers shims in /root/.corepack which IS on PATH.
+#
+# REACT_APP_BACKEND_URL='' makes the web bundle call itself (same-origin).
+# The native APK bakes its own URL at build time on the developer machine
+# and is not affected by this value.
+buildCommand = "corepack enable && corepack prepare yarn@1.22.22 --activate && cd frontend && yarn install --frozen-lockfile && REACT_APP_BACKEND_URL='' yarn build && cd ../backend && pip install -r requirements.txt"
 
 [deploy]
 startCommand = "cd backend && uvicorn server:app --host 0.0.0.0 --port ${PORT:-5000}"
