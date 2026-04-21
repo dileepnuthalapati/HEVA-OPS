@@ -134,7 +134,12 @@ if _FRONTEND_BUILD_DIR.exists() and (_FRONTEND_BUILD_DIR / "index.html").exists(
         # Never intercept API / socket / template routes — those are already
         # registered above and would have matched first. This catch-all only
         # fires for paths that didn't hit any earlier route.
-        if full_path.startswith(("api/", "socket.io/", "menu/", "kds-monitor/", "static/")):
+        # We check both the bare prefix (e.g. "api") and with trailing slash
+        # ("api/") so a user hitting /api without a slash gets a proper 404
+        # JSON instead of accidentally being served the SPA's index.html.
+        _RESERVED = {"api", "socket.io", "menu", "kds-monitor", "static"}
+        first_segment = full_path.split("/", 1)[0] if full_path else ""
+        if first_segment in _RESERVED:
             return JSONResponse({"detail": "Not Found"}, status_code=404)
 
         # Serve static root-level assets (favicon, manifest, robots, etc.)
