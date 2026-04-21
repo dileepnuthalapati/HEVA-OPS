@@ -1,10 +1,20 @@
 # Nixpacks configuration for Heva One monorepo
 # Tells Railway/nixpacks that this project needs BOTH Node.js (for the React
 # frontend build) and Python (for the FastAPI backend).
-# The actual build and start commands are defined in railway.toml.
+#
+# The actual build and start commands live in railway.toml.
+# buildCommand there handles `npm install -g yarn` explicitly so yarn is on
+# PATH regardless of whether nixpacks auto-detected the packageManager field.
 
 providers = ["node", "python"]
 
+[phases.setup]
+# Pin major versions so Railway rebuilds are reproducible.
+nixPkgs = ["nodejs_20", "python311"]
+
 [variables]
-# Force yarn over npm (package.json pins yarn as packageManager)
+# React dev deps (webpack, babel, etc.) must be installed for `yarn build`.
 NPM_CONFIG_PRODUCTION = "false"
+YARN_PRODUCTION = "false"
+# Larger heap for CRA webpack build (React app has many modules).
+NODE_OPTIONS = "--max-old-space-size=2048"
