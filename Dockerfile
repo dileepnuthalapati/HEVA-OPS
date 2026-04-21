@@ -10,12 +10,15 @@ FROM node:22-slim AS frontend-builder
 
 WORKDIR /frontend
 
+# Install yarn 1.22.22 globally via npm (npm ships with node:22-slim).
+# This is more reliable than `corepack enable` which can fail silently
+# inside some Docker base images.
+RUN npm install -g --silent yarn@1.22.22
+
 # Install deps first (cached layer) — only invalidated when package.json
 # or yarn.lock change, not on every source edit.
 COPY frontend/package.json frontend/yarn.lock ./
-RUN corepack enable \
- && yarn config set network-timeout 600000 \
- && yarn install --frozen-lockfile --network-concurrency 1
+RUN yarn install --frozen-lockfile --non-interactive
 
 # Copy the rest of the frontend source
 COPY frontend/ ./
@@ -25,6 +28,7 @@ COPY frontend/ ./
 # at build time on the developer machine and are NOT affected by this.
 ENV REACT_APP_BACKEND_URL=""
 ENV NODE_OPTIONS="--max-old-space-size=2048"
+ENV CI=false
 RUN yarn build
 
 # ── Stage 2: Python runtime ─────────────────────────────────────────
