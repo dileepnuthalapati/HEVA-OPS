@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { modulePricingAPI } from '../services/api';
-import { Sheet, SheetContent, SheetTrigger } from '../components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '../components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -29,7 +29,10 @@ const MODULE_META = {
   workforce: { label: 'Workforce', description: 'Shift scheduling, clock in/out, timesheets, payroll and the Heva Ops staff mobile app.' },
 };
 
-// Admin workspaces — each defines its icon, label, subtitle & page list
+// Admin workspaces — each defines its icon, label, subtitle & page list.
+// `defaultPath` is where the switcher lands the user when they pick this
+// workspace. This is intentionally a fixed home (NOT the last-visited page)
+// because the user prefers "start fresh" behaviour when switching contexts.
 const ADMIN_WORKSPACES = {
   pos: {
     key: 'pos',
@@ -37,6 +40,7 @@ const ADMIN_WORKSPACES = {
     subtitle: 'Orders · Menu · Tables',
     icon: Store,
     requires: ['pos', 'kds', 'qr_ordering'], // any one of these enables the workspace
+    defaultPath: '/dashboard',
     items: [
       { path: '/pos', icon: ShoppingCart, label: 'POS Terminal', requires: 'pos' },
       { path: '/orders', icon: FileText, label: 'Orders', requires: 'pos' },
@@ -54,6 +58,7 @@ const ADMIN_WORKSPACES = {
     subtitle: 'Live tickets',
     icon: ChefHat,
     requires: ['kds'],
+    defaultPath: '/kds',
     items: [
       { path: '/kds', icon: ChefHat, label: 'Kitchen (KDS)', requires: 'kds' },
     ],
@@ -64,6 +69,7 @@ const ADMIN_WORKSPACES = {
     subtitle: 'Schedule · HR · Payroll',
     icon: UsersIcon,
     requires: ['workforce'],
+    defaultPath: '/workforce/shifts',
     items: [
       { path: '/workforce/shifts', icon: Calendar, label: 'Shift Scheduler' },
       { path: '/workforce/attendance', icon: Clock, label: 'Attendance' },
@@ -80,6 +86,7 @@ const STAFF_WORKSPACES = {
     subtitle: 'Orders · Cash',
     icon: Store,
     requires: ['pos'],
+    defaultPath: '/pos',
     items: [
       { path: '/pos', icon: ShoppingCart, label: 'POS' },
       { path: '/orders', icon: FileText, label: 'Orders' },
@@ -92,6 +99,7 @@ const STAFF_WORKSPACES = {
     subtitle: 'Live tickets',
     icon: ChefHat,
     requires: ['kds'],
+    defaultPath: '/kds',
     items: [
       { path: '/kds', icon: ChefHat, label: 'Kitchen (KDS)' },
     ],
@@ -102,6 +110,7 @@ const STAFF_WORKSPACES = {
     subtitle: 'My shifts · pay',
     icon: UsersIcon,
     requires: ['workforce'],
+    defaultPath: '/heva-ops/shifts',
     items: [
       { path: '/heva-ops/shifts', icon: Calendar, label: 'My Shifts' },
       { path: '/heva-ops/clock', icon: Clock, label: 'Clock In/Out' },
@@ -120,7 +129,6 @@ const platformMenu = [
 ];
 
 const WORKSPACE_STORAGE_KEY = 'heva_active_workspace';
-const WORKSPACE_LAST_PATH_KEY = 'heva_workspace_last_path'; // map: {ws_key: last_path}
 
 // ──────────────────────────────────────────────────────────────────────
 // Upgrade modal (unchanged behaviour, shown when clicking a locked workspace)
@@ -341,24 +349,17 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
     }
   }, [enabled, activeKey]);
 
-  // Auto-switch workspace when the user navigates to a route belonging to a different workspace.
-  // Also records the last-visited path per workspace so the switcher can return there.
+  // Auto-switch workspace when the user navigates to a route belonging to a
+  // different workspace. We intentionally do NOT persist per-workspace last
+  // paths — switching a workspace should always land on the workspace's
+  // default home page (set at workspace level via `defaultPath`).
   useEffect(() => {
     if (isPlatform) return;
     const path = location.pathname;
     const matchingWs = enabled.find(ws => ws.items.some(it => it.path === path));
-    if (matchingWs) {
-      if (matchingWs.key !== activeKey) {
-        setActiveKey(matchingWs.key);
-        try { localStorage.setItem(WORKSPACE_STORAGE_KEY, matchingWs.key); } catch {}
-      }
-      // Remember the last path the user visited inside this workspace
-      try {
-        const raw = localStorage.getItem(WORKSPACE_LAST_PATH_KEY);
-        const map = raw ? JSON.parse(raw) : {};
-        map[matchingWs.key] = path;
-        localStorage.setItem(WORKSPACE_LAST_PATH_KEY, JSON.stringify(map));
-      } catch {}
+    if (matchingWs && matchingWs.key !== activeKey) {
+      setActiveKey(matchingWs.key);
+      try { localStorage.setItem(WORKSPACE_STORAGE_KEY, matchingWs.key); } catch {}
     }
   }, [location.pathname, enabled, activeKey, isPlatform]);
 
@@ -388,22 +389,12 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
   const handleSelectWorkspace = (key) => {
     setActiveKey(key);
     try { localStorage.setItem(WORKSPACE_STORAGE_KEY, key); } catch {}
-    // Navigate to the last-visited path inside this workspace if we have one;
-    // otherwise land on /dashboard (the universal home) — NOT the first module
-    // page. This matches user expectation that switching workspace = "start
-    // fresh at home" rather than "jump into the first tool".
+    // Always land on the workspace's fixed home page. We deliberately ignore
+    // any "last-visited" state — users prefer predictable navigation:
+    //   POS → /dashboard, KDS → /kds, Workforce → /workforce/shifts
+    // Staff equivalents live in STAFF_WORKSPACES.defaultPath.
     const ws = enabled.find(w => w.key === key);
-    let target = '/dashboard';
-    try {
-      const raw = localStorage.getItem(WORKSPACE_LAST_PATH_KEY);
-      const map = raw ? JSON.parse(raw) : {};
-      const last = map[key];
-      // Only accept the stored path if it still belongs to this workspace
-      // and the feature is still enabled.
-      if (last && ws?.items?.some(it => it.path === last && (!it.requires || hasFeature(it.requires)))) {
-        target = last;
-      }
-    } catch {}
+    const target = ws?.defaultPath || '/dashboard';
     if (target && target !== location.pathname) navigate(target);
   };
 
@@ -537,7 +528,16 @@ function SidebarShell({ user, onLogout, onOpenSearch, children }) {
 const Sidebar = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  // Auto-close the mobile drawer whenever the route changes. Without this,
+  // the Sheet's overlay can linger on top of the new page and block clicks —
+  // giving the impression that the app has "frozen" and needs a hard refresh.
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
 
   const handleLogout = () => {
     logout();
@@ -561,15 +561,20 @@ const Sidebar = () => {
       <aside className="sidebar-wrapper hidden md:flex flex-col" data-testid="desktop-sidebar">
         <SidebarContent user={user} onLogout={handleLogout} onOpenSearch={() => setSearchOpen(true)} />
       </aside>
-      <div className="md:hidden fixed top-0 left-0 right-0 z-50 glass" data-testid="mobile-header">
+      <div
+        className="md:hidden fixed top-0 left-0 right-0 z-50 glass"
+        style={{ paddingTop: 'env(safe-area-inset-top)' }}
+        data-testid="mobile-header"
+      >
         <div className="flex items-center justify-between px-4 py-3">
-          <Sheet>
+          <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
             <SheetTrigger asChild>
               <button className="p-2 -ml-2 rounded-lg hover:bg-slate-100 transition-colors" data-testid="mobile-menu-toggle">
                 <Menu className="w-5 h-5 text-slate-700" />
               </button>
             </SheetTrigger>
             <SheetContent side="left" className="w-[280px] p-0 bg-gradient-to-b from-[#0F172A] to-[#1E293B] border-none">
+              <SheetTitle className="sr-only">Navigation menu</SheetTitle>
               <div className="p-5 h-full">
                 <SidebarContent user={user} onLogout={handleLogout} onOpenSearch={() => setSearchOpen(true)} />
               </div>
