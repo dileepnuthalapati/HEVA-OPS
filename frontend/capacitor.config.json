@@ -1,6 +1,6 @@
 {
   "appId": "com.hevapos.app",
-  "appName": "Heva ONE",
+  "appName": "HevaONE",
   "webDir": "build",
   "bundledWebRuntime": false,
   "server": {
