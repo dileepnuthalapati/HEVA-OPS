@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { modulePricingAPI } from '../services/api';
-import { Sheet, SheetContent, SheetTrigger } from '../components/ui/sheet';
+import { Sheet, SheetContent, SheetTrigger, SheetTitle } from '../components/ui/sheet';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '../components/ui/dialog';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem,
@@ -574,6 +574,7 @@ const Sidebar = () => {
               </button>
             </SheetTrigger>
             <SheetContent side="left" className="w-[280px] p-0 bg-gradient-to-b from-[#0F172A] to-[#1E293B] border-none">
+              <SheetTitle className="sr-only">Navigation menu</SheetTitle>
               <div className="p-5 h-full">
                 <SidebarContent user={user} onLogout={handleLogout} onOpenSearch={() => setSearchOpen(true)} />
               </div>
