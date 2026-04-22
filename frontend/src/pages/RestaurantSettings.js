@@ -883,7 +883,12 @@ const RestaurantSettings = () => {
                 </CardContent>
               </Card>
 
-              {/* Push Notifications Card */}
+              {/* Push Notifications Card — only shown when the APK was built
+                  with Firebase credentials (REACT_APP_ENABLE_PUSH=true).
+                  Calling PushNotifications.register() without a valid
+                  google-services.json hard-crashes the Android activity, so
+                  we gate the UI behind an explicit build flag. */}
+              {process.env.REACT_APP_ENABLE_PUSH === 'true' && (
               <Card data-testid="push-notifications-card">
                 <CardHeader>
                   <CardTitle className="text-xl font-semibold flex items-center gap-2"><Bell className="w-5 h-5" /> Push Notifications</CardTitle>
@@ -902,8 +907,9 @@ const RestaurantSettings = () => {
                       onClick={async () => {
                         try {
                           const { initPushNotifications } = await import('../services/push');
-                          await initPushNotifications();
-                          toast.success('Push notifications enabled!');
+                          const result = await initPushNotifications();
+                          if (result?.success) toast.success('Push notifications enabled!');
+                          else toast.error(result?.message || 'Failed to enable notifications');
                         } catch (err) {
                           toast.error('Failed to enable notifications. Your device may not support this feature.');
                         }
@@ -914,6 +920,7 @@ const RestaurantSettings = () => {
                   </div>
                 </CardContent>
               </Card>
+              )}
 
               {/* Print settings moved to Printers page */}
 

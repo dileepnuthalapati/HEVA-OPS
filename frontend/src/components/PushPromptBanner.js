@@ -15,6 +15,13 @@ export default function PushPromptBanner() {
 
   useEffect(() => {
     const check = async () => {
+      // Push is behind an explicit build-time flag. Unless the app was built
+      // with REACT_APP_ENABLE_PUSH=true AND a valid google-services.json was
+      // present at build time, calling PushNotifications.register() will
+      // crash the Android activity because FirebaseMessaging can't
+      // initialise. Opt-in keeps the build stable for customers who haven't
+      // configured Firebase yet.
+      if (process.env.REACT_APP_ENABLE_PUSH !== 'true') return;
       // Don't show if already enabled or dismissed
       if (wasPushEnabled() || localStorage.getItem('heva_push_dismissed')) return;
       // Only show on native devices where push is available

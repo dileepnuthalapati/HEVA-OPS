@@ -186,10 +186,19 @@ function UpgradeModal({ open, onClose, moduleName }) {
 // ──────────────────────────────────────────────────────────────────────
 
 function WorkspaceSwitcher({ workspaces, activeKey, onSelect, lockedWorkspaces, onLockedClick }) {
+  const [open, setOpen] = useState(false);
   const active = workspaces.find(w => w.key === activeKey) || workspaces[0];
   if (!active) return null;
   const ActiveIcon = active.icon;
   const hasMultiple = workspaces.length + lockedWorkspaces.length > 1;
+
+  // Close the dropdown FIRST, then navigate on the next paint. This prevents
+  // an orphaned Radix portal overlay from lingering on top of the new route
+  // and blocking all clicks (the "app freezes when I shift to Workforce" bug).
+  const handleChoose = (fn) => {
+    setOpen(false);
+    requestAnimationFrame(() => fn());
+  };
 
   // If the user only has one workspace available, render it as a static header (no dropdown)
   if (!hasMultiple) {
@@ -210,7 +219,7 @@ function WorkspaceSwitcher({ workspaces, activeKey, onSelect, lockedWorkspaces, 
   }
 
   return (
-    <DropdownMenu>
+    <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
         <button
           className="flex items-center gap-2 w-full px-2.5 py-2 mb-3 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700/50 transition-all group"
@@ -240,7 +249,7 @@ function WorkspaceSwitcher({ workspaces, activeKey, onSelect, lockedWorkspaces, 
           return (
             <DropdownMenuItem
               key={ws.key}
-              onClick={() => onSelect(ws.key)}
+              onClick={() => handleChoose(() => onSelect(ws.key))}
               className="cursor-pointer flex items-center gap-2.5 py-2"
               data-testid={`workspace-option-${ws.key}`}
             >
@@ -266,7 +275,7 @@ function WorkspaceSwitcher({ workspaces, activeKey, onSelect, lockedWorkspaces, 
               return (
                 <DropdownMenuItem
                   key={ws.key}
-                  onClick={() => onLockedClick(ws.key)}
+                  onClick={() => handleChoose(() => onLockedClick(ws.key))}
                   className="cursor-pointer flex items-center gap-2.5 py-2 opacity-70"
                   data-testid={`workspace-locked-${ws.key}`}
                 >
