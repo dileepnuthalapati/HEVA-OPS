@@ -1,0 +1,52 @@
+{
+  "summary": "Verified all 8 spec items from the bug-fix request for SKAdmin (admin with all 3 modules: POS, KDS, Workforce). All workspace-switcher routing rules, mobile drawer auto-close, SPA navigation and login-brand changes are working correctly on both desktop (1920x1080) and mobile (390x844) viewports.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "Mobile drawer (Sheet) on every page",
+        "issues": [
+          "Console a11y error (Radix): 'DialogContent requires a DialogTitle for the component to be accessible for screen reader users.' — fires every time the mobile Sheet opens. Wrap a hidden DialogTitle (or use VisuallyHidden) inside SheetContent in /app/frontend/src/components/Sidebar.js (around line 576) to silence the warning and keep the drawer screen-reader-friendly."
+        ]
+      }
+    ]
+  },
+  "verified_behaviors": [
+    "Login page brand reads 'Heva ONE' (with space) — confirmed at /login.",
+    "Admin selecting 'Point of Sale' from workspace switcher lands on /dashboard (NOT /pos) — verified after first navigating to /orders to seed a 'last visited' subpage; switcher still routed to /dashboard.",
+    "Admin selecting 'Workforce' lands on /workforce/shifts.",
+    "Admin selecting 'Kitchen Display' lands on /kds.",
+    "Workspace switching uses React Router (no hard refresh) — verified by setting window.__noReload2 marker before switcher click; marker preserved after navigation.",
+    "Sidebar nav links auto-close the mobile Sheet on navigation — clicking nav-shift-scheduler inside drawer routed to /workforce/shifts and the [data-state=open] dialog count went to 0.",
+    "Mobile SPA navigation (no hard refresh) — window.__mobNoReload marker preserved through drawer→nav transition.",
+    "Page remains interactive after drawer-nav — re-opening the hamburger after a drawer nav succeeded (drawer count went 0 → 1), proving no overlay is left blocking clicks.",
+    "Mobile header has paddingTop: env(safe-area-inset-top) — confirmed via inline style attribute on [data-testid=mobile-header].",
+    "Hamburger menu button is positioned at x=9 y=13 (not overlapping top edge) on 390x844 viewport.",
+    "Rapid switching POS → Workforce → POS always lands on /dashboard (the fixed defaultPath), even after visiting /menu-management between switches. Verified the switcher does NOT remember last-visited subpage."
+  ],
+  "test_report_links": [],
+  "action_items": [
+    "Optional polish: add a VisuallyHidden DialogTitle inside the mobile SheetContent (Sidebar.js ~line 576) to silence the Radix a11y warning. Not a regression but pollutes the console on every drawer open.",
+    "Out-of-scope reminder from prev iteration: STAFF_WORKSPACES in Sidebar.js is dead code because staff users render the Heva Ops layout, not Sidebar.js."
+  ],
+  "critical_code_review_comments": [
+    "handleSelectWorkspace in Sidebar.js (line ~389-399) correctly uses ws.defaultPath and the 'no last-visited memory' design is implemented as documented in the comments — the implementation matches the spec.",
+    "useEffect on [location.pathname] (line ~538-540) properly resets mobileOpen on every route change, eliminating the stuck-overlay 'frozen' bug.",
+    "Sidebar.js is now ~597 lines — still under the 700-line guideline but consider splitting WorkspaceSwitcher and SidebarShell into separate files in the next refactor.",
+    "Unused imports in Sidebar.js: ArrowRightLeft is only used in STAFF_WORKSPACES which is dead code (per prev iteration) — minor cleanup opportunity.",
+    "Mobile SheetContent should embed a DialogTitle (VisuallyHidden) to satisfy Radix a11y contract — the warning is logged on every drawer open."
+  ],
+  "updated_files": [],
+  "success_rate": {"backend": "N/A (frontend-only request)", "frontend": "100% (8/8 spec items pass on desktop + mobile for admin SKAdmin)"},
+  "test_credentials": "SKAdmin / saswata@123 (admin with POS+KDS+Workforce all enabled)",
+  "seed_data_creation": "None",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "All 4 reported bugs are fixed: (1) login brand 'Heva ONE' with space, (2) workspace switcher uses fixed defaultPath ignoring last-visited, (3) mobile drawer auto-closes on route change via useEffect on location.pathname, (4) SPA navigation (no hard refresh) works on both desktop switcher and mobile drawer. Only minor leftover: Radix a11y warning about missing DialogTitle inside SheetContent — does not affect functionality, only pollutes console. Tested only with SKAdmin (multi-workspace admin); single-module admin would render workspace-static instead of dropdown — not retested but code path is unchanged from iteration 59. Staff role bypasses Sidebar.js entirely.",
+  "rca of the issue": "Not applicable — verifying main-agent fixes, not investigating new bugs. The fixes are in place and working: defaultPath property on workspace defs (Sidebar.js lines 43, 61, 72, 89, 102, 113); handleSelectWorkspace uses it (line 397); mobileOpen reset on location change (lines 538-540); 'Heva ONE' with space (Login.js line 80, Sidebar.js line 470, 582)."
+}

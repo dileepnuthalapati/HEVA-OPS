@@ -77,7 +77,7 @@ const Login = () => {
         {/* Logo */}
         <div className="text-center mb-8">
           <h1 className="font-heading text-4xl font-bold text-white tracking-tight">
-            Heva<span className="text-indigo-400">ONE</span>
+            Heva <span className="text-indigo-400">ONE</span>
           </h1>
           <p className="text-slate-400 text-sm mt-2 font-medium">Sign in to your account</p>
         </div>

@@ -20,10 +20,32 @@ if ('serviceWorker' in navigator && (_isHttps || _isLocalhost) && !_isCapacitor)
         .register('/service-worker.js')
         .then((registration) => {
           console.log('SW registered:', registration.scope);
+
+          // When an update is found, ask the waiting SW to activate right away.
+          registration.addEventListener('updatefound', () => {
+            const installing = registration.installing;
+            if (!installing) return;
+            installing.addEventListener('statechange', () => {
+              if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+                // A new SW has installed over an existing one → activate it.
+                installing.postMessage('SKIP_WAITING');
+              }
+            });
+          });
         })
         .catch((error) => {
           console.warn('SW registration failed:', error);
         });
+
+      // Reload the page exactly once when a new SW takes control, so the
+      // user is guaranteed to be running the latest bundle without having
+      // to hard-refresh or restart the app.
+      let reloadedForSW = false;
+      navigator.serviceWorker.addEventListener('controllerchange', () => {
+        if (reloadedForSW) return;
+        reloadedForSW = true;
+        window.location.reload();
+      });
     });
   } catch (e) {
     console.warn('Service worker not available');

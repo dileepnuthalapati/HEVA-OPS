@@ -1,29 +1,32 @@
 /**
  * Heva ONE Service Worker
  * ───────────────────────
- * Strategy:
- *   • NEVER cache /api/ or /socket.io/ — those are live.
- *   • NEVER cache HTML navigation requests — always fetch fresh so
- *     clicks/routing work immediately after deploy (no hard refresh
- *     needed). Fall back to cached index.html only when offline.
- *   • Cache JS/CSS/fonts/images with stale-while-revalidate so
- *     subsequent visits feel instant but updates propagate within
- *     one page load.
- *   • Bump CACHE_NAME on deploy (commit hash would be ideal but
- *     we bump manually here) to evict old caches.
+ * Strategy (tuned to eliminate the "click does nothing until hard refresh" bug):
+ *   • Skip waiting + claim clients immediately so a new deploy takes over
+ *     without a second visit.
+ *   • Never cache /api/ or /socket.io/ — those are live.
+ *   • Navigation (HTML) requests → network-first, fall back to cached
+ *     index.html only when offline. This guarantees users get the latest
+ *     index.html (which references the latest hashed JS bundle).
+ *   • Hashed JS/CSS from /static/ → cache-first (safe because the filename
+ *     itself changes on every build).
+ *   • Other static assets (images, fonts, manifest icons) →
+ *     stale-while-revalidate.
+ *   • Everything else → passthrough (no cache interference).
+ *   • Bump CACHE_NAME on every deploy to evict stale entries.
  */
 
-const CACHE_NAME = 'heva-one-v3-2026-04-21';
-const STATIC_EXT = /\.(?:js|css|woff2?|ttf|eot|otf|png|jpg|jpeg|gif|svg|ico|webp)$/i;
+const CACHE_NAME = 'heva-one-v5-2026-02-11';
+const HASHED_STATIC = /^\/static\/(?:js|css|media)\//;
+const OTHER_ASSET_EXT = /\.(?:woff2?|ttf|eot|otf|png|jpg|jpeg|gif|svg|ico|webp)$/i;
 
-self.addEventListener('install', (event) => {
+self.addEventListener('install', () => {
   // Activate the new SW immediately so users get the fixed behaviour
   // without needing to close and reopen tabs.
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
-  // Clear out any previous cache versions on activation.
   event.waitUntil(
     (async () => {
       const names = await caches.keys();
@@ -33,6 +36,11 @@ self.addEventListener('activate', (event) => {
       await self.clients.claim();
     })()
   );
+});
+
+// Allow the page to trigger an immediate activation handshake if needed.
+self.addEventListener('message', (event) => {
+  if (event.data === 'SKIP_WAITING') self.skipWaiting();
 });
 
 self.addEventListener('fetch', (event) => {
@@ -47,17 +55,15 @@ self.addEventListener('fetch', (event) => {
 
   // Never cache API or websocket traffic.
   if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/socket.io/')) {
-    return; // let the network handle it
+    return;
   }
 
-  // ── Navigation requests (HTML) — network-first, fall back to cached
-  //    index.html for offline support. Stale HTML was the root cause of
-  //    the "need hard refresh to click anything" bug.
+  // Navigation requests (HTML) → network-first. Stale HTML was the root
+  // cause of "need hard refresh to click anything" after deploys.
   if (req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html')) {
     event.respondWith(
       fetch(req)
         .then((res) => {
-          // Update the cached copy of index.html for offline fallback
           const resClone = res.clone();
           caches.open(CACHE_NAME).then((c) => c.put('/index.html', resClone)).catch(() => {});
           return res;
@@ -67,8 +73,25 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // ── Static assets (hashed JS/CSS/images) — stale-while-revalidate.
-  if (STATIC_EXT.test(url.pathname)) {
+  // Hashed JS/CSS from CRA's /static/ → cache-first. Filenames change on
+  // every build so we can safely serve from cache without going stale.
+  if (HASHED_STATIC.test(url.pathname)) {
+    event.respondWith(
+      caches.open(CACHE_NAME).then(async (cache) => {
+        const cached = await cache.match(req);
+        if (cached) return cached;
+        const res = await fetch(req);
+        if (res && res.status === 200 && res.type === 'basic') {
+          cache.put(req, res.clone());
+        }
+        return res;
+      })
+    );
+    return;
+  }
+
+  // Other static assets (images/fonts/icons) → stale-while-revalidate.
+  if (OTHER_ASSET_EXT.test(url.pathname)) {
     event.respondWith(
       caches.open(CACHE_NAME).then(async (cache) => {
         const cached = await cache.match(req);
@@ -86,5 +109,5 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Everything else — just go to network (no cache interference).
+  // Everything else — straight to network.
 });
