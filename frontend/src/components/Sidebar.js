@@ -10,6 +10,7 @@ import {
 } from '../components/ui/dropdown-menu';
 import { Button } from '../components/ui/button';
 import CommandSearch from './CommandSearch';
+import InstallAppButton from './InstallAppButton';
 import {
   LayoutDashboard, ShoppingCart, ChefHat, FileText, Settings, Table2,
   BarChart3, Wallet, LogOut, Menu, Search, Building2, Globe,
@@ -388,24 +389,21 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
     setActiveKey(key);
     try { localStorage.setItem(WORKSPACE_STORAGE_KEY, key); } catch {}
     // Navigate to the last-visited path inside this workspace if we have one;
-    // otherwise fall back to the first available link. This makes the
-    // switcher "pick up where you left off" instead of always resetting.
+    // otherwise land on /dashboard (the universal home) — NOT the first module
+    // page. This matches user expectation that switching workspace = "start
+    // fresh at home" rather than "jump into the first tool".
     const ws = enabled.find(w => w.key === key);
-    let target = null;
+    let target = '/dashboard';
     try {
       const raw = localStorage.getItem(WORKSPACE_LAST_PATH_KEY);
       const map = raw ? JSON.parse(raw) : {};
       const last = map[key];
       // Only accept the stored path if it still belongs to this workspace
-      // (e.g. feature might have been toggled off, or we renamed a route).
+      // and the feature is still enabled.
       if (last && ws?.items?.some(it => it.path === last && (!it.requires || hasFeature(it.requires)))) {
         target = last;
       }
     } catch {}
-    if (!target) {
-      const firstItem = ws?.items?.find(it => !it.requires || hasFeature(it.requires));
-      target = firstItem?.path || null;
-    }
     if (target && target !== location.pathname) navigate(target);
   };
 
@@ -507,6 +505,9 @@ function SidebarShell({ user, onLogout, onOpenSearch, children }) {
 
       {/* User + logout — pinned at the very bottom */}
       <div className="mt-1 pt-2 border-t border-slate-700/40">
+        <div className="px-2 mb-2">
+          <InstallAppButton variant="sidebar" />
+        </div>
         <div className="flex items-center gap-2 px-2 mb-2">
           <div className="w-7 h-7 rounded-lg bg-indigo-600/30 flex items-center justify-center text-indigo-300 text-xs font-bold">
             {(user?.username || 'U')[0].toUpperCase()}
