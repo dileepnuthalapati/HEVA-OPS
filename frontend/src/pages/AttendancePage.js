@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Sidebar from '../components/Sidebar';
 import { attendanceAPI, staffAPI } from '../services/api';
+import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
@@ -8,17 +9,51 @@ import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
 import { Clock, UserCheck, AlertTriangle, CheckCircle } from 'lucide-react';
 
+// Current-week range honouring the restaurant's configured week_start_day
+// (JS convention: 0=Sun, 1=Mon, 6=Sat). Used as the default filter on the
+// Attendance page so the "last 7 days" pill matches the rota week.
+function getCurrentWeekRange(weekStartDay = 1) {
+  const now = new Date();
+  const day = now.getDay();
+  const diff = (day - weekStartDay + 7) % 7;
+  const start = new Date(now);
+  start.setDate(now.getDate() - diff);
+  const end = new Date(start);
+  end.setDate(start.getDate() + 6);
+  return { start: start.toISOString().split('T')[0], end: end.toISOString().split('T')[0] };
+}
+
 export default function AttendancePage() {
   const { user } = useAuth();
   const [liveRecords, setLiveRecords] = useState([]);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [dateRange, setDateRange] = useState(() => {
-    const now = new Date();
-    const start = new Date(now);
-    start.setDate(now.getDate() - 7);
-    return { start: start.toISOString().split('T')[0], end: now.toISOString().split('T')[0] };
-  });
+  const [dateRange, setDateRange] = useState(() => getCurrentWeekRange(1));
+  const [weekStartDay, setWeekStartDay] = useState(1);
+
+  // Pull week_start_day from restaurant settings and realign the default
+  // filter range. Only rewrites the range if the user hasn't manually edited
+  // it yet (we track that implicitly — if the range still equals the
+  // Monday-default it's safe to update).
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const res = await api.get('/restaurants/my');
+        const wsd = res.data?.business_info?.week_start_day;
+        if (wsd !== undefined && wsd !== null) {
+          setWeekStartDay(wsd);
+          setDateRange((prev) => {
+            const monDefault = getCurrentWeekRange(1);
+            if (prev.start === monDefault.start && prev.end === monDefault.end) {
+              return getCurrentWeekRange(wsd);
+            }
+            return prev;
+          });
+        }
+      } catch {}
+    };
+    loadSettings();
+  }, []);
 
   const loadData = useCallback(async () => {
     setLoading(true);

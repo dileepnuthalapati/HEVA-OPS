@@ -883,12 +883,7 @@ const RestaurantSettings = () => {
                 </CardContent>
               </Card>
 
-              {/* Push Notifications Card — only shown when the APK was built
-                  with Firebase credentials (REACT_APP_ENABLE_PUSH=true).
-                  Calling PushNotifications.register() without a valid
-                  google-services.json hard-crashes the Android activity, so
-                  we gate the UI behind an explicit build flag. */}
-              {process.env.REACT_APP_ENABLE_PUSH === 'true' && (
+              {/* Push Notifications Card */}
               <Card data-testid="push-notifications-card">
                 <CardHeader>
                   <CardTitle className="text-xl font-semibold flex items-center gap-2"><Bell className="w-5 h-5" /> Push Notifications</CardTitle>
@@ -920,7 +915,6 @@ const RestaurantSettings = () => {
                   </div>
                 </CardContent>
               </Card>
-              )}
 
               {/* Print settings moved to Printers page */}
 

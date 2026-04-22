@@ -41,6 +41,12 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
 
+    <!-- Push notifications: required on Android 13+ (API 33+). Without
+         this declaration, PushNotifications.register() hard-crashes the
+         Android activity because the runtime permission can never be
+         granted. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
     <!-- Bluetooth permissions for Android 12 and higher -->
     <uses-permission android:name="android.permission.BLUETOOTH_SCAN" android:usesPermissionFlags="neverForLocation" />
     <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />

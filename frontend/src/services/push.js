@@ -56,8 +56,10 @@ export async function initPushNotifications() {
     // Check current permission
     let permStatus = await PushNotifications.checkPermissions();
 
-    // Request if needed
-    if (permStatus.receive === 'prompt') {
+    // Request if needed. On Android 13+ this triggers the POST_NOTIFICATIONS
+    // runtime prompt; requires the permission to be declared in
+    // AndroidManifest.xml (we declare it in src/main/AndroidManifest.xml).
+    if (permStatus.receive === 'prompt' || permStatus.receive === 'prompt-with-rationale') {
       permStatus = await PushNotifications.requestPermissions();
     }
 
@@ -65,10 +67,9 @@ export async function initPushNotifications() {
       return { success: false, message: 'Notification permission denied' };
     }
 
-    // Register with platform push service (FCM/APNs)
-    await PushNotifications.register();
-
-    // Listen for token
+    // IMPORTANT: register listeners BEFORE calling register(). On Android,
+    // the FCM token can arrive synchronously after register() and a listener
+    // attached afterwards will miss it — causing downstream flows to hang.
     await PushNotifications.addListener('registration', async (token) => {
       const platform = /iPad|iPhone|iPod/.test(navigator.userAgent) ? 'ios' : 'android';
       try {
@@ -76,7 +77,9 @@ export async function initPushNotifications() {
       } catch {}
     });
 
-    await PushNotifications.addListener('registrationError', () => {});
+    await PushNotifications.addListener('registrationError', (err) => {
+      console.warn('[Push] Registration error:', err);
+    });
 
     await PushNotifications.addListener('pushNotificationReceived', (notification) => {
       console.log('[Push] Received:', notification.title);
@@ -88,6 +91,11 @@ export async function initPushNotifications() {
         window.location.href = '/heva-ops/clock';
       }
     });
+
+    // Register with platform push service (FCM/APNs). This is the call that
+    // can hard-crash on Android 13+ without POST_NOTIFICATIONS declared, or
+    // if google-services.json is missing / invalid.
+    await PushNotifications.register();
 
     pushInitialized = true;
     localStorage.setItem('heva_push_enabled', 'true');

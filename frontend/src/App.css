@@ -3,6 +3,17 @@
   background-color: #ffffff;
 }
 
+/* Mobile header offset — the fixed top header honours env(safe-area-inset-top)
+   for iPhone PWAs, which makes it taller than a bare 4rem. Pages that use the
+   `pt-16 md:pt-6` pattern to clear the header need matching extra padding so
+   the page H1 doesn't slide under the status bar / hamburger strip. */
+@media (max-width: 767px) {
+  .pt-16.md\:pt-6 {
+    padding-top: calc(4rem + env(safe-area-inset-top, 0px));
+  }
+}
+
+
 .pos-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
