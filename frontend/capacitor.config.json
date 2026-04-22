@@ -1,6 +1,6 @@
 {
   "appId": "com.hevapos.app",
-  "appName": "HevaPOS",
+  "appName": "Heva ONE",
   "webDir": "build",
   "bundledWebRuntime": false,
   "server": {
