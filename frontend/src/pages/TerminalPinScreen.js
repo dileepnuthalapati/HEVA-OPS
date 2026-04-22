@@ -50,7 +50,7 @@ export default function TerminalPinScreen() {
 
   const terminalData = JSON.parse(localStorage.getItem('heva_terminal') || '{}');
   const restaurantId = terminalData.restaurant_id;
-  const businessName = terminalData.business_name || 'Heva One';
+  const businessName = terminalData.business_name || 'Heva ONE';
 
   // Auto-focus the hidden input
   useEffect(() => {

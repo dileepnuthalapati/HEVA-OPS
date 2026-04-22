@@ -1,5 +1,5 @@
 /**
- * Heva One Universal Thermal Printer Service
+ * Heva ONE Universal Thermal Printer Service
  * 
  * THREE connection methods — covers ALL printer setups:
  * 
@@ -339,7 +339,7 @@ class ThermalPrinterService {
 
   async _printWebBluetooth(bytes) {
     if (!navigator.bluetooth) {
-      throw new Error('Bluetooth not available in browser. Use the Heva One Android app.');
+      throw new Error('Bluetooth not available in browser. Use the Heva ONE Android app.');
     }
 
     const device = await navigator.bluetooth.requestDevice({
@@ -546,7 +546,7 @@ class ThermalPrinterService {
 
   async scanBLEDevices(onDeviceFound, durationMs = 5000) {
     await this.initBLE();
-    if (!this.isNative) throw new Error('BLE scanning requires the Heva One Android app.');
+    if (!this.isNative) throw new Error('BLE scanning requires the Heva ONE Android app.');
 
     const isEnabled = await BleClient.isEnabled();
     if (!isEnabled) {

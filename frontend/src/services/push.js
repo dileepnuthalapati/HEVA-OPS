@@ -1,5 +1,5 @@
 /**
- * Push Notification Service — Heva One
+ * Push Notification Service — Heva ONE
  * 
  * Strategy: Push is initialized ONCE via a user-facing prompt banner.
  * The banner appears in both staff (HevaOps) and admin (Dashboard) views.

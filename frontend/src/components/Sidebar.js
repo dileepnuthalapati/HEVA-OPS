@@ -10,6 +10,7 @@ import {
 } from '../components/ui/dropdown-menu';
 import { Button } from '../components/ui/button';
 import CommandSearch from './CommandSearch';
+import InstallAppButton from './InstallAppButton';
 import {
   LayoutDashboard, ShoppingCart, ChefHat, FileText, Settings, Table2,
   BarChart3, Wallet, LogOut, Menu, Search, Building2, Globe,
@@ -119,6 +120,7 @@ const platformMenu = [
 ];
 
 const WORKSPACE_STORAGE_KEY = 'heva_active_workspace';
+const WORKSPACE_LAST_PATH_KEY = 'heva_workspace_last_path'; // map: {ws_key: last_path}
 
 // ──────────────────────────────────────────────────────────────────────
 // Upgrade modal (unchanged behaviour, shown when clicking a locked workspace)
@@ -339,14 +341,24 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
     }
   }, [enabled, activeKey]);
 
-  // Auto-switch workspace when the user navigates to a route belonging to a different workspace
+  // Auto-switch workspace when the user navigates to a route belonging to a different workspace.
+  // Also records the last-visited path per workspace so the switcher can return there.
   useEffect(() => {
     if (isPlatform) return;
     const path = location.pathname;
     const matchingWs = enabled.find(ws => ws.items.some(it => it.path === path));
-    if (matchingWs && matchingWs.key !== activeKey) {
-      setActiveKey(matchingWs.key);
-      try { localStorage.setItem(WORKSPACE_STORAGE_KEY, matchingWs.key); } catch {}
+    if (matchingWs) {
+      if (matchingWs.key !== activeKey) {
+        setActiveKey(matchingWs.key);
+        try { localStorage.setItem(WORKSPACE_STORAGE_KEY, matchingWs.key); } catch {}
+      }
+      // Remember the last path the user visited inside this workspace
+      try {
+        const raw = localStorage.getItem(WORKSPACE_LAST_PATH_KEY);
+        const map = raw ? JSON.parse(raw) : {};
+        map[matchingWs.key] = path;
+        localStorage.setItem(WORKSPACE_LAST_PATH_KEY, JSON.stringify(map));
+      } catch {}
     }
   }, [location.pathname, enabled, activeKey, isPlatform]);
 
@@ -376,13 +388,23 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
   const handleSelectWorkspace = (key) => {
     setActiveKey(key);
     try { localStorage.setItem(WORKSPACE_STORAGE_KEY, key); } catch {}
-    // Navigate to the first link of the selected workspace so the user
-    // lands on a page that actually belongs to the new workspace.
+    // Navigate to the last-visited path inside this workspace if we have one;
+    // otherwise land on /dashboard (the universal home) — NOT the first module
+    // page. This matches user expectation that switching workspace = "start
+    // fresh at home" rather than "jump into the first tool".
     const ws = enabled.find(w => w.key === key);
-    const firstItem = ws?.items?.find(it => !it.requires || hasFeature(it.requires));
-    if (firstItem?.path) {
-      navigate(firstItem.path);
-    }
+    let target = '/dashboard';
+    try {
+      const raw = localStorage.getItem(WORKSPACE_LAST_PATH_KEY);
+      const map = raw ? JSON.parse(raw) : {};
+      const last = map[key];
+      // Only accept the stored path if it still belongs to this workspace
+      // and the feature is still enabled.
+      if (last && ws?.items?.some(it => it.path === last && (!it.requires || hasFeature(it.requires)))) {
+        target = last;
+      }
+    } catch {}
+    if (target && target !== location.pathname) navigate(target);
   };
 
   const activeWorkspace = enabled.find(w => w.key === activeKey);
@@ -454,7 +476,7 @@ function SidebarShell({ user, onLogout, onOpenSearch, children }) {
   return (
     <div className="flex flex-col h-full">
       <div className="mb-3" data-testid="sidebar-logo">
-        <h1 className="font-heading text-lg font-bold tracking-tight text-white">Heva One</h1>
+        <h1 className="font-heading text-lg font-bold tracking-tight text-white">Heva ONE</h1>
         <p className="text-[10px] tracking-[0.15em] uppercase text-slate-400 mt-0.5 font-medium">
           {isPlatform ? 'Platform' : user?.role === 'admin' ? 'Business' : 'Staff'}
         </p>
@@ -483,6 +505,9 @@ function SidebarShell({ user, onLogout, onOpenSearch, children }) {
 
       {/* User + logout — pinned at the very bottom */}
       <div className="mt-1 pt-2 border-t border-slate-700/40">
+        <div className="px-2 mb-2">
+          <InstallAppButton variant="sidebar" />
+        </div>
         <div className="flex items-center gap-2 px-2 mb-2">
           <div className="w-7 h-7 rounded-lg bg-indigo-600/30 flex items-center justify-center text-indigo-300 text-xs font-bold">
             {(user?.username || 'U')[0].toUpperCase()}
@@ -550,7 +575,7 @@ const Sidebar = () => {
               </div>
             </SheetContent>
           </Sheet>
-          <h1 className="font-heading text-base font-bold text-slate-900 tracking-tight">Heva One</h1>
+          <h1 className="font-heading text-base font-bold text-slate-900 tracking-tight">Heva ONE</h1>
           <button
             onClick={() => setSearchOpen(true)}
             className="p-2 -mr-2 rounded-lg hover:bg-slate-100 transition-colors"

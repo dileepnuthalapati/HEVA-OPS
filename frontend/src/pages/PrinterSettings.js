@@ -541,7 +541,7 @@ const PrinterSettings = () => {
                 <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1.5">
                   <li>Connect your printer to your restaurant's WiFi network</li>
                   <li>Find the printer's IP (print a network status page from the printer)</li>
-                  <li>In Heva One: <strong>Add Printer &rarr; WiFi &rarr; Enter IP</strong> (e.g., 192.168.1.100)</li>
+                  <li>In Heva ONE: <strong>Add Printer &rarr; WiFi &rarr; Enter IP</strong> (e.g., 192.168.1.100)</li>
                   <li>Or use <strong>Discover &rarr; WiFi &rarr; Scan</strong> to auto-detect</li>
                   <li>Hit <strong>Test</strong> to verify</li>
                 </ol>
@@ -551,7 +551,7 @@ const PrinterSettings = () => {
                 <h4 className="font-semibold mb-2">Bluetooth Printer</h4>
                 <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1.5">
                   <li>Go to your tablet's <strong>Bluetooth Settings</strong> and pair with the printer</li>
-                  <li>Open Heva One on your tablet (Android app)</li>
+                  <li>Open Heva ONE on your tablet (Android app)</li>
                   <li>Go to <strong>Printers &rarr; Discover &rarr; Bluetooth &rarr; Find Printers</strong></li>
                   <li>Your paired printer will appear — tap to add it</li>
                   <li>Hit <strong>Test</strong> to verify it prints correctly</li>
@@ -653,8 +653,8 @@ const PrinterSettings = () => {
                   <>
                     {/* Browser — simple explanation */}
                     <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-                      <p className="font-semibold text-amber-900 text-sm">Bluetooth requires the Heva One app</p>
-                      <p className="text-amber-800 text-xs mt-1">To scan for Bluetooth printers, open Heva One on your Android tablet or phone.</p>
+                      <p className="font-semibold text-amber-900 text-sm">Bluetooth requires the Heva ONE app</p>
+                      <p className="text-amber-800 text-xs mt-1">To scan for Bluetooth printers, open Heva ONE on your Android tablet or phone.</p>
                     </div>
                     <div className="p-4 border rounded-lg space-y-2">
                       <p className="font-semibold text-sm">Steps:</p>
@@ -665,7 +665,7 @@ const PrinterSettings = () => {
                         </div>
                         <div className="flex gap-2">
                           <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs shrink-0">2</span>
-                          <span>Open Heva One app on your tablet</span>
+                          <span>Open Heva ONE app on your tablet</span>
                         </div>
                         <div className="flex gap-2">
                           <span className="w-6 h-6 rounded-full bg-primary text-white flex items-center justify-center text-xs shrink-0">3</span>
