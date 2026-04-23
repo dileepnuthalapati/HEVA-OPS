@@ -63,7 +63,7 @@ const API = `${BACKEND_URL}/api`;
 
 // --- Components ---
 
-const ProtectedRoute = ({ children, adminOnly = false, platformOwnerOnly = false, restaurantAdminOnly = false }) => {
+const ProtectedRoute = ({ children, adminOnly = false, platformOwnerOnly = false, restaurantAdminOnly = false, capability = null }) => {
   const { user, loading, isPlatformOwner, isRestaurantAdmin } = useAuth();
 
   if (loading) {
@@ -83,8 +83,15 @@ const ProtectedRoute = ({ children, adminOnly = false, platformOwnerOnly = false
     return <Navigate to={isRestaurantAdmin ? "/dashboard" : "/pos"} replace />;
   }
 
+  // A staff user with the specified capability is allowed through this gate
+  // even if the route is marked restaurantAdminOnly. This is how personas
+  // (e.g. `workforce.manage_rota`) grant staff access to the rota/attendance/
+  // timesheet admin screens without making them full admins.
+  const userCapabilities = user.capabilities || [];
+  const hasRequiredCapability = capability && userCapabilities.includes(capability);
+
   // Restaurant admin only routes (not platform owner)
-  if (restaurantAdminOnly && !isRestaurantAdmin) {
+  if (restaurantAdminOnly && !isRestaurantAdmin && !hasRequiredCapability) {
     if (isPlatformOwner) {
       return <Navigate to="/platform/dashboard" replace />;
     }
@@ -172,10 +179,11 @@ const AppRoutes = () => {
       <Route path="/settings" element={<ProtectedRoute restaurantAdminOnly><RestaurantSettings /></ProtectedRoute>} />
       {/* /staff route removed — user management is inside Settings */}
       
-      {/* Workforce Module Routes */}
-      <Route path="/workforce/shifts" element={<ProtectedRoute restaurantAdminOnly><ShiftScheduler /></ProtectedRoute>} />
-      <Route path="/workforce/attendance" element={<ProtectedRoute restaurantAdminOnly><AttendancePage /></ProtectedRoute>} />
-      <Route path="/workforce/timesheets" element={<ProtectedRoute restaurantAdminOnly><TimesheetsPage /></ProtectedRoute>} />
+      {/* Workforce Module Routes — staff with the `workforce.manage_rota`
+          capability can access these (they act as a manager persona). */}
+      <Route path="/workforce/shifts" element={<ProtectedRoute restaurantAdminOnly capability="workforce.manage_rota"><ShiftScheduler /></ProtectedRoute>} />
+      <Route path="/workforce/attendance" element={<ProtectedRoute restaurantAdminOnly capability="workforce.manage_rota"><AttendancePage /></ProtectedRoute>} />
+      <Route path="/workforce/timesheets" element={<ProtectedRoute restaurantAdminOnly capability="workforce.manage_rota"><TimesheetsPage /></ProtectedRoute>} />
       
       {/* POS Staff & Restaurant Admin */}
       <Route path="/pos" element={<ProtectedRoute><POSScreen /></ProtectedRoute>} />

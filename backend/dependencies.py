@@ -43,7 +43,8 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
             username=user_doc["username"],
             role=user_doc.get("role", "user"),
             restaurant_id=user_doc.get("restaurant_id"),
-            created_at=user_doc.get("created_at")
+            created_at=user_doc.get("created_at"),
+            capabilities=user_doc.get("capabilities", []) or []
         )
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
@@ -66,7 +67,8 @@ async def decode_token(token: str):
             username=user_doc["username"],
             role=user_doc.get("role", "user"),
             restaurant_id=user_doc.get("restaurant_id"),
-            created_at=user_doc.get("created_at")
+            created_at=user_doc.get("created_at"),
+            capabilities=user_doc.get("capabilities", []) or []
         )
     except (jwt.ExpiredSignatureError, jwt.InvalidTokenError):
         return None
@@ -83,6 +85,19 @@ def require_admin(current_user: User = Depends(get_current_user)):
     if current_user.role not in ["admin", "platform_owner"]:
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
+
+
+def require_rota_manager(current_user: User = Depends(get_current_user)):
+    """Admin + any staff with the `workforce.manage_rota` capability.
+
+    Used by rota/attendance/timesheet endpoints so a `manage_rota` persona
+    can prepare schedules and check attendance without being a full admin.
+    """
+    if current_user.role in ["admin", "platform_owner"]:
+        return current_user
+    if "workforce.manage_rota" in (current_user.capabilities or []):
+        return current_user
+    raise HTTPException(status_code=403, detail="Requires workforce.manage_rota capability or admin role")
 
 
 def require_platform_owner(current_user: User = Depends(get_current_user)):

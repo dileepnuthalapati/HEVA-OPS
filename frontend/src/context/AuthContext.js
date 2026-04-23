@@ -29,6 +29,11 @@ const DEMO_RESTAURANT_USER = {
   created_at: new Date().toISOString()
 };
 
+// Module-level throttle — persists across component remounts (page reloads,
+// route-level Suspense, dev HMR etc.). Limits /auth/features to at most 1
+// call per 3 seconds so rapid navigation can't spam the API.
+let lastFeatureFetchTs = 0;
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -59,10 +64,90 @@ export const AuthProvider = ({ children }) => {
     const token = localStorage.getItem('auth_token');
     const savedUser = localStorage.getItem('user');
     if (token && savedUser) {
-      setUser(JSON.parse(savedUser));
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch {
+        // Corrupt saved user — wipe and force re-login.
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user');
+      }
+      // Verify the session is still valid on THIS build/server. This doubles
+      // as a safety net for the Android "reinstall restored an old session
+      // from Google Backup" class of bugs — a stale token will 401 here and
+      // we wipe it immediately, landing the user on /login for a clean start.
+      // Also refreshes `features` so newly-enabled modules appear without the
+      // user needing a manual hard-refresh / relogin.
+      authAPI.getMe()
+        .then((me) => {
+          authAPI.getFeatures().then((f) => {
+            const nextUser = {
+              username: me.username,
+              role: me.role,
+              restaurant_id: me.restaurant_id,
+              features: f?.features || me.features || {},
+              capabilities: me.capabilities || [],
+              email: me.email || '',
+            };
+            setUser(nextUser);
+            localStorage.setItem('user', JSON.stringify(nextUser));
+          }).catch(() => {});
+        })
+        .catch((err) => {
+          if (err?.response?.status === 401 || err?.response?.status === 403) {
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user');
+            setUser(null);
+          }
+        });
     }
     setLoading(false);
   }, []);
+
+  // Silently refresh features + identity from the server. Exposed through
+  // context so components can fire it on navigation (see Sidebar) — gives
+  // users near-instant propagation of module enables instead of waiting for
+  // the focus/interval tick.
+  //
+  // Throttled at module level to at most 1 call every 3 seconds. The 60 s
+  // safety-net interval + window focus listener still cover the "tab left
+  // open for hours" case by passing force=true.
+  const refreshFeatures = useCallback(async (force = false) => {
+    if (!user || user.role === 'platform_owner') return;
+    const now = Date.now();
+    if (!force && now - lastFeatureFetchTs < 3000) return;
+    lastFeatureFetchTs = now;
+    try {
+      const f = await authAPI.getFeatures();
+      const nextFeatures = f?.features || {};
+      const prev = JSON.stringify(user.features || {});
+      const next = JSON.stringify(nextFeatures);
+      if (prev !== next) {
+        const updated = { ...user, features: nextFeatures };
+        setUser(updated);
+        localStorage.setItem('user', JSON.stringify(updated));
+      }
+    } catch {}
+  }, [user]);
+
+  // Poll the server for feature flag changes so platform-admin module
+  // enables/disables propagate to the logged-in user WITHOUT them having to
+  // log out. Runs on window focus + when the tab becomes visible again +
+  // every 60 s as a safety net. Route-change refresh is wired from Sidebar.
+  useEffect(() => {
+    if (!user || user.role === 'platform_owner') return;
+    // These paths bypass the 3-second debounce because they happen rarely
+    // (user tabbing back, unlocking phone, or the 60-second safety net).
+    const forceRefresh = () => refreshFeatures(true);
+    const onVisibility = () => { if (document.visibilityState === 'visible') forceRefresh(); };
+    const interval = setInterval(forceRefresh, 60000);
+    window.addEventListener('focus', forceRefresh);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', forceRefresh);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [user, refreshFeatures]);
 
   const login = async (username, password) => {
     // DEMO MODE: Return different users based on username
@@ -212,6 +297,7 @@ export const AuthProvider = ({ children }) => {
       isAdmin: isPlatformOwner || isRestaurantAdmin,
       hasFeature,
       hasCapability,
+      refreshFeatures,
       isTerminalMode,
       features,
       capabilities,

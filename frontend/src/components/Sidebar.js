@@ -187,30 +187,21 @@ function UpgradeModal({ open, onClose, moduleName }) {
 
 function WorkspaceSwitcher({ workspaces, activeKey, onSelect, lockedWorkspaces, onLockedClick }) {
   const [open, setOpen] = useState(false);
-  // Holds the action queued by a menu-item click. We only execute it AFTER
-  // the dropdown has fully closed (open === false has been committed + Radix
-  // portal has unmounted). This is the ONLY reliable way across Chromium,
-  // Safari, and Android WebView to avoid the orphaned-portal race that was
-  // leaving an invisible overlay on top of the next page.
-  const [pending, setPending] = useState(null);
-  useEffect(() => {
-    if (pending && !open) {
-      const fn = pending;
-      setPending(null);
-      // A microtask defer ensures React has finished unmounting the portal
-      // subtree before the navigation-triggered re-render begins.
-      Promise.resolve().then(fn);
-    }
-  }, [pending, open]);
-
   const active = workspaces.find(w => w.key === activeKey) || workspaces[0];
   if (!active) return null;
   const ActiveIcon = active.icon;
   const hasMultiple = workspaces.length + lockedWorkspaces.length > 1;
 
+  // On Safari / Android WebView, Radix's modal DropdownMenu was leaving a
+  // pointer-events blocking layer on top of the destination page for the
+  // duration of its close animation (~150 ms, sometimes longer). During that
+  // window, clicks did nothing — exactly what the user experienced as
+  // "workforce opens but nothing is clickable until I tap again".
+  // `modal={false}` removes the focus trap + body pointer-events lock so the
+  // destination page is interactive the instant we navigate.
   const handleChoose = (fn) => {
-    setPending(() => fn);
     setOpen(false);
+    fn();
   };
 
   // If the user only has one workspace available, render it as a static header (no dropdown)
@@ -232,7 +223,7 @@ function WorkspaceSwitcher({ workspaces, activeKey, onSelect, lockedWorkspaces, 
   }
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
       <DropdownMenuTrigger asChild>
         <button
           className="flex items-center gap-2 w-full px-2.5 py-2 mb-3 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700/50 transition-all group"
@@ -333,26 +324,50 @@ function SidebarLink({ item }) {
 // ──────────────────────────────────────────────────────────────────────
 
 function SidebarContent({ user, onLogout, onOpenSearch }) {
-  const { hasFeature } = useAuth();
+  const { hasFeature, hasCapability, refreshFeatures } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [upgradeModule, setUpgradeModule] = useState(null);
 
   const isPlatform = user?.role === 'platform_owner';
   const isAdmin = user?.role === 'admin';
-  const workspaceDefs = isAdmin ? ADMIN_WORKSPACES : STAFF_WORKSPACES;
+  // Staff granted `workforce.manage_rota` → treat as admin for Workforce UI
+  // purposes (see also App.js ProtectedRoute capability= override). Their
+  // workspace items include the admin rota/attendance/timesheet screens.
+  const canManageRota = !isAdmin && hasCapability('workforce.manage_rota');
+
+  // Build workspace definitions on the fly for the manage-rota persona: use
+  // the Staff workspaces as the base, but swap the Workforce block for the
+  // admin one so they can access Shift Scheduler + Attendance + Timesheets.
+  const workspaceDefs = useMemo(() => {
+    if (isAdmin) return ADMIN_WORKSPACES;
+    if (canManageRota) {
+      return {
+        ...STAFF_WORKSPACES,
+        workforce: {
+          ...ADMIN_WORKSPACES.workforce,
+          label: 'Workforce',
+          subtitle: 'Rota · Attendance · Timesheets',
+        },
+      };
+    }
+    return STAFF_WORKSPACES;
+  }, [isAdmin, canManageRota]);
 
   // Compute which workspaces are enabled vs locked (safe even for platform owner)
   const { enabled, locked } = useMemo(() => {
     if (isPlatform) return { enabled: [], locked: [] };
     const en = [];
-    const lo = [];
     for (const ws of Object.values(workspaceDefs)) {
       const isEnabled = ws.requires.some(f => hasFeature(f));
       if (isEnabled) en.push(ws);
-      else if (isAdmin) lo.push(ws); // staff doesn't see locked workspaces
+      // Previously we pushed disabled workspaces into a "locked" list so
+      // admins saw an upgrade prompt. Removed per product direction: a
+      // workforce-only customer (healthcare / retail etc.) shouldn't see POS
+      // or KDS upsell inside their sidebar — the switcher should only show
+      // what the business actually pays for.
     }
-    return { enabled: en, locked: lo };
+    return { enabled: en, locked: [] };
   }, [workspaceDefs, hasFeature, isAdmin, isPlatform]);
 
   // Active workspace state — derived from URL first, then localStorage, then first enabled
@@ -375,15 +390,20 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
   // different workspace. We intentionally do NOT persist per-workspace last
   // paths — switching a workspace should always land on the workspace's
   // default home page (set at workspace level via `defaultPath`).
+  // We also fire a lightweight feature refresh here so that platform-admin
+  // module enables/disables propagate to the sidebar the moment the user
+  // navigates anywhere — effectively instant rather than waiting for the
+  // 60-second safety-net poll.
   useEffect(() => {
     if (isPlatform) return;
+    refreshFeatures?.();
     const path = location.pathname;
     const matchingWs = enabled.find(ws => ws.items.some(it => it.path === path));
     if (matchingWs && matchingWs.key !== activeKey) {
       setActiveKey(matchingWs.key);
       try { localStorage.setItem(WORKSPACE_STORAGE_KEY, matchingWs.key); } catch {}
     }
-  }, [location.pathname, enabled, activeKey, isPlatform]);
+  }, [location.pathname, enabled, activeKey, isPlatform, refreshFeatures]);
 
   // If currently active workspace got disabled (e.g. feature turned off), fall back
   useEffect(() => {
@@ -441,15 +461,19 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
           />
         )}
 
-        {/* Dashboard / Overview — always pinned at the top of the link list.
-            Labelled "Overview" for workforce-only businesses, "Dashboard" otherwise. */}
-        <div className="space-y-0.5">
-          <SidebarLink item={{
-            path: '/dashboard',
-            icon: LayoutDashboard,
-            label: (enabled.length === 1 && enabled[0].key === 'workforce') ? 'Overview' : 'Dashboard',
-          }} />
-        </div>
+        {/* Dashboard / Overview — pinned at the top for full admins only.
+            A `workforce.manage_rota` staff is a team lead, not a business
+            owner — they get their workforce items but not the business
+            overview or settings (those remain exclusive to admin). */}
+        {isAdmin && (
+          <div className="space-y-0.5">
+            <SidebarLink item={{
+              path: '/dashboard',
+              icon: LayoutDashboard,
+              label: (enabled.length === 1 && enabled[0].key === 'workforce') ? 'Overview' : 'Dashboard',
+            }} />
+          </div>
+        )}
 
         {/* Dynamic module section for current workspace */}
         {visibleItems.length > 0 && (

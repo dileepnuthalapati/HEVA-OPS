@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from database import db
-from dependencies import get_current_user, require_admin, require_feature
+from dependencies import get_current_user, require_admin, require_feature, require_rota_manager
 from models import User
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
@@ -42,7 +42,7 @@ async def get_shifts(start_date: str, end_date: str, current_user: User = Depend
 
 
 @router.post("/shifts")
-async def create_shift(shift: ShiftCreate, current_user: User = Depends(require_admin)):
+async def create_shift(shift: ShiftCreate, current_user: User = Depends(require_rota_manager)):
     """Create a new shift assignment."""
     staff = await db.users.find_one({"id": shift.staff_id, "restaurant_id": current_user.restaurant_id}, {"_id": 0})
     if not staff:
@@ -68,7 +68,7 @@ async def create_shift(shift: ShiftCreate, current_user: User = Depends(require_
 
 
 @router.put("/shifts/{shift_id}")
-async def update_shift(shift_id: str, data: ShiftUpdate, current_user: User = Depends(require_admin)):
+async def update_shift(shift_id: str, data: ShiftUpdate, current_user: User = Depends(require_rota_manager)):
     shift = await db.shifts.find_one({"id": shift_id, "restaurant_id": current_user.restaurant_id})
     if not shift:
         raise HTTPException(status_code=404, detail="Shift not found")
@@ -87,7 +87,7 @@ async def update_shift(shift_id: str, data: ShiftUpdate, current_user: User = De
 
 
 @router.delete("/shifts/clear-week-off")
-async def clear_week_off(staff_id: str, week_start_date: str, current_user: User = Depends(require_admin)):
+async def clear_week_off(staff_id: str, week_start_date: str, current_user: User = Depends(require_rota_manager)):
     """Undo a 'week off' marking for a staff. Removes the bulk-week-off leave record."""
     try:
         start_dt = datetime.strptime(week_start_date, "%Y-%m-%d")
@@ -106,7 +106,7 @@ async def clear_week_off(staff_id: str, week_start_date: str, current_user: User
 
 
 @router.delete("/shifts/{shift_id}")
-async def delete_shift(shift_id: str, current_user: User = Depends(require_admin)):
+async def delete_shift(shift_id: str, current_user: User = Depends(require_rota_manager)):
     shift = await db.shifts.find_one({"id": shift_id, "restaurant_id": current_user.restaurant_id})
     if not shift:
         raise HTTPException(status_code=404, detail="Shift not found")
@@ -115,7 +115,7 @@ async def delete_shift(shift_id: str, current_user: User = Depends(require_admin
 
 
 @router.post("/shifts/copy-week")
-async def copy_week(source_start: str, target_start: str, current_user: User = Depends(require_admin)):
+async def copy_week(source_start: str, target_start: str, current_user: User = Depends(require_rota_manager)):
     """Copy all shifts from one week to another."""
     source_end = (datetime.strptime(source_start, "%Y-%m-%d") + timedelta(days=6)).strftime("%Y-%m-%d")
     source_shifts = await db.shifts.find({
@@ -163,7 +163,7 @@ async def copy_week(source_start: str, target_start: str, current_user: User = D
 
 
 @router.post("/shifts/publish")
-async def publish_shifts(start_date: str, end_date: str, current_user: User = Depends(require_admin)):
+async def publish_shifts(start_date: str, end_date: str, current_user: User = Depends(require_rota_manager)):
     """Publish shifts for a week — makes them visible to staff."""
     result = await db.shifts.update_many(
         {"restaurant_id": current_user.restaurant_id, "date": {"$gte": start_date, "$lte": end_date}},
@@ -180,7 +180,7 @@ class MarkWeekOffRequest(BaseModel):
 
 
 @router.post("/shifts/mark-week-off")
-async def mark_week_off(data: MarkWeekOffRequest, current_user: User = Depends(require_admin)):
+async def mark_week_off(data: MarkWeekOffRequest, current_user: User = Depends(require_rota_manager)):
     """Manager marks a staff as off for the entire week.
     - Deletes any existing shifts for that staff in the given week.
     - Creates an auto-approved leave entry so the scheduler shows a hard block.

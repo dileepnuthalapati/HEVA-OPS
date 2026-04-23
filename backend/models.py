@@ -11,6 +11,10 @@ class User(BaseModel):
     role: str
     restaurant_id: Optional[str] = None
     created_at: Optional[str] = None
+    # Persona capabilities (e.g. `workforce.manage_rota`, `pos.access`).
+    # Surfaced in /auth/me so the frontend can refresh in-flight without
+    # a full re-login when an admin updates a staff member's persona.
+    capabilities: List[str] = []
 
 
 class UserCreate(BaseModel):

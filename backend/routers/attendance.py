@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Query, Header
 from fastapi.responses import Response
 from database import db
-from dependencies import verify_password, get_current_user, require_admin, require_feature
+from dependencies import verify_password, get_current_user, require_admin, require_feature, require_rota_manager
 from models import User
 from datetime import datetime, timezone, timedelta
 from pydantic import BaseModel
@@ -468,7 +468,7 @@ async def get_attendance(start_date: str, end_date: str, current_user: User = De
 
 
 @router.get("/attendance/live")
-async def get_live_attendance(current_user: User = Depends(require_admin)):
+async def get_live_attendance(current_user: User = Depends(require_rota_manager)):
     """Get who is currently clocked in (admin only)."""
     records = await db.attendance.find(
         {"restaurant_id": current_user.restaurant_id, "clock_out": None, "is_operational": {"$ne": False}},
