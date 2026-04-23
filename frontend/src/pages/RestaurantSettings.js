@@ -902,8 +902,9 @@ const RestaurantSettings = () => {
                       onClick={async () => {
                         try {
                           const { initPushNotifications } = await import('../services/push');
-                          await initPushNotifications();
-                          toast.success('Push notifications enabled!');
+                          const result = await initPushNotifications();
+                          if (result?.success) toast.success('Push notifications enabled!');
+                          else toast.error(result?.message || 'Failed to enable notifications');
                         } catch (err) {
                           toast.error('Failed to enable notifications. Your device may not support this feature.');
                         }
