@@ -187,30 +187,21 @@ function UpgradeModal({ open, onClose, moduleName }) {
 
 function WorkspaceSwitcher({ workspaces, activeKey, onSelect, lockedWorkspaces, onLockedClick }) {
   const [open, setOpen] = useState(false);
-  // Holds the action queued by a menu-item click. We only execute it AFTER
-  // the dropdown has fully closed (open === false has been committed + Radix
-  // portal has unmounted). This is the ONLY reliable way across Chromium,
-  // Safari, and Android WebView to avoid the orphaned-portal race that was
-  // leaving an invisible overlay on top of the next page.
-  const [pending, setPending] = useState(null);
-  useEffect(() => {
-    if (pending && !open) {
-      const fn = pending;
-      setPending(null);
-      // A microtask defer ensures React has finished unmounting the portal
-      // subtree before the navigation-triggered re-render begins.
-      Promise.resolve().then(fn);
-    }
-  }, [pending, open]);
-
   const active = workspaces.find(w => w.key === activeKey) || workspaces[0];
   if (!active) return null;
   const ActiveIcon = active.icon;
   const hasMultiple = workspaces.length + lockedWorkspaces.length > 1;
 
+  // On Safari / Android WebView, Radix's modal DropdownMenu was leaving a
+  // pointer-events blocking layer on top of the destination page for the
+  // duration of its close animation (~150 ms, sometimes longer). During that
+  // window, clicks did nothing — exactly what the user experienced as
+  // "workforce opens but nothing is clickable until I tap again".
+  // `modal={false}` removes the focus trap + body pointer-events lock so the
+  // destination page is interactive the instant we navigate.
   const handleChoose = (fn) => {
-    setPending(() => fn);
     setOpen(false);
+    fn();
   };
 
   // If the user only has one workspace available, render it as a static header (no dropdown)
@@ -232,7 +223,7 @@ function WorkspaceSwitcher({ workspaces, activeKey, onSelect, lockedWorkspaces, 
   }
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
       <DropdownMenuTrigger asChild>
         <button
           className="flex items-center gap-2 w-full px-2.5 py-2 mb-3 rounded-lg bg-slate-800/50 hover:bg-slate-700/50 border border-slate-700/50 transition-all group"
