@@ -40,6 +40,14 @@ dependencies {
     androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
     androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
     implementation project(':capacitor-cordova-android-plugins')
+
+    // Firebase BOM aligns every Firebase SDK to one version. Capacitor's
+    // push-notifications plugin pulls in `firebase-messaging` transitively,
+    // but without a BOM the version can drift relative to what Firebase
+    // internals expect — producing hard-to-diagnose runtime crashes on
+    // `PushNotifications.register()`. The BOM pin prevents that drift.
+    implementation platform('com.google.firebase:firebase-bom:33.7.0')
+    implementation 'com.google.firebase:firebase-messaging'
 }
 
 apply from: 'capacitor.build.gradle'
