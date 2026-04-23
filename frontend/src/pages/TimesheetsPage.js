@@ -26,7 +26,10 @@ function getWeekRange(offset = 0, weekStartDay = 1) {
 }
 
 export default function TimesheetsPage() {
-  const { hasFeature } = useAuth();
+  const { hasFeature, user } = useAuth();
+  // Full admins can approve/reject/unlock. Rota-manager staff can VIEW the
+  // timesheet summary but not approve hours (that's the owner/manager job).
+  const canApproveHours = user?.role === 'admin' || user?.role === 'platform_owner';
   const [weekOffset, setWeekOffset] = useState(0);
   const [summary, setSummary] = useState([]);
   const [payroll, setPayroll] = useState(null);
@@ -55,12 +58,15 @@ export default function TimesheetsPage() {
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
+      // Load each endpoint independently — rota-manager staff have access to
+      // the timesheet summary but not the full payroll report (admin-only).
+      // Catching per-call prevents a single 403 from wiping the whole screen.
       const [ts, pr, att] = await Promise.all([
-        timesheetAPI.getSummary(start, end),
-        payrollAPI.getReport(start, end),
+        timesheetAPI.getSummary(start, end).catch(() => []),
+        payrollAPI.getReport(start, end).catch(() => null),
         attendanceAPI.getAll(start, end).catch(() => []),
       ]);
-      setSummary(ts);
+      setSummary(ts || []);
       setPayroll(pr);
       setAttendanceRecords(att);
 
@@ -236,7 +242,10 @@ export default function TimesheetsPage() {
                         </td>
                         <td className="p-3 text-sm text-center font-mono font-semibold">{r.gross_pay.toFixed(2)}</td>
                         <td className="p-3 text-center">
-                          {r.locked ? (
+                          {!canApproveHours ? (
+                            // Rota-manager persona: view-only for timesheets
+                            <span className="text-xs text-slate-400 font-medium" title="Only business admin can approve hours">View only</span>
+                          ) : r.locked ? (
                             <Button variant="ghost" size="sm" onClick={() => handleUnlock(r.staff_id)} className="text-xs h-7" data-testid={`unlock-${r.staff_id}`}>
                               <Unlock className="w-3 h-3 mr-1" /> Unlock
                             </Button>

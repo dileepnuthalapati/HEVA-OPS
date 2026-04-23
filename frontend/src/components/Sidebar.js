@@ -465,15 +465,19 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
           />
         )}
 
-        {/* Dashboard / Overview — always pinned at the top of the link list.
-            Labelled "Overview" for workforce-only businesses, "Dashboard" otherwise. */}
-        <div className="space-y-0.5">
-          <SidebarLink item={{
-            path: '/dashboard',
-            icon: LayoutDashboard,
-            label: (enabled.length === 1 && enabled[0].key === 'workforce') ? 'Overview' : 'Dashboard',
-          }} />
-        </div>
+        {/* Dashboard / Overview — pinned at the top for full admins only.
+            A `workforce.manage_rota` staff is a team lead, not a business
+            owner — they get their workforce items but not the business
+            overview or settings (those remain exclusive to admin). */}
+        {isAdmin && (
+          <div className="space-y-0.5">
+            <SidebarLink item={{
+              path: '/dashboard',
+              icon: LayoutDashboard,
+              label: (enabled.length === 1 && enabled[0].key === 'workforce') ? 'Overview' : 'Dashboard',
+            }} />
+          </div>
+        )}
 
         {/* Dynamic module section for current workspace */}
         {visibleItems.length > 0 && (
