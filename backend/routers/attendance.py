@@ -897,3 +897,50 @@ async def cleanup_old_photos(days: int = 90, current_user: User = Depends(requir
         {"$set": {"photo_proof_path": None, "photo_cleaned_at": datetime.now(timezone.utc).isoformat()}}
     )
     return {"message": f"Cleaned {result.modified_count} photo references older than {days} days"}
+
+
+# ── Admin: Force-close a runaway open shift ──
+# If a staff member forgets to clock out and the shift keeps running for 24/36+
+# hours (happens in production — pocketed phones, forgotten logouts), admins
+# need a way to terminate the open record without waiting for that employee
+# to clock in again. The closed record is flagged `needs_staff_correction` so
+# the employee is prompted to enter their real clock-out time on next login.
+
+@router.post("/attendance/{record_id}/admin-force-close")
+async def admin_force_close_attendance(
+    record_id: str,
+    current_user: User = Depends(require_admin),
+):
+    """Admin force-closes a long-running open clock-in. The hours are capped
+    at MAX_SHIFT_HOURS and the record is flagged for the employee to fix."""
+    rec = await db.attendance.find_one(
+        {"id": record_id, "restaurant_id": current_user.restaurant_id},
+        {"_id": 0}
+    )
+    if not rec:
+        raise HTTPException(status_code=404, detail="Record not found")
+    if rec.get("clock_out"):
+        raise HTTPException(status_code=400, detail="Record is already closed")
+
+    try:
+        clock_in_dt = datetime.fromisoformat(rec["clock_in"])
+    except Exception:
+        raise HTTPException(status_code=400, detail="Record has invalid clock_in timestamp")
+
+    capped_out = clock_in_dt + timedelta(hours=MAX_SHIFT_HOURS)
+    await db.attendance.update_one(
+        {"id": record_id},
+        {"$set": {
+            "clock_out": capped_out.isoformat(),
+            "hours_worked": MAX_SHIFT_HOURS,
+            "flagged": True,
+            "flag_reason": f"Admin force-closed (shift exceeded {MAX_SHIFT_HOURS}h). Employee must verify real clock-out time.",
+            "needs_staff_correction": True,
+            "force_closed_by": current_user.id,
+            "force_closed_at": datetime.now(timezone.utc).isoformat(),
+        }}
+    )
+    return {
+        "message": "Shift force-closed. Employee will be prompted to fix their hours.",
+        "capped_hours": MAX_SHIFT_HOURS,
+    }

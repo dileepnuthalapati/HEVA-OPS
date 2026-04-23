@@ -121,17 +121,55 @@ export default function AttendancePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {liveRecords.map(r => {
                     const clockedAt = new Date(r.clock_in);
-                    const elapsed = ((Date.now() - clockedAt.getTime()) / 3600000).toFixed(1);
+                    const elapsedMs = Date.now() - clockedAt.getTime();
+                    const elapsed = (elapsedMs / 3600000).toFixed(1);
+                    // Past 12h a shift is almost certainly forgotten — show
+                    // an admin-only "Force Clock Out" button (backend caps
+                    // hours to MAX_SHIFT_HOURS and prompts the employee to
+                    // correct the time when they next open the app).
+                    const isRunaway = elapsedMs >= 12 * 3600000;
+                    const isAdmin = user?.role === 'admin' || user?.role === 'platform_owner';
+
+                    const forceClose = async () => {
+                      if (!window.confirm(`Force clock-out for ${r.staff_name}? Their hours will be capped and they'll be asked to correct the time when they next log in.`)) return;
+                      try {
+                        await api.post(`/attendance/${r.id}/admin-force-close`);
+                        toast.success(`${r.staff_name} clocked out by admin`);
+                        loadData();
+                      } catch (err) {
+                        toast.error(err?.response?.data?.detail || 'Force clock-out failed');
+                      }
+                    };
+
                     return (
-                      <div key={r.id} className="flex items-center gap-3 p-3 rounded-xl bg-emerald-50 border border-emerald-100" data-testid={`live-${r.staff_id}`}>
-                        <div className="w-10 h-10 rounded-lg bg-emerald-600 flex items-center justify-center text-white font-bold text-sm">
+                      <div
+                        key={r.id}
+                        className={`flex items-center gap-3 p-3 rounded-xl border ${isRunaway ? 'bg-amber-50 border-amber-200' : 'bg-emerald-50 border-emerald-100'}`}
+                        data-testid={`live-${r.staff_id}`}
+                      >
+                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold text-sm ${isRunaway ? 'bg-amber-600' : 'bg-emerald-600'}`}>
                           {(r.staff_name || '?')[0].toUpperCase()}
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-semibold truncate">{r.staff_name}</p>
-                          <p className="text-xs text-emerald-700">In since {formatClockTime(r.clock_in)} ({elapsed}h)</p>
+                          <p className={`text-xs ${isRunaway ? 'text-amber-700' : 'text-emerald-700'}`}>
+                            In since {formatClockTime(r.clock_in)} ({elapsed}h)
+                            {isRunaway && ' — likely forgotten'}
+                          </p>
                         </div>
-                        <UserCheck className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                        {isRunaway && isAdmin ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-xs h-8 text-amber-700 hover:bg-amber-100 border-amber-300 whitespace-nowrap"
+                            onClick={forceClose}
+                            data-testid={`force-close-${r.id}`}
+                          >
+                            Force out
+                          </Button>
+                        ) : (
+                          <UserCheck className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+                        )}
                       </div>
                     );
                   })}

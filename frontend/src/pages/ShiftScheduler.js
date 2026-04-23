@@ -314,18 +314,24 @@ export default function ShiftScheduler() {
                         </td>
                         {weekDates.map(date => {
                           const dayShifts = shifts.filter(s => s.staff_id === sid && s.date === date);
-                          const isToday = date === new Date().toISOString().split('T')[0];
+                          const todayStr = new Date().toISOString().split('T')[0];
+                          const isToday = date === todayStr;
+                          // Disable adding shifts on past days — admins can
+                          // only schedule from today onwards. Existing shifts
+                          // stay visible but can't be edited.
+                          const isPast = date < todayStr;
                           const block = blocks[sid]?.[date];
                           const isHardBlock = block?.block_type === 'hard';
                           const isPendingLeave = block?.block_type === 'pending_leave';
                           const isSoftBlock = block?.block_type === 'soft';
                           return (
                             <td key={date} className={`p-1.5 align-top relative ${
+                              isPast ? 'bg-slate-50/80 opacity-60' :
                               isToday ? 'bg-indigo-50/50' :
                               isHardBlock ? 'bg-slate-100' :
                               isPendingLeave ? 'bg-amber-50/60' :
                               isSoftBlock ? 'bg-orange-50/40' : ''
-                            }`}>
+                            }`} data-testid={`cell-${sid}-${date}${isPast ? '-past' : ''}`}>
                               {/* Block overlay */}
                               {isHardBlock && (
                                 <div className="text-[9px] text-slate-400 text-center py-1 italic capitalize" data-testid={`block-${sid}-${date}`}>
@@ -347,25 +353,27 @@ export default function ShiftScheduler() {
                               {dayShifts.map(sh => (
                                 <div
                                   key={sh.id}
-                                  className={`group relative text-[11px] rounded-lg px-2 py-1.5 mb-1 cursor-pointer transition-all ${
+                                  className={`group relative text-[11px] rounded-lg px-2 py-1.5 mb-1 ${isPast ? 'cursor-default' : 'cursor-pointer'} transition-all ${
                                     sh.published
                                       ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
                                       : 'bg-slate-100 text-slate-700 border border-slate-200'
                                   } hover:shadow-sm`}
-                                  onClick={() => openEdit(sh)}
+                                  onClick={() => { if (!isPast) openEdit(sh); }}
                                   data-testid={`shift-${sh.id}`}
                                 >
                                   <div className="font-semibold">{formatTime(sh.start_time)} - {formatTime(sh.end_time)}</div>
                                   {sh.position && <div className="text-[10px] opacity-70 truncate">{sh.position}</div>}
-                                  <button
-                                    className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
-                                    onClick={(e) => { e.stopPropagation(); handleDelete(sh.id); }}
-                                  >
-                                    <Trash2 className="w-3 h-3" />
-                                  </button>
+                                  {!isPast && (
+                                    <button
+                                      className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"
+                                      onClick={(e) => { e.stopPropagation(); handleDelete(sh.id); }}
+                                    >
+                                      <Trash2 className="w-3 h-3" />
+                                    </button>
+                                  )}
                                 </div>
                               ))}
-                              {user?.role === 'admin' && !isHardBlock && (
+                              {user?.role === 'admin' && !isHardBlock && !isPast && (
                                 <button
                                   className="w-full h-7 rounded-lg border border-dashed border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-slate-400 hover:text-indigo-500 transition-all flex items-center justify-center"
                                   onClick={() => {

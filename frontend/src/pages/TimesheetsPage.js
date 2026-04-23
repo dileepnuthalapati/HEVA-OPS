@@ -229,15 +229,32 @@ export default function TimesheetsPage() {
                         <td className={`p-3 text-sm text-center font-mono ${r.variance > 0 ? 'text-amber-600' : r.variance < 0 ? 'text-red-600' : 'text-slate-400'}`}>
                           {r.variance > 0 ? '+' : ''}{r.variance}
                         </td>
-                        <td className="p-3 text-sm text-center font-mono text-slate-500">{r.hourly_rate.toFixed(2)}</td>
+                        <td className="p-3 text-sm text-center font-mono text-slate-500">
+                          {r.pay_type === 'monthly'
+                            ? <span className="inline-block px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-600 text-[11px] font-medium">Salary</span>
+                            : r.hourly_rate.toFixed(2)}
+                        </td>
                         <td className="p-3 text-sm text-center font-mono font-semibold">{r.gross_pay.toFixed(2)}</td>
                         <td className="p-3 text-center">
                           {r.locked ? (
                             <Button variant="ghost" size="sm" onClick={() => handleUnlock(r.staff_id)} className="text-xs h-7" data-testid={`unlock-${r.staff_id}`}>
                               <Unlock className="w-3 h-3 mr-1" /> Unlock
                             </Button>
+                          ) : r.has_rejected ? (
+                            // Manager previously rejected → employee needs to fix.
+                            // Keep the label short so it doesn't overflow on mobile.
+                            <span
+                              className="inline-block px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[11px] font-medium"
+                              data-testid={`rejected-${r.staff_id}`}
+                              title="Manager rejected — employee must fix their hours"
+                            >
+                              Rejected
+                            </span>
                           ) : r.has_flagged ? (
                             <span className="text-xs text-amber-600 font-medium">Has Flags</span>
+                          ) : (r.actual_hours === 0 && r.scheduled_hours === 0) ? (
+                            // Nothing worked, nothing scheduled — no approval to give.
+                            <span className="text-xs text-slate-400 font-medium" data-testid={`no-hours-${r.staff_id}`}>No hours</span>
                           ) : (
                             <div className="flex items-center gap-1">
                               <Button size="sm" onClick={() => handleApprove(r.staff_id)} className="text-xs h-7 bg-emerald-600 hover:bg-emerald-700" data-testid={`approve-${r.staff_id}`}>

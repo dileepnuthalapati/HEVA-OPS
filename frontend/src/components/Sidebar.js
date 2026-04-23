@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { NavLink, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { modulePricingAPI } from '../services/api';
@@ -187,17 +187,30 @@ function UpgradeModal({ open, onClose, moduleName }) {
 
 function WorkspaceSwitcher({ workspaces, activeKey, onSelect, lockedWorkspaces, onLockedClick }) {
   const [open, setOpen] = useState(false);
+  // Holds the action queued by a menu-item click. We only execute it AFTER
+  // the dropdown has fully closed (open === false has been committed + Radix
+  // portal has unmounted). This is the ONLY reliable way across Chromium,
+  // Safari, and Android WebView to avoid the orphaned-portal race that was
+  // leaving an invisible overlay on top of the next page.
+  const [pending, setPending] = useState(null);
+  useEffect(() => {
+    if (pending && !open) {
+      const fn = pending;
+      setPending(null);
+      // A microtask defer ensures React has finished unmounting the portal
+      // subtree before the navigation-triggered re-render begins.
+      Promise.resolve().then(fn);
+    }
+  }, [pending, open]);
+
   const active = workspaces.find(w => w.key === activeKey) || workspaces[0];
   if (!active) return null;
   const ActiveIcon = active.icon;
   const hasMultiple = workspaces.length + lockedWorkspaces.length > 1;
 
-  // Close the dropdown FIRST, then navigate on the next paint. This prevents
-  // an orphaned Radix portal overlay from lingering on top of the new route
-  // and blocking all clicks (the "app freezes when I shift to Workforce" bug).
   const handleChoose = (fn) => {
+    setPending(() => fn);
     setOpen(false);
-    requestAnimationFrame(() => fn());
   };
 
   // If the user only has one workspace available, render it as a static header (no dropdown)

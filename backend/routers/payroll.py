@@ -69,21 +69,35 @@ async def get_efficiency_ratio(start_date: str, end_date: str, current_user: Use
     ).to_list(10000)
     total_revenue = sum(o.get("total_amount", 0) or o.get("total", 0) for o in orders)
 
-    # Get total labour cost
+    # Total labour cost — include monthly-salary staff. For salaried employees
+    # the cost is prorated by the number of days in the requested window out
+    # of a 30-day month (so a weekly view shows ~1/4 of their monthly salary).
     staff_list = await db.users.find(
         {"restaurant_id": rest_id},
-        {"_id": 0, "id": 1, "hourly_rate": 1}
+        {"_id": 0, "id": 1, "hourly_rate": 1, "pay_type": 1, "monthly_salary": 1}
     ).to_list(100)
+
+    from datetime import date as _date
+    try:
+        days_in_window = (_date.fromisoformat(end_date) - _date.fromisoformat(start_date)).days + 1
+    except Exception:
+        days_in_window = 7
+    days_in_window = max(1, days_in_window)
 
     total_labour = 0
     for s in staff_list:
-        rate = s.get("hourly_rate", 0) or 0
-        records = await db.attendance.find(
-            {"restaurant_id": rest_id, "staff_id": s["id"], "date": {"$gte": start_date, "$lte": end_date}, "approved": True},
-            {"_id": 0, "hours_worked": 1}
-        ).to_list(500)
-        hours = sum(r.get("hours_worked", 0) or 0 for r in records)
-        total_labour += hours * rate
+        pay_type = (s.get("pay_type") or "hourly").lower()
+        if pay_type == "monthly":
+            monthly = s.get("monthly_salary", 0) or 0
+            total_labour += (monthly / 30.0) * days_in_window
+        else:
+            rate = s.get("hourly_rate", 0) or 0
+            records = await db.attendance.find(
+                {"restaurant_id": rest_id, "staff_id": s["id"], "date": {"$gte": start_date, "$lte": end_date}, "approved": True},
+                {"_id": 0, "hours_worked": 1}
+            ).to_list(500)
+            hours = sum(r.get("hours_worked", 0) or 0 for r in records)
+            total_labour += hours * rate
 
     ratio = round(total_revenue / total_labour, 2) if total_labour > 0 else 0
 

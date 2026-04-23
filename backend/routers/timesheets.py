@@ -14,10 +14,12 @@ async def get_timesheet_summary(start_date: str, end_date: str, current_user: Us
     """Get timesheet summary: scheduled vs actual hours per staff."""
     rest_id = current_user.restaurant_id
 
-    # Get all staff
+    # Get all staff — include pay_type + monthly_salary so we handle salaried
+    # staff correctly (track hours, but compute gross pay from salary).
     staff_list = await db.users.find(
         {"restaurant_id": rest_id},
-        {"_id": 0, "id": 1, "username": 1, "position": 1, "hourly_rate": 1, "role": 1}
+        {"_id": 0, "id": 1, "username": 1, "position": 1,
+         "hourly_rate": 1, "pay_type": 1, "monthly_salary": 1, "role": 1}
     ).to_list(100)
 
     result = []
@@ -41,14 +43,15 @@ async def get_timesheet_summary(start_date: str, end_date: str, current_user: Us
             except (ValueError, KeyError):
                 pass
 
-        # Actual hours from attendance
+        # Actual hours from attendance — and whether anything in the window
+        # was rejected by a manager (employee needs to fix).
         attendance = await db.attendance.find(
             {"restaurant_id": rest_id, "staff_id": sid, "date": {"$gte": start_date, "$lte": end_date}},
-            {"_id": 0, "hours_worked": 1, "flagged": 1, "approved": 1}
+            {"_id": 0, "hours_worked": 1, "flagged": 1, "approved": 1, "rejected": 1}
         ).to_list(500)
         actual_hours = sum(a.get("hours_worked", 0) or 0 for a in attendance)
         has_flagged = any(a.get("flagged") for a in attendance)
-        all_approved = all(a.get("approved") for a in attendance) if attendance else False
+        has_rejected = any(a.get("rejected") for a in attendance)
 
         # Check if timesheet is locked
         lock = await db.timesheet_locks.find_one(
@@ -58,20 +61,35 @@ async def get_timesheet_summary(start_date: str, end_date: str, current_user: Us
 
         scheduled_hours = round(scheduled_mins / 60, 2)
         variance = round(actual_hours - scheduled_hours, 2)
+        pay_type = (s.get("pay_type") or "hourly").lower()
         rate = s.get("hourly_rate", 0) or 0
+        monthly_salary = s.get("monthly_salary", 0) or 0
+
+        # Gross-pay logic:
+        #   • hourly  → actual_hours × hourly_rate
+        #   • monthly → weekly share of the monthly salary (4.33 weeks/month)
+        #     We STILL track hours/attendance so admin has full visibility;
+        #     the pay just doesn't scale with hours worked.
+        if pay_type == "monthly":
+            gross_pay = round(monthly_salary / 4.33, 2) if monthly_salary else 0
+        else:
+            gross_pay = round(actual_hours * rate, 2)
 
         result.append({
             "staff_id": sid,
             "staff_name": s.get("username", ""),
             "position": s.get("position", ""),
+            "pay_type": pay_type,
             "hourly_rate": rate,
+            "monthly_salary": monthly_salary,
             "scheduled_hours": scheduled_hours,
             "actual_hours": round(actual_hours, 2),
             "variance": variance,
             "has_flagged": has_flagged,
+            "has_rejected": has_rejected,
             "approved": bool(lock and lock.get("approved")),
             "locked": bool(lock and lock.get("locked")),
-            "gross_pay": round(actual_hours * rate, 2),
+            "gross_pay": gross_pay,
         })
 
     return result
@@ -82,10 +100,13 @@ async def approve_timesheet(staff_id: str, start_date: str, end_date: str, curre
     """Approve and lock a staff member's timesheet for the period."""
     rest_id = current_user.restaurant_id
 
-    # Mark all attendance records as approved
+    # Mark all attendance records as approved AND clear any prior rejection
+    # state — otherwise records rejected in a previous round stay flagged
+    # even though the manager has now accepted them.
     await db.attendance.update_many(
         {"restaurant_id": rest_id, "staff_id": staff_id, "date": {"$gte": start_date, "$lte": end_date}},
-        {"$set": {"approved": True}}
+        {"$set": {"approved": True, "rejected": False},
+         "$unset": {"reject_reason": "", "rejected_by": "", "rejected_at": ""}}
     )
 
     # Create/update lock record
