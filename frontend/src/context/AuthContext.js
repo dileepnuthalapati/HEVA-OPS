@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { authAPI } from '../services/api';
 
 const AuthContext = createContext();
@@ -179,17 +179,18 @@ export const AuthProvider = ({ children }) => {
   const isRestaurantUser = user?.role === 'user';
   const canAccessRestaurants = isPlatformOwner; // Only platform owner
 
-  // Feature check helper - reads from user.features (embedded in JWT)
-  const hasFeature = (featureName) => {
+  // Feature check helper - reads from user.features (embedded in JWT).
+  // Memoized so consumers using it as a useMemo/useEffect dep don't thrash.
+  const hasFeature = useCallback((featureName) => {
     if (isPlatformOwner) return true; // Platform owner sees everything
     return user?.features?.[featureName] === true;
-  };
+  }, [isPlatformOwner, user]);
 
   // Capability check helper - reads from user.capabilities array
-  const hasCapability = (cap) => {
+  const hasCapability = useCallback((cap) => {
     if (isPlatformOwner || isRestaurantAdmin) return true;
     return (user?.capabilities || []).includes(cap);
-  };
+  }, [isPlatformOwner, isRestaurantAdmin, user]);
 
   // Device mode check
   const isTerminalMode = !!localStorage.getItem('heva_terminal');

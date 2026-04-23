@@ -22,9 +22,18 @@ export async function isPushAvailable() {
       pushAvailable = false;
       return false;
     }
-    // Check if the plugin is actually registered
-    const plugins = window.Capacitor?.Plugins;
-    if (!plugins?.PushNotifications) {
+    // Prefer Capacitor's official plugin-availability check. This catches the
+    // case where @capacitor/push-notifications is in package.json but the
+    // Android project was never `npx cap sync`'d — trying to call register()
+    // in that state hard-crashes the native activity (the "APK closes when
+    // I tap Enable" bug). isPluginAvailable returns false cleanly instead.
+    const cap = window.Capacitor;
+    if (typeof cap?.isPluginAvailable === 'function') {
+      if (!cap.isPluginAvailable('PushNotifications')) {
+        pushAvailable = false;
+        return false;
+      }
+    } else if (!cap?.Plugins?.PushNotifications) {
       pushAvailable = false;
       return false;
     }
@@ -47,7 +56,10 @@ export async function initPushNotifications() {
   const available = await isPushAvailable();
   if (!available) {
     pushInitialized = true;
-    return { success: false, message: 'Push notifications are not available on this device' };
+    return {
+      success: false,
+      message: 'Push notifications are not configured in this build. Run `npx cap sync android` locally, then rebuild the APK.',
+    };
   }
 
   try {
