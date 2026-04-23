@@ -324,7 +324,7 @@ function SidebarLink({ item }) {
 // ──────────────────────────────────────────────────────────────────────
 
 function SidebarContent({ user, onLogout, onOpenSearch }) {
-  const { hasFeature, hasCapability } = useAuth();
+  const { hasFeature, hasCapability, refreshFeatures } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [upgradeModule, setUpgradeModule] = useState(null);
@@ -390,15 +390,20 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
   // different workspace. We intentionally do NOT persist per-workspace last
   // paths — switching a workspace should always land on the workspace's
   // default home page (set at workspace level via `defaultPath`).
+  // We also fire a lightweight feature refresh here so that platform-admin
+  // module enables/disables propagate to the sidebar the moment the user
+  // navigates anywhere — effectively instant rather than waiting for the
+  // 60-second safety-net poll.
   useEffect(() => {
     if (isPlatform) return;
+    refreshFeatures?.();
     const path = location.pathname;
     const matchingWs = enabled.find(ws => ws.items.some(it => it.path === path));
     if (matchingWs && matchingWs.key !== activeKey) {
       setActiveKey(matchingWs.key);
       try { localStorage.setItem(WORKSPACE_STORAGE_KEY, matchingWs.key); } catch {}
     }
-  }, [location.pathname, enabled, activeKey, isPlatform]);
+  }, [location.pathname, enabled, activeKey, isPlatform, refreshFeatures]);
 
   // If currently active workspace got disabled (e.g. feature turned off), fall back
   useEffect(() => {

@@ -29,6 +29,11 @@ const DEMO_RESTAURANT_USER = {
   created_at: new Date().toISOString()
 };
 
+// Module-level throttle — persists across component remounts (page reloads,
+// route-level Suspense, dev HMR etc.). Limits /auth/features to at most 1
+// call per 3 seconds so rapid navigation can't spam the API.
+let lastFeatureFetchTs = 0;
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -98,40 +103,51 @@ export const AuthProvider = ({ children }) => {
     setLoading(false);
   }, []);
 
+  // Silently refresh features + identity from the server. Exposed through
+  // context so components can fire it on navigation (see Sidebar) — gives
+  // users near-instant propagation of module enables instead of waiting for
+  // the focus/interval tick.
+  //
+  // Throttled at module level to at most 1 call every 3 seconds. The 60 s
+  // safety-net interval + window focus listener still cover the "tab left
+  // open for hours" case by passing force=true.
+  const refreshFeatures = useCallback(async (force = false) => {
+    if (!user || user.role === 'platform_owner') return;
+    const now = Date.now();
+    if (!force && now - lastFeatureFetchTs < 3000) return;
+    lastFeatureFetchTs = now;
+    try {
+      const f = await authAPI.getFeatures();
+      const nextFeatures = f?.features || {};
+      const prev = JSON.stringify(user.features || {});
+      const next = JSON.stringify(nextFeatures);
+      if (prev !== next) {
+        const updated = { ...user, features: nextFeatures };
+        setUser(updated);
+        localStorage.setItem('user', JSON.stringify(updated));
+      }
+    } catch {}
+  }, [user]);
+
   // Poll the server for feature flag changes so platform-admin module
   // enables/disables propagate to the logged-in user WITHOUT them having to
-  // log out. Runs on window focus + every 60 s while the tab is visible.
+  // log out. Runs on window focus + when the tab becomes visible again +
+  // every 60 s as a safety net. Route-change refresh is wired from Sidebar.
   useEffect(() => {
     if (!user || user.role === 'platform_owner') return;
-    let stopped = false;
-
-    const refresh = async () => {
-      try {
-        const f = await authAPI.getFeatures();
-        const nextFeatures = f?.features || {};
-        // Only update if something actually changed to avoid re-render churn.
-        const prev = JSON.stringify(user.features || {});
-        const next = JSON.stringify(nextFeatures);
-        if (prev !== next && !stopped) {
-          const updated = { ...user, features: nextFeatures };
-          setUser(updated);
-          localStorage.setItem('user', JSON.stringify(updated));
-        }
-      } catch {}
-    };
-
-    const onFocus = () => refresh();
-    const onVisibility = () => { if (document.visibilityState === 'visible') refresh(); };
-    const interval = setInterval(refresh, 60000);
-    window.addEventListener('focus', onFocus);
+    // These paths bypass the 3-second debounce because they happen rarely
+    // (user tabbing back, unlocking phone, or the 60-second safety net).
+    const forceRefresh = () => refreshFeatures(true);
+    const onVisibility = () => { if (document.visibilityState === 'visible') forceRefresh(); };
+    const interval = setInterval(forceRefresh, 60000);
+    window.addEventListener('focus', forceRefresh);
     document.addEventListener('visibilitychange', onVisibility);
     return () => {
-      stopped = true;
       clearInterval(interval);
-      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('focus', forceRefresh);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [user]);
+  }, [user, refreshFeatures]);
 
   const login = async (username, password) => {
     // DEMO MODE: Return different users based on username
@@ -281,6 +297,7 @@ export const AuthProvider = ({ children }) => {
       isAdmin: isPlatformOwner || isRestaurantAdmin,
       hasFeature,
       hasCapability,
+      refreshFeatures,
       isTerminalMode,
       features,
       capabilities,
