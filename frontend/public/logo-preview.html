@@ -1,31 +1,48 @@
 <!DOCTYPE html>
 <html><head><meta charset="utf-8"><title>Heva ONE logo preview</title>
 <style>
-  body{background:#f1f5f9;font-family:system-ui,-apple-system,sans-serif;padding:40px;margin:0}
-  h2{text-align:center;margin:0 0 32px;color:#0f172a}
+  body{background:#eef2f7;font-family:system-ui,-apple-system,sans-serif;padding:40px;margin:0}
+  h2{text-align:center;margin:0 0 8px;color:#0f172a;font-weight:700}
+  .sub{text-align:center;margin:0 0 32px;color:#64748b;font-size:13px}
   .grid{display:flex;gap:40px;justify-content:center;align-items:flex-start;flex-wrap:wrap}
   .card{text-align:center}
-  .card img{border-radius:24px;box-shadow:0 8px 24px rgba(0,0,0,.12);background:#6366F1}
-  .label{font-weight:600;margin:0 0 12px;color:#334155}
-  .meta{margin:8px 0 0;font-size:12px;color:#64748b}
+  .card img{border-radius:24px;box-shadow:0 8px 24px rgba(15,30,60,.14)}
+  .label{font-weight:600;margin:0 0 12px;color:#334155;font-size:14px}
+  .meta{margin:8px 0 0;font-size:11px;color:#64748b;font-family:'JetBrains Mono',monospace}
+  hr{border:none;border-top:1px solid #cbd5e1;margin:48px 0}
 </style></head>
 <body>
-  <h2>Heva ONE — logo preview</h2>
+  <h2>Heva ONE — new brand icon</h2>
+  <p class="sub">Two overlapping plus shapes (back H/V in sky blue · front X in royal blue) on a pearl squircle.</p>
   <div class="grid">
     <div class="card">
-      <p class="label">APK launcher (Android)</p>
-      <img src="/apk-logo-preview.png" width="192" height="192" alt="APK logo">
-      <p class="meta">192×192 · ic_launcher.png</p>
+      <p class="label">Your reference</p>
+      <img src="/logo-source.jpeg" width="192" height="192" alt="Source">
+      <p class="meta">Original screenshot</p>
     </div>
     <div class="card">
-      <p class="label">APK foreground only (transparent)</p>
-      <img src="/apk-logo-foreground.png" width="192" height="192" alt="APK foreground">
-      <p class="meta">432×432 · ic_launcher_foreground.png</p>
+      <p class="label">Recreated master (1024)</p>
+      <img src="/logo-master.png" width="192" height="192" alt="Master">
+      <p class="meta">1024x1024 source</p>
     </div>
     <div class="card">
-      <p class="label">PWA (now synced to match APK)</p>
-      <img src="/pwa-logo-preview.png" width="192" height="192" alt="PWA logo">
-      <p class="meta">512×512 · icon-512.png</p>
+      <p class="label">APK launcher</p>
+      <img src="/apk-logo-preview.png" width="192" height="192" alt="APK">
+      <p class="meta">192x192 · ic_launcher.png</p>
     </div>
+    <div class="card">
+      <p class="label">PWA icon</p>
+      <img src="/pwa-logo-preview.png" width="192" height="192" alt="PWA">
+      <p class="meta">512x512 · icon-512.png</p>
+    </div>
+  </div>
+  <hr>
+  <h2 style="font-size:18px;margin-bottom:24px">How it appears at real sizes</h2>
+  <div class="grid" style="align-items:center">
+    <div class="card"><img src="/icon-192.png" width="48" height="48" style="border-radius:10px"><p class="meta">48px · mdpi</p></div>
+    <div class="card"><img src="/icon-192.png" width="72" height="72" style="border-radius:14px"><p class="meta">72px · hdpi</p></div>
+    <div class="card"><img src="/icon-192.png" width="96" height="96" style="border-radius:18px"><p class="meta">96px · xhdpi</p></div>
+    <div class="card"><img src="/icon-192.png" width="144" height="144" style="border-radius:26px"><p class="meta">144px · xxhdpi</p></div>
+    <div class="card"><img src="/icon-192.png" width="192" height="192" style="border-radius:36px"><p class="meta">192px · xxxhdpi</p></div>
   </div>
 </body></html>
