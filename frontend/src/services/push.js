@@ -65,49 +65,72 @@ export async function initPushNotifications() {
   try {
     const { PushNotifications } = await import('@capacitor/push-notifications');
 
-    // Check current permission
-    let permStatus = await PushNotifications.checkPermissions();
-
-    // Request if needed. On Android 13+ this triggers the POST_NOTIFICATIONS
-    // runtime prompt; requires the permission to be declared in
-    // AndroidManifest.xml (we declare it in src/main/AndroidManifest.xml).
-    if (permStatus.receive === 'prompt' || permStatus.receive === 'prompt-with-rationale') {
-      permStatus = await PushNotifications.requestPermissions();
+    // Wrap every native call in an individual try/catch so a crash in one
+    // step (missing google-services.json, Firebase init failure, etc.)
+    // cannot escape to the Capacitor bridge and kill the WebView. Even then,
+    // Firebase-init native crashes are unrecoverable from JS on Android;
+    // this is the best we can do from the JS side, and is a defence in
+    // depth on top of the `isPluginAvailable` gate above.
+    let permStatus;
+    try {
+      permStatus = await PushNotifications.checkPermissions();
+    } catch (e) {
+      return { success: false, message: 'Cannot read notification permission. Please try again.' };
     }
 
-    if (permStatus.receive !== 'granted') {
+    if (permStatus?.receive === 'prompt' || permStatus?.receive === 'prompt-with-rationale') {
+      try {
+        permStatus = await PushNotifications.requestPermissions();
+      } catch (e) {
+        return { success: false, message: 'Permission request failed. Enable notifications in system settings.' };
+      }
+    }
+
+    if (permStatus?.receive !== 'granted') {
       return { success: false, message: 'Notification permission denied' };
     }
 
     // IMPORTANT: register listeners BEFORE calling register(). On Android,
     // the FCM token can arrive synchronously after register() and a listener
     // attached afterwards will miss it — causing downstream flows to hang.
-    await PushNotifications.addListener('registration', async (token) => {
-      const platform = /iPad|iPhone|iPod/.test(navigator.userAgent) ? 'ios' : 'android';
-      try {
-        await api.post('/devices/register', { token: token.value, platform });
-      } catch {}
-    });
+    try {
+      await PushNotifications.addListener('registration', async (token) => {
+        const platform = /iPad|iPhone|iPod/.test(navigator.userAgent) ? 'ios' : 'android';
+        try {
+          await api.post('/devices/register', { token: token.value, platform });
+        } catch {}
+      });
+      await PushNotifications.addListener('registrationError', (err) => {
+        console.warn('[Push] Registration error:', err);
+      });
+      await PushNotifications.addListener('pushNotificationReceived', (notification) => {
+        console.log('[Push] Received:', notification.title);
+      });
+      await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
+        const data = action.notification?.data;
+        if (data?.type === 'long_shift_nudge') {
+          window.location.href = '/heva-ops/clock';
+        }
+      });
+    } catch (e) {
+      console.warn('[Push] Listener registration failed:', e);
+      // Don't fail the whole flow — user can still receive notifications
+      // even if some listeners didn't attach; just log and keep going.
+    }
 
-    await PushNotifications.addListener('registrationError', (err) => {
-      console.warn('[Push] Registration error:', err);
-    });
-
-    await PushNotifications.addListener('pushNotificationReceived', (notification) => {
-      console.log('[Push] Received:', notification.title);
-    });
-
-    await PushNotifications.addListener('pushNotificationActionPerformed', (action) => {
-      const data = action.notification?.data;
-      if (data?.type === 'long_shift_nudge') {
-        window.location.href = '/heva-ops/clock';
-      }
-    });
-
-    // Register with platform push service (FCM/APNs). This is the call that
-    // can hard-crash on Android 13+ without POST_NOTIFICATIONS declared, or
-    // if google-services.json is missing / invalid.
-    await PushNotifications.register();
+    // Register with FCM/APNs. Race against a 10s timeout so we don't hang
+    // the UI if the native side is stuck waiting for Firebase init.
+    try {
+      await Promise.race([
+        PushNotifications.register(),
+        new Promise((_, reject) => setTimeout(() => reject(new Error('timeout')), 10000)),
+      ]);
+    } catch (e) {
+      const msg = e?.message === 'timeout'
+        ? 'Notification service did not respond. Check google-services.json and rebuild the APK.'
+        : (e?.message || 'Registration failed. Firebase may not be configured in this build.');
+      return { success: false, message: msg };
+    }
 
     pushInitialized = true;
     localStorage.setItem('heva_push_enabled', 'true');

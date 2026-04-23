@@ -156,7 +156,7 @@ const Login = () => {
         <div className="flex flex-col items-center gap-3 mt-6">
           <InstallAppButton variant="compact" />
           <p className="text-center text-xs text-slate-500">
-            Powered by Heva ONE
+            Powered by Hetu Pathways
           </p>
         </div>
       </div>

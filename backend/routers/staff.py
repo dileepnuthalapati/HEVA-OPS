@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from database import db
-from dependencies import get_password_hash, verify_password, get_current_user, require_admin
+from dependencies import get_password_hash, verify_password, get_current_user, require_admin, require_rota_manager
 from models import User, StaffCreate, StaffUpdate, PasswordReset, PasswordChange
 from datetime import datetime, timezone
 import secrets
@@ -9,7 +9,7 @@ router = APIRouter()
 
 
 @router.get("/restaurant/staff")
-async def list_restaurant_staff(current_user: User = Depends(require_admin)):
+async def list_restaurant_staff(current_user: User = Depends(require_rota_manager)):
     users = await db.users.find({"restaurant_id": current_user.restaurant_id}, {"_id": 0, "password": 0, "password_hash": 0, "pos_pin_hash": 0, "manager_pin_hash": 0}).to_list(100)
     # Add has_pin flag for UI
     for u in users:

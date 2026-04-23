@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from database import db
-from dependencies import get_current_user, require_admin, require_feature
+from dependencies import get_current_user, require_admin, require_feature, require_rota_manager
 from models import User
 from datetime import datetime, timezone
 from pydantic import BaseModel
@@ -10,7 +10,7 @@ router = APIRouter(dependencies=[Depends(require_feature("workforce"))])
 
 
 @router.get("/timesheets/summary")
-async def get_timesheet_summary(start_date: str, end_date: str, current_user: User = Depends(require_admin)):
+async def get_timesheet_summary(start_date: str, end_date: str, current_user: User = Depends(require_rota_manager)):
     """Get timesheet summary: scheduled vs actual hours per staff."""
     rest_id = current_user.restaurant_id
 

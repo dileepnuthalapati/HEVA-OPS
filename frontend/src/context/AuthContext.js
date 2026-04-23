@@ -59,10 +59,79 @@ export const AuthProvider = ({ children }) => {
     const token = localStorage.getItem('auth_token');
     const savedUser = localStorage.getItem('user');
     if (token && savedUser) {
-      setUser(JSON.parse(savedUser));
+      try {
+        setUser(JSON.parse(savedUser));
+      } catch {
+        // Corrupt saved user — wipe and force re-login.
+        localStorage.removeItem('auth_token');
+        localStorage.removeItem('user');
+      }
+      // Verify the session is still valid on THIS build/server. This doubles
+      // as a safety net for the Android "reinstall restored an old session
+      // from Google Backup" class of bugs — a stale token will 401 here and
+      // we wipe it immediately, landing the user on /login for a clean start.
+      // Also refreshes `features` so newly-enabled modules appear without the
+      // user needing a manual hard-refresh / relogin.
+      authAPI.getMe()
+        .then((me) => {
+          authAPI.getFeatures().then((f) => {
+            const nextUser = {
+              username: me.username,
+              role: me.role,
+              restaurant_id: me.restaurant_id,
+              features: f?.features || me.features || {},
+              capabilities: me.capabilities || [],
+              email: me.email || '',
+            };
+            setUser(nextUser);
+            localStorage.setItem('user', JSON.stringify(nextUser));
+          }).catch(() => {});
+        })
+        .catch((err) => {
+          if (err?.response?.status === 401 || err?.response?.status === 403) {
+            localStorage.removeItem('auth_token');
+            localStorage.removeItem('user');
+            setUser(null);
+          }
+        });
     }
     setLoading(false);
   }, []);
+
+  // Poll the server for feature flag changes so platform-admin module
+  // enables/disables propagate to the logged-in user WITHOUT them having to
+  // log out. Runs on window focus + every 60 s while the tab is visible.
+  useEffect(() => {
+    if (!user || user.role === 'platform_owner') return;
+    let stopped = false;
+
+    const refresh = async () => {
+      try {
+        const f = await authAPI.getFeatures();
+        const nextFeatures = f?.features || {};
+        // Only update if something actually changed to avoid re-render churn.
+        const prev = JSON.stringify(user.features || {});
+        const next = JSON.stringify(nextFeatures);
+        if (prev !== next && !stopped) {
+          const updated = { ...user, features: nextFeatures };
+          setUser(updated);
+          localStorage.setItem('user', JSON.stringify(updated));
+        }
+      } catch {}
+    };
+
+    const onFocus = () => refresh();
+    const onVisibility = () => { if (document.visibilityState === 'visible') refresh(); };
+    const interval = setInterval(refresh, 60000);
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [user]);
 
   const login = async (username, password) => {
     // DEMO MODE: Return different users based on username

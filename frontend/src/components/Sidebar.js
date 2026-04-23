@@ -333,26 +333,50 @@ function SidebarLink({ item }) {
 // ──────────────────────────────────────────────────────────────────────
 
 function SidebarContent({ user, onLogout, onOpenSearch }) {
-  const { hasFeature } = useAuth();
+  const { hasFeature, hasCapability } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [upgradeModule, setUpgradeModule] = useState(null);
 
   const isPlatform = user?.role === 'platform_owner';
   const isAdmin = user?.role === 'admin';
-  const workspaceDefs = isAdmin ? ADMIN_WORKSPACES : STAFF_WORKSPACES;
+  // Staff granted `workforce.manage_rota` → treat as admin for Workforce UI
+  // purposes (see also App.js ProtectedRoute capability= override). Their
+  // workspace items include the admin rota/attendance/timesheet screens.
+  const canManageRota = !isAdmin && hasCapability('workforce.manage_rota');
+
+  // Build workspace definitions on the fly for the manage-rota persona: use
+  // the Staff workspaces as the base, but swap the Workforce block for the
+  // admin one so they can access Shift Scheduler + Attendance + Timesheets.
+  const workspaceDefs = useMemo(() => {
+    if (isAdmin) return ADMIN_WORKSPACES;
+    if (canManageRota) {
+      return {
+        ...STAFF_WORKSPACES,
+        workforce: {
+          ...ADMIN_WORKSPACES.workforce,
+          label: 'Workforce',
+          subtitle: 'Rota · Attendance · Timesheets',
+        },
+      };
+    }
+    return STAFF_WORKSPACES;
+  }, [isAdmin, canManageRota]);
 
   // Compute which workspaces are enabled vs locked (safe even for platform owner)
   const { enabled, locked } = useMemo(() => {
     if (isPlatform) return { enabled: [], locked: [] };
     const en = [];
-    const lo = [];
     for (const ws of Object.values(workspaceDefs)) {
       const isEnabled = ws.requires.some(f => hasFeature(f));
       if (isEnabled) en.push(ws);
-      else if (isAdmin) lo.push(ws); // staff doesn't see locked workspaces
+      // Previously we pushed disabled workspaces into a "locked" list so
+      // admins saw an upgrade prompt. Removed per product direction: a
+      // workforce-only customer (healthcare / retail etc.) shouldn't see POS
+      // or KDS upsell inside their sidebar — the switcher should only show
+      // what the business actually pays for.
     }
-    return { enabled: en, locked: lo };
+    return { enabled: en, locked: [] };
   }, [workspaceDefs, hasFeature, isAdmin, isPlatform]);
 
   // Active workspace state — derived from URL first, then localStorage, then first enabled

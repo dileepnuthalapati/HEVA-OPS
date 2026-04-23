@@ -321,7 +321,7 @@ export function generateCustomerReceipt(order, businessInfo = {}, tableInfo = nu
     '\n',
     CMD.ALIGN_CENTER,
     businessInfo.receipt_footer ? `${businessInfo.receipt_footer}\n` : 'Thank you for your visit!\n',
-    '\nPowered by Heva ONE\n',
+    '\nPowered by Hetu Pathways\n',
     CMD.FEED_5,
     CMD.CUT,
   );
