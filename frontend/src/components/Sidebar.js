@@ -336,9 +336,12 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
   // workspace items include the admin rota/attendance/timesheet screens.
   const canManageRota = !isAdmin && hasCapability('workforce.manage_rota');
 
-  // Build workspace definitions on the fly for the manage-rota persona: use
-  // the Staff workspaces as the base, but swap the Workforce block for the
-  // admin one so they can access Shift Scheduler + Attendance + Timesheets.
+  // Build workspace definitions on the fly for the manage-rota persona:
+  // start from Staff workspaces but REPLACE the Workforce block with a
+  // superset — admin rota/attendance/timesheets PLUS the personal Heva Ops
+  // items (clock, my shifts, my pay). A team lead is still an employee, so
+  // they need both views; the admin items are listed first because
+  // preparing the rota is their primary function.
   const workspaceDefs = useMemo(() => {
     if (isAdmin) return ADMIN_WORKSPACES;
     if (canManageRota) {
@@ -347,7 +350,14 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
         workforce: {
           ...ADMIN_WORKSPACES.workforce,
           label: 'Workforce',
-          subtitle: 'Rota · Attendance · Timesheets',
+          subtitle: 'Rota · Attendance · Team',
+          // Merge admin rota items with the personal items so a team lead
+          // has one sidebar that covers both their team duties and their
+          // own attendance.
+          items: [
+            ...(ADMIN_WORKSPACES.workforce.items || []),
+            ...(STAFF_WORKSPACES.workforce.items || []),
+          ],
         },
       };
     }

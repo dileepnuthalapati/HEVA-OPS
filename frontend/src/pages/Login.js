@@ -42,11 +42,17 @@ const Login = () => {
     try {
       const response = await login(emailOrUsername, password);
       const role = response.user.role;
-      const features = response.user.features || {};
+      const capabilities = response.user.capabilities || [];
+      const hasManageRota = capabilities.includes('workforce.manage_rota');
       if (role === 'platform_owner') {
         navigate('/platform/dashboard');
       } else if (role === 'admin') {
         navigate('/dashboard');
+      } else if (hasManageRota) {
+        // Team lead persona — primary job is preparing the rota. Drop them
+        // into the admin Shift Scheduler instead of their personal Heva Ops
+        // screen (which uses a dedicated layout without the admin sidebar).
+        navigate('/workforce/shifts');
       } else {
         // Personal mode staff → always Heva Ops
         navigate('/heva-ops/shifts');

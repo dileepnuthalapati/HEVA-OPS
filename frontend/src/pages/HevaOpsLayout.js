@@ -53,6 +53,16 @@ export default function HevaOpsLayout() {
           <p className="text-[10px] text-slate-400 uppercase tracking-wider">Staff Portal</p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Switch to Rota admin for manage_rota personas */}
+          {user?.capabilities?.includes('workforce.manage_rota') && (
+            <button
+              data-testid="switch-to-rota-btn"
+              onClick={() => window.location.href = '/workforce/shifts'}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 hover:text-white text-xs font-medium transition-colors"
+            >
+              <span className="text-[10px]">ROTA</span>
+            </button>
+          )}
           {/* Switch to POS for dual-access users */}
           {user?.capabilities?.includes('pos.access') && (
             <button
