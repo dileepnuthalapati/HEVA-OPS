@@ -13,7 +13,17 @@ let pushInitialized = false;
 let pushAvailable = null; // null=unchecked, true/false after check
 
 /**
- * Check if native push is available (Capacitor + plugin installed)
+ * Check if native push is available (Capacitor + plugin installed).
+ *
+ * A plugin-level check is not enough: even when the plugin class exists in
+ * the APK, calling register() without a valid `google-services.json` in the
+ * build crashes the native Android activity (JNI null-pointer from
+ * FirebaseMessaging.getInstance()) — a crash JS try/catch CANNOT intercept.
+ *
+ * We therefore ALSO require an explicit opt-in flag so accidental taps in a
+ * build that wasn't configured with Firebase simply report "not configured"
+ * instead of closing the app. Set `REACT_APP_PUSH_ENABLED=true` at build
+ * time AFTER you've added `android/app/google-services.json`.
  */
 export async function isPushAvailable() {
   if (pushAvailable !== null) return pushAvailable;
@@ -22,11 +32,12 @@ export async function isPushAvailable() {
       pushAvailable = false;
       return false;
     }
-    // Prefer Capacitor's official plugin-availability check. This catches the
-    // case where @capacitor/push-notifications is in package.json but the
-    // Android project was never `npx cap sync`'d — trying to call register()
-    // in that state hard-crashes the native activity (the "APK closes when
-    // I tap Enable" bug). isPluginAvailable returns false cleanly instead.
+    // Hard gate: require the build-time flag so a missing google-services.json
+    // can never crash the app via the Enable button.
+    if (process.env.REACT_APP_PUSH_ENABLED !== 'true') {
+      pushAvailable = false;
+      return false;
+    }
     const cap = window.Capacitor;
     if (typeof cap?.isPluginAvailable === 'function') {
       if (!cap.isPluginAvailable('PushNotifications')) {
