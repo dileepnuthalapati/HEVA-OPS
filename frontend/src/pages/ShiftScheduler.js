@@ -20,6 +20,18 @@ function getDayLabels(startDay) {
   return result;
 }
 
+// Format a Date in the user's LOCAL timezone as YYYY-MM-DD. Using
+// `toISOString()` here would silently return the UTC calendar date, which
+// can be a full day off when the user is in any timezone east of UTC during
+// their early-morning hours — this is what caused the "dates don't match the
+// day labels" bug in the shift scheduler.
+function toLocalDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function getWeekDates(offset = 0, weekStartDay = 1) {
   // weekStartDay: 0=Sunday, 1=Monday, 6=Saturday
   const now = new Date();
@@ -30,7 +42,7 @@ function getWeekDates(offset = 0, weekStartDay = 1) {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(start);
     d.setDate(start.getDate() + i);
-    return d.toISOString().split('T')[0];
+    return toLocalDateStr(d);
   });
 }
 
@@ -245,7 +257,7 @@ export default function ShiftScheduler() {
                   <tr className="border-b bg-slate-50">
                     <th className="p-3 text-left text-xs font-semibold text-slate-500 w-[140px]">Staff</th>
                     {weekDates.map((d, i) => {
-                      const isToday = d === new Date().toISOString().split('T')[0];
+                      const isToday = d === toLocalDateStr(new Date());
                       return (
                         <th key={d} className={`p-3 text-center text-xs font-semibold ${isToday ? 'bg-indigo-50 text-indigo-700' : 'text-slate-500'}`}>
                           <div>{getDayLabels(weekStartDay)[i]}</div>
@@ -289,7 +301,7 @@ export default function ShiftScheduler() {
                               <div className="text-sm font-medium truncate">{staff?.username || 'Unknown'}</div>
                               <div className="text-[11px] text-slate-400">{staff?.position || ''}</div>
                             </div>
-                            {user?.role === 'admin' && staff && (
+                            {(user?.role === 'admin' || user?.capabilities?.includes('workforce.manage_rota')) && staff && (
                               isWholeWeekOff ? (
                                 <button
                                   onClick={() => handleClearWeekOff(sid, staff.username)}
@@ -314,7 +326,7 @@ export default function ShiftScheduler() {
                         </td>
                         {weekDates.map(date => {
                           const dayShifts = shifts.filter(s => s.staff_id === sid && s.date === date);
-                          const todayStr = new Date().toISOString().split('T')[0];
+                          const todayStr = toLocalDateStr(new Date());
                           const isToday = date === todayStr;
                           // Disable adding shifts on past days — admins can
                           // only schedule from today onwards. Existing shifts
@@ -373,7 +385,7 @@ export default function ShiftScheduler() {
                                   )}
                                 </div>
                               ))}
-                              {user?.role === 'admin' && !isHardBlock && !isPast && (
+                              {(user?.role === 'admin' || user?.capabilities?.includes('workforce.manage_rota')) && !isHardBlock && !isPast && (
                                 <button
                                   className="w-full h-7 rounded-lg border border-dashed border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-slate-400 hover:text-indigo-500 transition-all flex items-center justify-center"
                                   onClick={() => {

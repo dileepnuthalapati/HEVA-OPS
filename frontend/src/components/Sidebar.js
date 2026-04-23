@@ -439,12 +439,15 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
   }
 
   const handleSelectWorkspace = (key) => {
-    setActiveKey(key);
+    // IMPORTANT: do NOT setActiveKey(key) here.
+    // The old Sidebar's location-sync useEffect would otherwise run ONE
+    // more time with the stale previous pathname (e.g. '/workforce/shifts'),
+    // detect the mismatch, and revert activeKey back to the previous
+    // workspace — also overwriting localStorage back to the old key.
+    // Instead we persist to localStorage and navigate; the new Sidebar
+    // instance mounted by the next route component initialises activeKey
+    // from localStorage in its useState initializer, which is race-free.
     try { localStorage.setItem(WORKSPACE_STORAGE_KEY, key); } catch {}
-    // Always land on the workspace's fixed home page. We deliberately ignore
-    // any "last-visited" state — users prefer predictable navigation:
-    //   POS → /dashboard, KDS → /kds, Workforce → /workforce/shifts
-    // Staff equivalents live in STAFF_WORKSPACES.defaultPath.
     const ws = enabled.find(w => w.key === key);
     const target = ws?.defaultPath || '/dashboard';
     if (target && target !== location.pathname) navigate(target);
