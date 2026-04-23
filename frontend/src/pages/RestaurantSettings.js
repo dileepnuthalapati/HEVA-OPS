@@ -23,6 +23,13 @@ const ALL_TABS = [
 
 const RestaurantSettings = () => {
   const { hasFeature, user } = useAuth();
+  // Only show the Enable Notifications card if the build was compiled with
+  // push enabled AND we're running on a native platform. On the PWA or in
+  // a dev/test APK without google-services.json, the button would crash the
+  // native activity — so we hide it entirely.
+  const pushEnabledBuild = process.env.REACT_APP_PUSH_ENABLED === 'true'
+    && typeof window !== 'undefined'
+    && window.Capacitor?.isNativePlatform?.();
   const [activeTab, setActiveTab] = useState('business');
   const [restaurant, setRestaurant] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -883,7 +890,11 @@ const RestaurantSettings = () => {
                 </CardContent>
               </Card>
 
-              {/* Push Notifications Card */}
+              {/* Push Notifications Card — only shown on a native build where
+                  Firebase is actually configured. See push.js isPushAvailable()
+                  for why this gate exists (missing google-services.json =
+                  native crash on Enable tap). */}
+              {pushEnabledBuild && (
               <Card data-testid="push-notifications-card">
                 <CardHeader>
                   <CardTitle className="text-xl font-semibold flex items-center gap-2"><Bell className="w-5 h-5" /> Push Notifications</CardTitle>
@@ -915,6 +926,7 @@ const RestaurantSettings = () => {
                   </div>
                 </CardContent>
               </Card>
+              )}
 
               {/* Print settings moved to Printers page */}
 
