@@ -13,6 +13,7 @@ import { toast } from 'sonner';
 import { Save, Users, Store, Lock, Plus, Edit, Trash2, KeyRound, Eye, EyeOff, CreditCard, ExternalLink, CheckCircle, Clock, AlertCircle, Hash, Monitor, Smartphone, MapPin, Loader2, ShieldOff, Fingerprint, Camera, Bell, Mail, Printer } from 'lucide-react';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import { toLocalDateStr } from '../utils/dateUtils';
 
 const ALL_TABS = [
   { id: 'business', label: 'Business Info', icon: Store },
@@ -189,7 +190,7 @@ const RestaurantSettings = () => {
     const defaultCaps = [];
     if (hasFeature('pos')) defaultCaps.push('pos.access');
     if (hasFeature('workforce')) defaultCaps.push('workforce.clock_in');
-    setStaffForm({ username: '', email: '', password: '', role: 'user', capabilities: defaultCaps, pos_pin: '', position: '', hourly_rate: '', phone: '', employment_type: 'full_time', joining_date: new Date().toISOString().split('T')[0], tax_id: '' });
+    setStaffForm({ username: '', email: '', password: '', role: 'user', capabilities: defaultCaps, pos_pin: '', position: '', hourly_rate: '', phone: '', employment_type: 'full_time', joining_date: toLocalDateStr(new Date()), tax_id: '' });
     setShowStaffDialog(true);
   };
 

@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../co
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
 import { Clock, UserCheck, AlertTriangle, CheckCircle } from 'lucide-react';
+import { toLocalDateStr } from '../utils/dateUtils';
 
 // Current-week range honouring the restaurant's configured week_start_day
 // (JS convention: 0=Sun, 1=Mon, 6=Sat). Used as the default filter on the
@@ -20,7 +21,7 @@ function getCurrentWeekRange(weekStartDay = 1) {
   start.setDate(now.getDate() - diff);
   const end = new Date(start);
   end.setDate(start.getDate() + 6);
-  return { start: start.toISOString().split('T')[0], end: end.toISOString().split('T')[0] };
+  return { start: toLocalDateStr(start), end: toLocalDateStr(end) };
 }
 
 export default function AttendancePage() {

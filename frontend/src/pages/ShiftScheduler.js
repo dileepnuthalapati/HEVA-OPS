@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { ChevronLeft, ChevronRight, Plus, Copy, Send, Trash2, Edit2, CalendarX, RotateCcw } from 'lucide-react';
 import { Skeleton } from '../components/ui/skeleton';
+import { toLocalDateStr } from '../utils/dateUtils';
 
 const ALL_DAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 function getDayLabels(startDay) {
@@ -20,17 +21,9 @@ function getDayLabels(startDay) {
   return result;
 }
 
-// Format a Date in the user's LOCAL timezone as YYYY-MM-DD. Using
-// `toISOString()` here would silently return the UTC calendar date, which
-// can be a full day off when the user is in any timezone east of UTC during
-// their early-morning hours — this is what caused the "dates don't match the
-// day labels" bug in the shift scheduler.
-function toLocalDateStr(d) {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
-}
+// Format a Date in the user's LOCAL timezone as YYYY-MM-DD.
+// Imported from `../utils/dateUtils` so every week-view page across the
+// app formats dates consistently and doesn't silently pick up UTC drift.
 
 function getWeekDates(offset = 0, weekStartDay = 1) {
   // weekStartDay: 0=Sunday, 1=Monday, 6=Saturday

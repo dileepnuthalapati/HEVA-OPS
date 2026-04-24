@@ -3,6 +3,7 @@ import { shiftAPI } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { Card } from '../components/ui/card';
 import { Calendar, Clock } from 'lucide-react';
+import { toLocalDateStr } from '../utils/dateUtils';
 
 function formatTime(t) {
   if (!t) return '';
@@ -17,7 +18,7 @@ function getNext14Days() {
   for (let i = 0; i < 14; i++) {
     const d = new Date(now);
     d.setDate(now.getDate() + i);
-    dates.push(d.toISOString().split('T')[0]);
+    dates.push(toLocalDateStr(d));
   }
   return dates;
 }
@@ -52,7 +53,7 @@ export default function StaffShifts() {
     shiftsByDate[s.date].push(s);
   });
 
-  const today = new Date().toISOString().split('T')[0];
+  const today = toLocalDateStr(new Date());
 
   return (
     <div className="p-4 max-w-lg mx-auto" data-testid="staff-shifts-page">

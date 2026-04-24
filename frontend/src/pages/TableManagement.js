@@ -11,6 +11,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../co
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
+import { toLocalDateStr } from '../utils/dateUtils';
 import { 
   Plus, Users, Clock, Merge, Split, Trash2, 
   CalendarClock, Phone, User, CheckCircle, XCircle,
@@ -261,7 +262,7 @@ const TableManagement = () => {
   };
 
   const todayReservations = reservations.filter(r => {
-    const today = new Date().toISOString().split('T')[0];
+    const today = toLocalDateStr(new Date());
     return r.reservation_time?.startsWith(today) && ['confirmed', 'seated'].includes(r.status);
   });
 

@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { shiftAPI } from '../services/api';
 import api from '../services/api';
 import { ArrowRightLeft, X, Loader2, Send, AlertTriangle, Zap, Hand } from 'lucide-react';
+import { toLocalDateStr } from '../utils/dateUtils';
 
 const STATUS_STYLES = {
   waiting_acceptance: 'bg-blue-100 text-blue-700',
@@ -63,8 +64,8 @@ export default function StaffSwapRequests() {
     setLoading(true);
     try {
       const now = new Date();
-      const start = now.toISOString().split('T')[0];
-      const end = new Date(now.getTime() + 14 * 86400000).toISOString().split('T')[0];
+      const start = toLocalDateStr(now);
+      const end = toLocalDateStr(new Date(now.getTime() + 14 * 86400000));
 
       const [shifts, swaps, open] = await Promise.all([
         shiftAPI.getAll(start, end).catch(() => []),
