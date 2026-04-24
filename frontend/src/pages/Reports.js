@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
 import { BarChart3, TrendingUp, ShoppingBag, Coins, Calendar, ArrowLeft, Banknote, CreditCard, Download, FileText } from 'lucide-react';
+import { toLocalDateStr } from '../utils/dateUtils';
 
 const getCurrencySymbol = (currency) => {
   const symbols = { 'GBP': '\u00a3', 'USD': '$', 'EUR': '\u20ac', 'INR': '\u20b9' };
@@ -48,8 +49,8 @@ const Reports = () => {
     const end = new Date();
     const start = new Date();
     if (days > 0) start.setDate(start.getDate() - days);
-    const sd = start.toISOString().split('T')[0];
-    const ed = end.toISOString().split('T')[0];
+    const sd = toLocalDateStr(start);
+    const ed = toLocalDateStr(end);
     setStartDate(sd);
     setEndDate(ed);
     loadStats(sd, ed);

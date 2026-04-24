@@ -10,6 +10,7 @@ import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
 import { Receipt, Lock, Unlock, CheckCircle, DollarSign, TrendingUp, Camera, X, XCircle } from 'lucide-react';
 import { Dialog, DialogContent } from '../components/ui/dialog';
+import { toLocalDateStr } from '../utils/dateUtils';
 
 function getWeekRange(offset = 0, weekStartDay = 1) {
   const now = new Date();
@@ -20,8 +21,8 @@ function getWeekRange(offset = 0, weekStartDay = 1) {
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekStart.getDate() + 6);
   return {
-    start: weekStart.toISOString().split('T')[0],
-    end: weekEnd.toISOString().split('T')[0],
+    start: toLocalDateStr(weekStart),
+    end: toLocalDateStr(weekEnd),
   };
 }
 
