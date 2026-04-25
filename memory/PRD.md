@@ -118,6 +118,7 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 - Background scheduler for automated daily email dispatch (Railway cron)
 
 ## Backlog (P2)
+- **Per-customer online ordering site** (NEEDS ARCHITECTURE REVIEW) — public-facing ordering page for each restaurant: subdomain (`saswata-kitchen.hetupathways.com`), slug-path (`/order/saswata-kitchen`), or full white-label custom domain. Customer browses menu → adds to cart → checks out via Stripe → order flows into restaurant's KDS + POS automatically. Requires: tenant-resolver middleware (subdomain/path → restaurant_id), public-facing React shell with no auth, Stripe public-checkout flow, order-tracking page, QR code generator, optional delivery/pickup/dine-in toggle + time slots. **User wants to fully re-plan this — including potential architecture changes — before scoping. Park for future release. Estimated 2-4 days depending on flavor; possible Pro-tier upsell.**
 - **Workspace switcher keyboard shortcuts** — ⌘1 / ⌘2 / ⌘3 (Ctrl on Windows/Linux, long-press on APK) for instant workspace switching. Restaurant managers running POS + KDS + Workforce tap the switcher dozens of times per shift; 2 taps → 1 keystroke is a measurable productivity win + a "power user" release-note item.
 - Print Void Receipt to Kitchen
 - Split monolithic server.py into modular routers
