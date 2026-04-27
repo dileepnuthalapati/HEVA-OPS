@@ -325,21 +325,60 @@ export default function StaffTimeOff() {
             <DialogDescription>Days you're regularly unavailable</DialogDescription>
           </DialogHeader>
           <div className="space-y-3 mt-2 max-h-[50vh] overflow-y-auto">
-            {availRules.map((rule, idx) => (
-              <div key={idx} className="p-3 border rounded-lg space-y-2" data-testid={`avail-edit-${idx}`}>
-                <div className="flex items-center justify-between">
-                  <select value={rule.day_of_week} onChange={e => updateAvailRule(idx, 'day_of_week', parseInt(e.target.value))} className="text-sm text-slate-900 border rounded-lg px-2 py-1 bg-slate-100/80 focus:ring-2 focus:ring-indigo-500/30 focus:outline-none">
-                    {DAYS_OF_WEEK.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
-                  </select>
-                  <button onClick={() => removeAvailRule(idx)} className="text-slate-400 hover:text-red-500"><X className="w-4 h-4" /></button>
+            {availRules.map((rule, idx) => {
+              const allDay = !rule.unavailable_from && !rule.unavailable_to;
+              return (
+                <div key={idx} className="p-3 border rounded-lg space-y-2.5" data-testid={`avail-edit-${idx}`}>
+                  <div className="flex items-center justify-between">
+                    <select value={rule.day_of_week} onChange={e => updateAvailRule(idx, 'day_of_week', parseInt(e.target.value))} className="text-sm text-slate-900 border rounded-lg px-2 py-1 bg-slate-100/80 focus:ring-2 focus:ring-indigo-500/30 focus:outline-none">
+                      {DAYS_OF_WEEK.map(d => <option key={d.value} value={d.value}>{d.label}</option>)}
+                    </select>
+                    <button onClick={() => removeAvailRule(idx)} className="text-slate-400 hover:text-red-500" data-testid={`remove-avail-${idx}`}><X className="w-4 h-4" /></button>
+                  </div>
+
+                  {/* All-day toggle — when on, both time inputs are cleared so
+                      the rule means "unavailable for the entire day". When
+                      off, the two times are required and users can pick a
+                      specific window (e.g. 09:00 - 13:00). */}
+                  <label className="flex items-center justify-between py-1">
+                    <span className="text-xs font-medium text-slate-700">Unavailable all day</span>
+                    <Switch
+                      checked={allDay}
+                      onCheckedChange={(checked) => {
+                        // Both fields must be updated in a single setState
+                        // call — chained updateAvailRule() calls each
+                        // operate on stale availRules and the second one
+                        // overwrites the first.
+                        const updated = [...availRules];
+                        updated[idx] = checked
+                          ? { ...updated[idx], unavailable_from: null, unavailable_to: null }
+                          : { ...updated[idx], unavailable_from: '09:00', unavailable_to: '17:00' };
+                        setAvailRules(updated);
+                      }}
+                      data-testid={`avail-allday-${idx}`}
+                    />
+                  </label>
+
+                  {!allDay && (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <Label className="text-[11px] text-slate-500 mb-1 block">Start time</Label>
+                        <Input type="time" value={rule.unavailable_from || ''} onChange={e => updateAvailRule(idx, 'unavailable_from', e.target.value || null)} className="text-xs h-9" data-testid={`avail-from-${idx}`} />
+                      </div>
+                      <div>
+                        <Label className="text-[11px] text-slate-500 mb-1 block">End time</Label>
+                        <Input type="time" value={rule.unavailable_to || ''} onChange={e => updateAvailRule(idx, 'unavailable_to', e.target.value || null)} className="text-xs h-9" data-testid={`avail-to-${idx}`} />
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <Label className="text-[11px] text-slate-500 mb-1 block">Reason (optional)</Label>
+                    <Input value={rule.reason || ''} onChange={e => updateAvailRule(idx, 'reason', e.target.value)} placeholder="e.g., University class" className="text-xs h-9" data-testid={`avail-reason-${idx}`} />
+                  </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Input type="time" value={rule.unavailable_from || ''} onChange={e => updateAvailRule(idx, 'unavailable_from', e.target.value || null)} placeholder="From" className="text-xs h-8" />
-                  <Input type="time" value={rule.unavailable_to || ''} onChange={e => updateAvailRule(idx, 'unavailable_to', e.target.value || null)} placeholder="To" className="text-xs h-8" />
-                </div>
-                <Input value={rule.reason || ''} onChange={e => updateAvailRule(idx, 'reason', e.target.value)} placeholder="e.g., University" className="text-xs h-8" />
-              </div>
-            ))}
+              );
+            })}
             <Button variant="outline" size="sm" className="w-full" onClick={addAvailRule} data-testid="add-avail-rule-btn">
               <Plus className="w-3.5 h-3.5 mr-1" /> Add Day
             </Button>
