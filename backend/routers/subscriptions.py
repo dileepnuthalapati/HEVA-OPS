@@ -156,29 +156,104 @@ async def create_stripe_checkout(current_user: User = Depends(require_platform_o
 
 @router.post("/stripe/webhook")
 async def stripe_webhook(request: Request):
+    """
+    Platform-billing webhook.
+    Stripe events for restaurant subscriptions arrive here.
+    Signature verification is MANDATORY in production — without it anyone
+    can POST a fake `invoice.payment_succeeded` event and unlock their
+    restaurant for free.
+    """
     import stripe
     stripe.api_key = os.environ.get("STRIPE_API_KEY", "")
+    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
     payload = await request.body()
+    sig_header = request.headers.get("stripe-signature", "")
+
+    # Production: signed payloads only. Dev fallback parses unsigned but logs
+    # a warning so we never accidentally ship without the secret.
     try:
-        event = stripe.Event.construct_from(json.loads(payload), stripe.api_key)
+        if webhook_secret:
+            event = stripe.Webhook.construct_event(payload, sig_header, webhook_secret)
+        else:
+            print("[Stripe] WARNING: STRIPE_WEBHOOK_SECRET not set — accepting unsigned event (DEV ONLY)")
+            event = stripe.Event.construct_from(json.loads(payload), stripe.api_key)
+    except stripe.error.SignatureVerificationError:
+        raise HTTPException(status_code=400, detail="Invalid signature")
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid payload")
 
-    if event.type == "invoice.payment_succeeded":
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    if event.type == "checkout.session.completed":
+        session = event.data.object
+        restaurant_id = (session.get("metadata") or {}).get("restaurant_id")
+        customer_id = session.get("customer")
+        subscription_id = session.get("subscription")
+        if restaurant_id:
+            await db.restaurants.update_one(
+                {"id": restaurant_id},
+                {"$set": {
+                    "stripe_customer_id": customer_id,
+                    "stripe_subscription_id": subscription_id,
+                    "subscription_status": "active",
+                    "activated_at": now_iso,
+                    "next_billing_date": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+                }}
+            )
+
+    elif event.type == "invoice.payment_succeeded":
         customer_id = event.data.object.get("customer")
         restaurant = await db.restaurants.find_one({"stripe_customer_id": customer_id})
         if restaurant:
-            await db.restaurants.update_one({"id": restaurant["id"]}, {"$set": {"subscription_status": "active", "next_billing_date": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat()}})
+            await db.restaurants.update_one(
+                {"id": restaurant["id"]},
+                {"$set": {
+                    "subscription_status": "active",
+                    "next_billing_date": (datetime.now(timezone.utc) + timedelta(days=30)).isoformat(),
+                }}
+            )
+            # Queue an email receipt — actual sending is handled by the
+            # notifications worker (`/api/notifications/send-pending`).
+            await db.notifications.insert_one({
+                "id": f"notif_pay_ok_{datetime.now(timezone.utc).timestamp()}",
+                "restaurant_id": restaurant["id"],
+                "type": "subscription_payment_succeeded",
+                "message": f"Subscription renewed for {restaurant.get('business_info', {}).get('name', '')}",
+                "email": restaurant.get("owner_email", ""),
+                "status": "pending",
+                "created_at": now_iso,
+                "sent_at": None,
+            })
+
     elif event.type == "invoice.payment_failed":
         customer_id = event.data.object.get("customer")
         restaurant = await db.restaurants.find_one({"stripe_customer_id": customer_id})
         if restaurant:
-            await db.restaurants.update_one({"id": restaurant["id"]}, {"$set": {"subscription_status": "suspended", "suspended_at": datetime.now(timezone.utc).isoformat()}})
+            await db.restaurants.update_one(
+                {"id": restaurant["id"]},
+                {"$set": {"subscription_status": "suspended", "suspended_at": now_iso}}
+            )
             await db.notifications.insert_one({
-                "id": f"notif_stripe_{datetime.now(timezone.utc).timestamp()}", "restaurant_id": restaurant["id"],
-                "type": "payment_failed", "message": f"Payment failed for {restaurant.get('business_info', {}).get('name', '')}",
-                "email": restaurant.get("owner_email", ""), "status": "pending",
-                "created_at": datetime.now(timezone.utc).isoformat(), "sent_at": None
+                "id": f"notif_pay_fail_{datetime.now(timezone.utc).timestamp()}",
+                "restaurant_id": restaurant["id"],
+                "type": "payment_failed",
+                "message": f"Payment failed for {restaurant.get('business_info', {}).get('name', '')}",
+                "email": restaurant.get("owner_email", ""),
+                "status": "pending",
+                "created_at": now_iso, "sent_at": None
             })
+
+    elif event.type == "customer.subscription.deleted":
+        # Restaurant cancelled (or Stripe terminated after multiple failures)
+        customer_id = event.data.object.get("customer")
+        restaurant = await db.restaurants.find_one({"stripe_customer_id": customer_id})
+        if restaurant:
+            await db.restaurants.update_one(
+                {"id": restaurant["id"]},
+                {"$set": {
+                    "subscription_status": "cancelled",
+                    "cancelled_at": now_iso,
+                }}
+            )
 
     return {"status": "ok"}
