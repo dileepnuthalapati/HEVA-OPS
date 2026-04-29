@@ -707,6 +707,14 @@ export const stripeAPI = {
     const response = await api.post('/stripe/create-checkout');
     return response.data;
   },
+  cancelSubscription: async () => {
+    const response = await api.post('/stripe/cancel-subscription');
+    return response.data;
+  },
+  billingPortal: async () => {
+    const response = await api.post('/stripe/billing-portal');
+    return response.data;
+  },
 };
 
 export const emailAPI = {
