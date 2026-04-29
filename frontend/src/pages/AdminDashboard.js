@@ -2,10 +2,11 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
-import { reportAPI, restaurantAPI, subscriptionAPI, attendanceAPI, staffAPI } from '../services/api';
+import { reportAPI, restaurantAPI, subscriptionAPI, attendanceAPI, staffAPI, stripeAPI } from '../services/api';
 import api from '../services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../components/ui/card';
 import { Switch } from '../components/ui/switch';
+import { Button } from '../components/ui/button';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import { toast } from 'sonner';
 import { 
@@ -45,6 +46,57 @@ const AdminDashboard = () => {
   const [topSortBy, setTopSortBy] = useState('revenue');
   const [pendingLeaves, setPendingLeaves] = useState([]);
   const [leaveActionId, setLeaveActionId] = useState(null);
+  const [subActionLoading, setSubActionLoading] = useState(false);
+
+  const handleSubscribe = async () => {
+    setSubActionLoading(true);
+    try {
+      const { checkout_url } = await stripeAPI.createCheckout();
+      if (checkout_url) {
+        window.location.href = checkout_url;
+      } else {
+        toast.error('Stripe checkout unavailable');
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to start checkout');
+    } finally {
+      setSubActionLoading(false);
+    }
+  };
+
+  const handleManageBilling = async () => {
+    setSubActionLoading(true);
+    try {
+      const { portal_url } = await stripeAPI.billingPortal();
+      if (portal_url) {
+        window.location.href = portal_url;
+      } else {
+        toast.error('Billing portal unavailable');
+      }
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to open billing portal');
+    } finally {
+      setSubActionLoading(false);
+    }
+  };
+
+  const handleCancelSubscription = async () => {
+    if (!window.confirm("Cancel subscription? Your account stays active until the end of the current billing period — you can resubscribe anytime.")) {
+      return;
+    }
+    setSubActionLoading(true);
+    try {
+      const result = await stripeAPI.cancelSubscription();
+      toast.success(result.message || 'Subscription will end at period close');
+      // refresh
+      const sub = await subscriptionAPI.getMy().catch(() => null);
+      if (sub) setSubscription(sub);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Failed to cancel subscription');
+    } finally {
+      setSubActionLoading(false);
+    }
+  };
 
   const hasPOS = hasFeature('pos');
   const hasWorkforce = hasFeature('workforce');
@@ -113,6 +165,25 @@ const AdminDashboard = () => {
     // Auto-refresh every 60s for live data
     const interval = setInterval(loadAll, 15000);
     return () => clearInterval(interval);
+  }, [loadAll]);
+
+  // Surface Stripe checkout return-status from query string
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const sub = params.get('subscription');
+    if (sub === 'success') {
+      toast.success('Subscription activated! Welcome to Heva ONE Standard.');
+      // Refresh to pick up the new status from the webhook
+      setTimeout(() => loadAll(), 1500);
+      params.delete('subscription');
+      const newSearch = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (newSearch ? `?${newSearch}` : ''));
+    } else if (sub === 'cancelled') {
+      toast.info('Checkout cancelled — no charge was made.');
+      params.delete('subscription');
+      const newSearch = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (newSearch ? `?${newSearch}` : ''));
+    }
   }, [loadAll]);
 
   const toggleQROrdering = async (enabled) => {
@@ -293,26 +364,100 @@ const AdminDashboard = () => {
           ) : (
             <>
               {/* Subscription Banner */}
-              {subscription && (subscription.subscription_status === 'trial' || subscription.subscription_status === 'suspended') && (
-                <Card className={`mb-4 ${subscription.subscription_status === 'suspended' ? 'border-red-300 bg-red-50' : subscription.trial_days_left <= 3 ? 'border-amber-300 bg-amber-50' : 'border-blue-200 bg-blue-50'}`} data-testid="subscription-banner">
-                  <CardContent className="p-3 md:p-4 flex items-center gap-3">
-                    {subscription.subscription_status === 'suspended' ? (
-                      <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
-                    ) : (
-                      <Clock className="w-5 h-5 text-blue-600 shrink-0" />
-                    )}
-                    <div className="text-sm">
-                      {subscription.subscription_status === 'suspended' ? (
-                        <span className="font-semibold text-red-700">Account suspended. Contact support to reactivate.</span>
-                      ) : (
-                        <span className={subscription.trial_days_left <= 3 ? 'font-semibold text-amber-700' : 'text-blue-700'}>
-                          Trial: <strong>{subscription.trial_days_left} days left</strong>
-                          {subscription.trial_days_left <= 3 && ' \u2014 Subscribe now to avoid interruption'}
-                        </span>
-                      )}
-                    </div>
-                  </CardContent>
-                </Card>
+              {subscription && (() => {
+                const status = subscription.subscription_status;
+                const days = subscription.trial_days_left;
+                const cancelling = subscription.subscription_cancel_at_period_end;
+                const cancelsAt = subscription.subscription_cancels_at;
+                const showBanner = status === 'trial' || status === 'suspended' || status === 'cancelled' || cancelling;
+                if (!showBanner) return null;
+
+                let tone, Icon, message;
+                if (status === 'suspended') {
+                  tone = 'border-red-300 bg-red-50';
+                  Icon = AlertTriangle;
+                  message = (<span className="font-semibold text-red-700">Account suspended — subscribe to restore access.</span>);
+                } else if (status === 'cancelled') {
+                  tone = 'border-slate-300 bg-slate-50';
+                  Icon = AlertTriangle;
+                  message = (<span className="font-semibold text-slate-700">Subscription cancelled. Resubscribe anytime to reactivate.</span>);
+                } else if (cancelling) {
+                  let endStr = '';
+                  try { endStr = cancelsAt ? new Date(cancelsAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : ''; } catch(e) {}
+                  tone = 'border-amber-300 bg-amber-50';
+                  Icon = Clock;
+                  message = (<span className="font-semibold text-amber-700">Subscription ending{endStr ? ` on ${endStr}` : ''} — you can resume anytime.</span>);
+                } else if (status === 'trial') {
+                  const urgent = days != null && days <= 3;
+                  tone = urgent ? 'border-amber-300 bg-amber-50' : 'border-blue-200 bg-blue-50';
+                  Icon = Clock;
+                  message = (
+                    <span className={urgent ? 'font-semibold text-amber-700' : 'text-blue-700'}>
+                      Trial: <strong>{days} day{days === 1 ? '' : 's'} left</strong>
+                      {urgent && ' \u2014 Subscribe now to avoid interruption'}
+                    </span>
+                  );
+                }
+
+                return (
+                  <Card className={`mb-4 ${tone}`} data-testid="subscription-banner">
+                    <CardContent className="p-3 md:p-4 flex flex-col md:flex-row md:items-center gap-3">
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <Icon className="w-5 h-5 shrink-0 text-current" />
+                        <div className="text-sm">{message}</div>
+                      </div>
+                      <div className="flex items-center gap-2 shrink-0">
+                        {(status === 'trial' || status === 'suspended' || status === 'cancelled') && (
+                          <Button
+                            size="sm"
+                            onClick={handleSubscribe}
+                            disabled={subActionLoading}
+                            data-testid="subscribe-now-button"
+                            className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                          >
+                            {subActionLoading ? 'Loading\u2026' : (status === 'cancelled' ? 'Resubscribe' : 'Subscribe Now \u00b7 \u00a349.99/mo')}
+                          </Button>
+                        )}
+                        {cancelling && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={handleManageBilling}
+                            disabled={subActionLoading}
+                            data-testid="manage-billing-button"
+                          >
+                            Manage Billing
+                          </Button>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })()}
+
+              {/* Active subscription mini-row — discreet manage link */}
+              {subscription && subscription.subscription_status === 'active' && !subscription.subscription_cancel_at_period_end && (
+                <div className="mb-4 flex items-center justify-end gap-2 text-xs text-slate-500" data-testid="subscription-active-row">
+                  <CreditCard className="w-3.5 h-3.5" />
+                  <span>Standard plan active</span>
+                  <button
+                    onClick={handleManageBilling}
+                    disabled={subActionLoading}
+                    className="text-indigo-600 hover:text-indigo-700 font-medium underline-offset-2 hover:underline disabled:opacity-50"
+                    data-testid="manage-billing-link"
+                  >
+                    Manage billing
+                  </button>
+                  <span className="text-slate-300">{'\u00b7'}</span>
+                  <button
+                    onClick={handleCancelSubscription}
+                    disabled={subActionLoading}
+                    className="text-slate-500 hover:text-red-600 underline-offset-2 hover:underline disabled:opacity-50"
+                    data-testid="cancel-subscription-link"
+                  >
+                    Cancel
+                  </button>
+                </div>
               )}
 
               {/* ══════════════ POS Section — Revenue first when business has POS ══════════════ */}
