@@ -117,6 +117,16 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
 - Add "Send Daily Summary" button in Admin Dashboard UI
 - Background scheduler for automated daily email dispatch (Railway cron)
 
+## Stripe SaaS Billing Hardening (Feb 12, 2026)
+Production-ready subscription flow for restaurant admins (P0 from previous session — DONE):
+- **Self-serve checkout** — `POST /api/stripe/create-checkout` switched from `require_platform_owner` to `require_admin`. Embeds `metadata.restaurant_id` + subscription_data metadata so the webhook can correlate. Re-uses existing `stripe_customer_id` (or `customer_email`) so customers don't get duplicate Stripe customers on re-attempt. Platform owner rejected with 400 (and 403 by `require_admin`).
+- **Cancellation** — `POST /api/stripe/cancel-subscription` calls `stripe.Subscription.modify(cancel_at_period_end=True)`, persists `subscription_cancel_at_period_end=True` and `subscription_cancels_at` (ISO of `current_period_end`). Stripe fires `customer.subscription.deleted` at period end → webhook flips to `cancelled`.
+- **Billing portal** — `POST /api/stripe/billing-portal` creates a Stripe Billing Portal session (return_url=/dashboard) so customers manage card / invoices / cancellation themselves.
+- **Receipt emails** — `invoice.payment_succeeded` now sends a real Resend email via new `_payment_receipt_html` template (amount, currency, hosted invoice link, next billing date). `customer.subscription.deleted` sends a "subscription ended" confirmation.
+- **Frontend banner** — AdminDashboard banner extended: `Subscribe Now · £49.99/mo` (or `Resubscribe`) for trial/suspended/cancelled; amber "Subscription ending on <date>" + Manage Billing during cancel-at-period-end window; discreet `Manage billing · Cancel` row when active. Stripe checkout return (`?subscription=success|cancelled`) surfaces toast + refresh.
+- **Webhook signature** — `stripe.Webhook.construct_event` verifies signed events when `STRIPE_WEBHOOK_SECRET` set; dev fallback (no secret) accepts unsigned with warning.
+- **Verified** via 16/16 backend pytests + frontend verification by testing agent (iter62).
+
 ## Backlog (P2)
 - **Per-customer online ordering site** (NEEDS ARCHITECTURE REVIEW) — public-facing ordering page for each restaurant: subdomain (`saswata-kitchen.hetupathways.com`), slug-path (`/order/saswata-kitchen`), or full white-label custom domain. Customer browses menu → adds to cart → checks out via Stripe → order flows into restaurant's KDS + POS automatically. Requires: tenant-resolver middleware (subdomain/path → restaurant_id), public-facing React shell with no auth, Stripe public-checkout flow, order-tracking page, QR code generator, optional delivery/pickup/dine-in toggle + time slots. **User wants to fully re-plan this — including potential architecture changes — before scoping. Park for future release. Estimated 2-4 days depending on flavor; possible Pro-tier upsell.**
 - **Workspace switcher keyboard shortcuts** — ⌘1 / ⌘2 / ⌘3 (Ctrl on Windows/Linux, long-press on APK) for instant workspace switching. Restaurant managers running POS + KDS + Workforce tap the switcher dozens of times per shift; 2 taps → 1 keystroke is a measurable productivity win + a "power user" release-note item.
