@@ -110,6 +110,96 @@ async def delete_restaurant_user(restaurant_id: str, user_id: str, current_user:
     return {"message": f"User '{user.get('username')}' removed from restaurant"}
 
 
+# ─── Platform Settings (Stripe keys, trial days, etc) ──────────────────────
+
+DEFAULT_PLATFORM_SETTINGS = {
+    "platform_name": "Heva ONE",
+    "support_email": "support@hevaone.com",
+    "default_trial_days": 14,
+    "default_plan_price": 19.99,
+    "default_currency": "GBP",
+    "enable_email_notifications": True,
+    "enable_trial_reminders": True,
+    "enable_auto_suspend": False,
+    "stripe_enabled": False,
+    "stripe_publishable_key": "",
+    "stripe_secret_key": "",
+    "stripe_webhook_secret": "",
+}
+
+# Fields that are sensitive and should never be returned to the client in full
+_SENSITIVE_FIELDS = {"stripe_secret_key", "stripe_webhook_secret"}
+
+
+def _mask_secret(value: str) -> str:
+    """Return a masked version of a secret (e.g. 'sk_live_•••••••1234') for display only."""
+    if not value:
+        return ""
+    if len(value) <= 8:
+        return "•" * len(value)
+    return f"{value[:7]}{'•' * 6}{value[-4:]}"
+
+
+def _public_view(doc: dict) -> dict:
+    """Strip sensitive fields, replace with masked / boolean indicators."""
+    out = {k: v for k, v in doc.items() if k not in _SENSITIVE_FIELDS and k != "type" and k != "_id"}
+    out["stripe_secret_key_set"] = bool(doc.get("stripe_secret_key"))
+    out["stripe_secret_key_masked"] = _mask_secret(doc.get("stripe_secret_key", ""))
+    out["stripe_webhook_secret_set"] = bool(doc.get("stripe_webhook_secret"))
+    out["stripe_webhook_secret_masked"] = _mask_secret(doc.get("stripe_webhook_secret", ""))
+    return out
+
+
+async def get_platform_settings_doc() -> dict:
+    """Shared helper — reads the single platform-settings document from DB.
+    Returns defaults merged with saved values (sensitive fields included — do NOT return to client)."""
+    doc = await db.platform_config.find_one({"type": "global"}, {"_id": 0}) or {}
+    merged = DEFAULT_PLATFORM_SETTINGS.copy()
+    merged.update({k: v for k, v in doc.items() if k != "type"})
+    return merged
+
+
+@router.get("/platform/settings")
+async def get_platform_settings(current_user: User = Depends(require_platform_owner)):
+    doc = await get_platform_settings_doc()
+    return _public_view(doc)
+
+
+@router.put("/platform/settings")
+async def update_platform_settings(payload: dict, current_user: User = Depends(require_platform_owner)):
+    """Save platform settings. Empty strings for secrets are ignored so the admin
+    can save other fields without re-entering keys. Pass `clear_secret: true` to wipe."""
+    existing = await db.platform_config.find_one({"type": "global"}, {"_id": 0}) or {}
+    update = {}
+    allowed = set(DEFAULT_PLATFORM_SETTINGS.keys())
+
+    for key, value in payload.items():
+        if key not in allowed:
+            continue
+        if key in _SENSITIVE_FIELDS:
+            # Don't overwrite stored secret with an empty string (frontend hides it)
+            if value in (None, ""):
+                continue
+        update[key] = value
+
+    if payload.get("clear_stripe_secret"):
+        update["stripe_secret_key"] = ""
+    if payload.get("clear_stripe_webhook_secret"):
+        update["stripe_webhook_secret"] = ""
+
+    update["type"] = "global"
+    update["updated_at"] = datetime.now(timezone.utc).isoformat()
+    update["updated_by"] = current_user.username
+
+    await db.platform_config.update_one(
+        {"type": "global"},
+        {"$set": update},
+        upsert=True,
+    )
+    merged = {**DEFAULT_PLATFORM_SETTINGS, **existing, **update}
+    return {"message": "Platform settings saved", "settings": _public_view(merged)}
+
+
 # ─── Module Pricing ──────────────────────────────────────
 
 DEFAULT_MODULE_PRICES = {

@@ -7,7 +7,7 @@ import { Label } from '../components/ui/label';
 import { Switch } from '../components/ui/switch';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { authAPI, platformAdminAPI, modulePricingAPI } from '../services/api';
+import { authAPI, platformAdminAPI, modulePricingAPI, platformSettingsAPI } from '../services/api';
 import { emailAPI } from '../services/api';
 import { Settings, Bell, Shield, CreditCard, Mail, Globe, Key, UserPlus, Trash2, Users, CheckCircle, XCircle, DollarSign, ShoppingCart, ChefHat, QrCode, Calendar } from 'lucide-react';
 
@@ -49,10 +49,38 @@ const PlatformSettings = () => {
   const [savingPricing, setSavingPricing] = useState(false);
 
   useEffect(() => {
+    loadSettings();
     loadAdmins();
     loadEmailStatus();
     loadModulePricing();
   }, []);
+
+  const loadSettings = async () => {
+    try {
+      const data = await platformSettingsAPI.get();
+      setSettings((prev) => ({
+        ...prev,
+        platformName: data.platform_name ?? prev.platformName,
+        supportEmail: data.support_email ?? prev.supportEmail,
+        defaultTrialDays: data.default_trial_days ?? prev.defaultTrialDays,
+        defaultPlanPrice: data.default_plan_price ?? prev.defaultPlanPrice,
+        defaultCurrency: data.default_currency ?? prev.defaultCurrency,
+        enableEmailNotifications: data.enable_email_notifications ?? prev.enableEmailNotifications,
+        enableTrialReminders: data.enable_trial_reminders ?? prev.enableTrialReminders,
+        enableAutoSuspend: data.enable_auto_suspend ?? prev.enableAutoSuspend,
+        stripeEnabled: data.stripe_enabled ?? false,
+        stripePublicKey: data.stripe_publishable_key ?? '',
+        stripeSecretKey: '',
+        stripeWebhookSecret: '',
+        stripeSecretKeySet: !!data.stripe_secret_key_set,
+        stripeSecretKeyMasked: data.stripe_secret_key_masked ?? '',
+        stripeWebhookSecretSet: !!data.stripe_webhook_secret_set,
+        stripeWebhookSecretMasked: data.stripe_webhook_secret_masked ?? '',
+      }));
+    } catch {
+      /* ignore — defaults are fine */
+    }
+  };
 
   const loadEmailStatus = async () => {
     try {
@@ -92,11 +120,30 @@ const PlatformSettings = () => {
   const handleSave = async () => {
     setSaving(true);
     try {
-      // TODO: Save to backend
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      toast.success('Platform settings saved!');
+      const payload = {
+        platform_name: settings.platformName,
+        support_email: settings.supportEmail,
+        default_trial_days: Number(settings.defaultTrialDays) || 14,
+        default_plan_price: Number(settings.defaultPlanPrice) || 19.99,
+        default_currency: settings.defaultCurrency,
+        enable_email_notifications: !!settings.enableEmailNotifications,
+        enable_trial_reminders: !!settings.enableTrialReminders,
+        enable_auto_suspend: !!settings.enableAutoSuspend,
+        stripe_enabled: !!settings.stripeEnabled,
+        stripe_publishable_key: settings.stripePublicKey || '',
+      };
+      // Only send secrets if the user actually typed something new
+      if (settings.stripeSecretKey && settings.stripeSecretKey.trim()) {
+        payload.stripe_secret_key = settings.stripeSecretKey.trim();
+      }
+      if (settings.stripeWebhookSecret && settings.stripeWebhookSecret.trim()) {
+        payload.stripe_webhook_secret = settings.stripeWebhookSecret.trim();
+      }
+      await platformSettingsAPI.update(payload);
+      toast.success('Platform settings saved');
+      await loadSettings();
     } catch (error) {
-      toast.error('Failed to save settings');
+      toast.error(error.response?.data?.detail || 'Failed to save settings');
     } finally {
       setSaving(false);
     }
@@ -468,17 +515,51 @@ const PlatformSettings = () => {
                       value={settings.stripePublicKey}
                       onChange={(e) => setSettings({ ...settings, stripePublicKey: e.target.value })}
                       placeholder="pk_live_..."
+                      data-testid="stripe-public-key-input"
                     />
                   </div>
                   <div>
-                    <Label htmlFor="stripeSecret">Stripe Secret Key</Label>
+                    <Label htmlFor="stripeSecret">
+                      Stripe Secret Key
+                      {settings.stripeSecretKeySet && (
+                        <span className="ml-2 text-xs text-emerald-600 font-normal">
+                          ✓ Saved ({settings.stripeSecretKeyMasked})
+                        </span>
+                      )}
+                    </Label>
                     <Input
                       id="stripeSecret"
                       type="password"
                       value={settings.stripeSecretKey}
                       onChange={(e) => setSettings({ ...settings, stripeSecretKey: e.target.value })}
-                      placeholder="sk_live_..."
+                      placeholder={settings.stripeSecretKeySet ? 'Leave blank to keep existing key' : 'sk_live_...'}
+                      data-testid="stripe-secret-key-input"
                     />
+                  </div>
+                  <div>
+                    <Label htmlFor="stripeWebhook">
+                      Stripe Webhook Secret
+                      {settings.stripeWebhookSecretSet && (
+                        <span className="ml-2 text-xs text-emerald-600 font-normal">
+                          ✓ Saved ({settings.stripeWebhookSecretMasked})
+                        </span>
+                      )}
+                    </Label>
+                    <Input
+                      id="stripeWebhook"
+                      type="password"
+                      value={settings.stripeWebhookSecret}
+                      onChange={(e) => setSettings({ ...settings, stripeWebhookSecret: e.target.value })}
+                      placeholder={settings.stripeWebhookSecretSet ? 'Leave blank to keep existing secret' : 'whsec_...'}
+                      data-testid="stripe-webhook-secret-input"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Set up a webhook at{' '}
+                      <a href="https://dashboard.stripe.com/webhooks" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                        Stripe Dashboard → Webhooks
+                      </a>
+                      . Endpoint URL: <code className="bg-muted px-1 rounded">{window.location.origin}/api/stripe/webhook</code>. Subscribe to events: <code className="bg-muted px-1 rounded">checkout.session.completed</code>, <code className="bg-muted px-1 rounded">invoice.payment_succeeded</code>, <code className="bg-muted px-1 rounded">invoice.payment_failed</code>, <code className="bg-muted px-1 rounded">customer.subscription.deleted</code>.
+                    </p>
                   </div>
                   <p className="text-xs text-muted-foreground">
                     <Mail className="w-3 h-3 inline mr-1" />
@@ -491,7 +572,7 @@ const PlatformSettings = () => {
 
           {/* Save Button */}
           <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={saving} size="lg">
+            <Button onClick={handleSave} disabled={saving} size="lg" data-testid="platform-settings-save-button">
               {saving ? 'Saving...' : 'Save Settings'}
             </Button>
           </div>

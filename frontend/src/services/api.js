@@ -762,4 +762,15 @@ export const modulePricingAPI = {
   },
 };
 
+export const platformSettingsAPI = {
+  get: async () => {
+    const response = await api.get('/platform/settings');
+    return response.data;
+  },
+  update: async (settings) => {
+    const response = await api.put('/platform/settings', settings);
+    return response.data;
+  },
+};
+
 export default api;
