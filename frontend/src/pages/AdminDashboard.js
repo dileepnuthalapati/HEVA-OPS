@@ -415,7 +415,7 @@ const AdminDashboard = () => {
                             data-testid="subscribe-now-button"
                             className="bg-indigo-600 hover:bg-indigo-700 text-white"
                           >
-                            {subActionLoading ? 'Loading\u2026' : (status === 'cancelled' ? 'Resubscribe' : 'Subscribe Now \u00b7 \u00a349.99/mo')}
+                            {subActionLoading ? 'Loading\u2026' : (status === 'cancelled' ? 'Resubscribe' : 'Subscribe Now')}
                           </Button>
                         )}
                         {cancelling && (

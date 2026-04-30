@@ -154,7 +154,8 @@ async def check_trial_expirations(current_user: User = Depends(require_platform_
 async def create_stripe_checkout(current_user: User = Depends(require_admin)):
     """
     Restaurant admin starts a Stripe Checkout session to subscribe to the
-    Heva ONE Standard Plan (£49.99/month). Platform owners cannot subscribe
+    Heva ONE subscription at the per-restaurant monthly price set during
+    onboarding (stored on the restaurant doc). Platform owners cannot subscribe
     themselves — they manage tenants via the platform dashboard.
     """
     import stripe
@@ -174,6 +175,16 @@ async def create_stripe_checkout(current_user: User = Depends(require_admin)):
     owner_email = restaurant.get("owner_email") or ""
     frontend_url = os.environ.get("FRONTEND_URL", "http://localhost:3000")
 
+    # Read the per-restaurant monthly price set during onboarding.
+    # Fall back to platform default (set by platform owner in Settings) or 19.99.
+    price = restaurant.get("price")
+    currency = (restaurant.get("currency") or "GBP").lower()
+    if not price or float(price) <= 0:
+        platform_doc = await db.platform_config.find_one({"type": "global"}, {"_id": 0}) or {}
+        price = platform_doc.get("default_plan_price") or 19.99
+        currency = (platform_doc.get("default_currency") or "GBP").lower()
+    unit_amount = int(round(float(price) * 100))  # Stripe needs the smallest currency unit
+
     # Re-use the existing Stripe customer if we already created one
     stripe_customer_id = restaurant.get("stripe_customer_id")
     customer_kwargs = {}
@@ -187,9 +198,9 @@ async def create_stripe_checkout(current_user: User = Depends(require_admin)):
             payment_method_types=["card"],
             line_items=[{
                 "price_data": {
-                    "currency": "gbp",
-                    "product_data": {"name": "Heva ONE Standard Plan", "description": f"Monthly subscription for {business_name}"},
-                    "unit_amount": 4999,
+                    "currency": currency,
+                    "product_data": {"name": f"Heva ONE — {business_name}", "description": f"Monthly subscription for {business_name}"},
+                    "unit_amount": unit_amount,
                     "recurring": {"interval": "month"},
                 },
                 "quantity": 1,
