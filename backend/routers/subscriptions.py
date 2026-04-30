@@ -12,6 +12,15 @@ router = APIRouter()
 logger = logging.getLogger("subscriptions")
 
 
+async def _get_stripe_config():
+    """Read Stripe API key + webhook secret from platform_config DB first, env second.
+    DB-stored keys (entered via Platform Settings UI) take priority."""
+    doc = await db.platform_config.find_one({"type": "global"}, {"_id": 0}) or {}
+    api_key = doc.get("stripe_secret_key") or os.environ.get("STRIPE_API_KEY", "")
+    webhook_secret = doc.get("stripe_webhook_secret") or os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+    return api_key, webhook_secret
+
+
 @router.get("/subscriptions")
 async def list_subscriptions(current_user: User = Depends(require_platform_owner)):
     restaurants = await db.restaurants.find({}, {"_id": 0}).to_list(1000)
@@ -149,9 +158,9 @@ async def create_stripe_checkout(current_user: User = Depends(require_admin)):
     themselves — they manage tenants via the platform dashboard.
     """
     import stripe
-    stripe.api_key = os.environ.get("STRIPE_API_KEY", "")
+    stripe.api_key, _ = await _get_stripe_config()
     if not stripe.api_key:
-        raise HTTPException(status_code=500, detail="Stripe not configured")
+        raise HTTPException(status_code=500, detail="Stripe not configured — platform owner must add Stripe keys in Platform Settings")
     if current_user.role == "platform_owner":
         raise HTTPException(status_code=400, detail="Platform owner cannot subscribe — this is the SaaS provider account.")
     if not current_user.restaurant_id:
@@ -216,7 +225,7 @@ async def cancel_subscription(current_user: User = Depends(require_admin)):
     webhook handles to set status='cancelled'.
     """
     import stripe
-    stripe.api_key = os.environ.get("STRIPE_API_KEY", "")
+    stripe.api_key, _ = await _get_stripe_config()
     if not stripe.api_key:
         raise HTTPException(status_code=500, detail="Stripe not configured")
     if not current_user.restaurant_id:
@@ -253,7 +262,7 @@ async def stripe_billing_portal(current_user: User = Depends(require_admin)):
     payment method, view invoices, and manage cancellation themselves.
     """
     import stripe
-    stripe.api_key = os.environ.get("STRIPE_API_KEY", "")
+    stripe.api_key, _ = await _get_stripe_config()
     if not stripe.api_key:
         raise HTTPException(status_code=500, detail="Stripe not configured")
     if not current_user.restaurant_id:
@@ -289,8 +298,7 @@ async def stripe_webhook(request: Request):
     restaurant for free.
     """
     import stripe
-    stripe.api_key = os.environ.get("STRIPE_API_KEY", "")
-    webhook_secret = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
+    stripe.api_key, webhook_secret = await _get_stripe_config()
     payload = await request.body()
     sig_header = request.headers.get("stripe-signature", "")
 
