@@ -248,6 +248,10 @@ class Printer(BaseModel):
     restaurant_id: Optional[str] = None
     is_default: bool = False
     paper_width: int = 80
+    # Document types this printer accepts. Empty/None = legacy printer that
+    # prints everything (backward-compat with restaurants on old schemas).
+    # Valid values: "kitchen", "receipt", "void", "report"
+    routes: List[str] = Field(default_factory=list)
     created_at: Optional[str] = None
 
 
@@ -257,6 +261,7 @@ class PrinterCreate(BaseModel):
     address: str = ""
     is_default: bool = False
     paper_width: int = 80
+    routes: List[str] = Field(default_factory=list)
 
 
 class PrinterUpdate(BaseModel):
@@ -265,6 +270,7 @@ class PrinterUpdate(BaseModel):
     address: Optional[str] = None
     is_default: Optional[bool] = None
     paper_width: Optional[int] = None
+    routes: Optional[List[str]] = None
 
 
 class PrinterSendData(BaseModel):

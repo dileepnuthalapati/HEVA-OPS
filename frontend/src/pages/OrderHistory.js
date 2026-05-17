@@ -2,12 +2,13 @@ import React, { useState, useEffect } from 'react';
 import { useSearchParams, useNavigate } from 'react-router-dom';
 import Sidebar from '../components/Sidebar';
 import { useAuth } from '../context/AuthContext';
-import { orderAPI, restaurantAPI, printerAPI } from '../services/api';
+import { orderAPI, restaurantAPI, tableAPI } from '../services/api';
+import posPrintService from '../services/posPrintService';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import VoidReasonModal from '../components/VoidReasonModal';
 import { toast } from 'sonner';
-import { Calendar, Printer, XCircle, ArrowLeft } from 'lucide-react';
+import { Calendar, Printer, ChefHat, XCircle, ArrowLeft } from 'lucide-react';
 
 const getCurrencySymbol = (currency) => {
   const symbols = { 'GBP': '£', 'USD': '$', 'EUR': '€', 'INR': '₹' };
@@ -21,6 +22,9 @@ const OrderHistory = () => {
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
   const [currency, setCurrency] = useState('GBP');
+  const [businessInfo, setBusinessInfo] = useState({});
+  const [paperWidth, setPaperWidth] = useState(80);
+  const [tables, setTables] = useState([]);
   const [printingOrderId, setPrintingOrderId] = useState(null);
   const [statusFilter, setStatusFilter] = useState('all');
   const [voidModal, setVoidModal] = useState({ open: false, orderId: null, orderNumber: null });
@@ -34,6 +38,11 @@ const OrderHistory = () => {
     try {
       const restaurant = await restaurantAPI.getMy();
       if (restaurant?.currency) setCurrency(restaurant.currency);
+      if (restaurant?.business_info) setBusinessInfo(restaurant.business_info);
+      const printerStatus = await posPrintService.checkDefaultPrinterStatus();
+      if (printerStatus?.paperWidth) setPaperWidth(printerStatus.paperWidth);
+      const tbls = await tableAPI.getAll().catch(() => []);
+      if (Array.isArray(tbls)) setTables(tbls);
     } catch (e) {}
   };
 
@@ -154,7 +163,10 @@ const OrderHistory = () => {
                           <div className="text-xs text-muted-foreground">by {order.created_by}</div>
                         </div>
                         <div className="flex flex-col gap-1">
-                          <Button variant="outline" size="sm" data-testid={`reprint-receipt-${order.id}`} disabled={printingOrderId === order.id} onClick={() => handleReprintReceipt(order.id)} className="h-8 px-2" title="Reprint Receipt">
+                          <Button variant="outline" size="sm" data-testid={`reprint-kitchen-${order.id}`} disabled={printingOrderId === order.id} onClick={() => handleReprintKitchen(order)} className="h-8 px-2" title="Print Kitchen Ticket">
+                            <ChefHat className="w-4 h-4" />
+                          </Button>
+                          <Button variant="outline" size="sm" data-testid={`reprint-receipt-${order.id}`} disabled={printingOrderId === order.id} onClick={() => handleReprintReceipt(order)} className="h-8 px-2" title="Print Customer Receipt">
                             <Printer className="w-4 h-4" />
                           </Button>
                           {order.status === 'pending' && (

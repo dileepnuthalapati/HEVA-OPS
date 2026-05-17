@@ -109,6 +109,37 @@ ONE app (Capacitor), TWO device modes — "Split-Brain" routing:
    - **(e) "Powered by Heva ONE" → "Powered by Hetu Pathways"** in Login footer, Receipt template preview (RestaurantSettings), and actual printed-receipt footer (`receiptGenerator.js`).
    - **(f) Push APK still crashing when tapping Enable.** Additional hardening on top of the iter-55 `isPluginAvailable` gate: wrapped every individual `PushNotifications.*` native call in its own try/catch (so one crashing step doesn't kill the whole flow), added a 10 s race-timeout around `register()` so the UI can recover even if native Firebase init hangs, and returns clearer messages ("Run `npx cap sync android` locally, then rebuild the APK" when plugin is missing; "Notification service did not respond" on timeout). Core requirement remains: user must run `npx cap sync android` locally once after pulling, then rebuild the APK — this wires the plugin into `capacitor.settings.gradle` which currently doesn't include it.
 
+## Production Field-Bug Sprint (Feb 12, 2026) — Customer Feedback After 2 Weeks Live
+
+Six critical issues reported by SKAdmin after live operation; all six resolved (12/12 backend tests passed, zero bugs found by testing agent in iter63).
+
+1. **Print Queue + Retries + Persistent "Printer Offline" Banner (Issue 1)**
+   - Rewrote `posPrintService.js` with a localStorage-persisted queue, 5-retry exponential backoff (2/5/15/30/60 s), pub/sub status, and a single drain worker that survives reloads.
+   - New `PrinterOfflineBanner` component mounted globally in App.js. Bottom-center red banner shows on failure with retry counter; dismiss button hides for 5 min, auto-clears on first success.
+
+2. **Manual print decoupled from auto-print toggle (Issue 2)**
+   - Renamed Printer Settings card to "Auto-Print Behavior" with toggle labels "Auto-Print Kitchen Slip" / "Auto-Print Customer Receipt" + an explainer that manual buttons always work.
+   - Added `manualPrintCustomerReceipt()` to posPrintService — bypasses gate.
+   - POS Pending orders now show TWO icons (Kitchen ChefHat + Receipt Printer). POS Completed orders show two buttons. Orders/OrderHistory page also has both buttons per order.
+
+3. **mDNS LAN Discovery (Issue 3)**
+   - Installed `capacitor-zeroconf` plugin.
+   - `printer.js#scanWifiPrinters` now does mDNS first (`_pdl-datastream._tcp.`, `_printer._tcp.`, `_ipp._tcp.`) — modern Square/UberEats-style discovery. Falls back to TCP sweep when zeroconf returns nothing or plugin missing. APK requires `npx cap sync android` + rebuild to activate.
+
+4. **Role-Based Print Routing (Issue 4 — Phase 1)**
+   - New `routes: List[str]` field on `Printer` model (kitchen / receipt / void / report).
+   - New `GET /api/printers/by-route/{route}` — returns all printers with that route, falls back to default for legacy printers (backward compat).
+   - PrinterSettings page shows route chips on every printer card (data-testid `route-toggle-{printerId}-{route}`); clicking toggles via PUT /printers/{id}.
+   - posPrintService dispatches each job to the resolved target printer(s) — multiple printers per route supported.
+
+5. **Latency (Issue 5)**
+   - AdminDashboard auto-refresh changed from 15 s → 45 s and now pauses when tab is hidden (visibilitychange listener). Refreshes immediately on tab return.
+   - 14 new MongoDB indexes added in `indexes.py`: `attendance.{restaurant_id+clock_out, +date, +staff_id+date, +flagged}`, `shifts.{restaurant_id+date, +staff_id+date}`, `timesheet_locks`, `leave_requests`, `swap_requests`, `drop_requests`, `printers.{routes, is_default}`, `platform_config.type`, `restaurants.stripe_customer_id`.
+
+6. **Force Logout Always Visible for Admins + Payroll CSV Export (Issue 6)**
+   - AttendancePage: "Force out" button now shows on every active staff row regardless of shift duration. Backend caps hours only when > MAX_SHIFT_HOURS (14h); under that, uses actual elapsed time and skips the `needs_staff_correction` flag.
+   - New `GET /api/timesheets/export.csv?start_date=&end_date=` — returns BOM-prefixed UTF-8 CSV with TOTAL row. Monthly-salary staff use weekly share (`/4.33 × weeks_in_window`) consistent with the on-screen summary. Three frontend buttons: Current Week, Current Month, Custom Range (popover with date inputs).
+
 ## Upcoming
 - Customer Order Board ("Digital Display" on TV via /display/{venue_id} — real-time order status via Socket.io)
 - Annual leave balance tracking & year-end report logic

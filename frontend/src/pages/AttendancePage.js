@@ -124,10 +124,9 @@ export default function AttendancePage() {
                     const clockedAt = new Date(r.clock_in);
                     const elapsedMs = Date.now() - clockedAt.getTime();
                     const elapsed = (elapsedMs / 3600000).toFixed(1);
-                    // Past 12h a shift is almost certainly forgotten — show
-                    // an admin-only "Force Clock Out" button (backend caps
-                    // hours to MAX_SHIFT_HOURS and prompts the employee to
-                    // correct the time when they next open the app).
+                    // Past 12h a shift is almost certainly forgotten — flag it
+                    // so the row stands out visually. Admins can force-close
+                    // ANY active shift regardless of duration.
                     const isRunaway = elapsedMs >= 12 * 3600000;
                     const isAdmin = user?.role === 'admin' || user?.role === 'platform_owner';
 
@@ -158,11 +157,11 @@ export default function AttendancePage() {
                             {isRunaway && ' — likely forgotten'}
                           </p>
                         </div>
-                        {isRunaway && isAdmin ? (
+                        {isAdmin ? (
                           <Button
                             size="sm"
                             variant="outline"
-                            className="text-xs h-8 text-amber-700 hover:bg-amber-100 border-amber-300 whitespace-nowrap"
+                            className={`text-xs h-8 whitespace-nowrap ${isRunaway ? 'text-amber-700 hover:bg-amber-100 border-amber-300' : 'text-slate-600 hover:bg-slate-100 border-slate-200'}`}
                             onClick={forceClose}
                             data-testid={`force-close-${r.id}`}
                           >

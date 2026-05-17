@@ -16,7 +16,7 @@
  *   • Bump CACHE_NAME on every deploy to evict stale entries.
  */
 
-const CACHE_NAME = 'heva-one-v8-2026-02-12-dynamic-price';
+const CACHE_NAME = 'heva-one-v9-2026-02-12-print-payroll';
 const HASHED_STATIC = /^\/static\/(?:js|css|media)\//;
 const OTHER_ASSET_EXT = /\.(?:woff2?|ttf|eot|otf|png|jpg|jpeg|gif|svg|ico|webp)$/i;
 
