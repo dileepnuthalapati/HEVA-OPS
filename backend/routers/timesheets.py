@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from database import db
 from dependencies import get_current_user, require_admin, require_feature, require_rota_manager
 from models import User
 from datetime import datetime, timezone
 from pydantic import BaseModel
 from typing import Optional
+import csv
+import io
 
 router = APIRouter(dependencies=[Depends(require_feature("workforce"))])
 
@@ -183,3 +185,102 @@ async def reject_timesheet(staff_id: str, start_date: str, end_date: str, reason
     await db.timesheet_locks.delete_one({"id": lock_id})
 
     return {"message": "Timesheet rejected. Employee can now update their records."}
+
+
+# ─── Payroll CSV export ───────────────────────────────────────────────
+
+@router.get("/timesheets/export.csv")
+async def export_timesheets_csv(
+    start_date: str,
+    end_date: str,
+    current_user: User = Depends(require_admin),
+):
+    """Export the timesheet summary for the period as a CSV file.
+
+    Hours are computed from `attendance.hours_worked` (which is already a
+    UTC datetime diff, so overnight shifts spanning two calendar dates are
+    handled correctly). Gross pay follows the same hourly/monthly logic as
+    `/timesheets/summary`.
+    """
+    rest_id = current_user.restaurant_id
+    restaurant = await db.restaurants.find_one({"id": rest_id}, {"_id": 0, "business_info": 1, "currency": 1})
+    business_name = (restaurant or {}).get("business_info", {}).get("name", "")
+    currency = (restaurant or {}).get("currency", "GBP")
+
+    staff_list = await db.users.find(
+        {"restaurant_id": rest_id},
+        {"_id": 0, "id": 1, "username": 1, "position": 1,
+         "hourly_rate": 1, "pay_type": 1, "monthly_salary": 1, "email": 1}
+    ).to_list(500)
+
+    rows = []
+    grand_hours = 0.0
+    grand_pay = 0.0
+
+    for s in staff_list:
+        sid = s["id"]
+        pay_type = (s.get("pay_type") or "hourly").lower()
+        rate = float(s.get("hourly_rate") or 0)
+        monthly_salary = float(s.get("monthly_salary") or 0)
+
+        attendance = await db.attendance.find(
+            {"restaurant_id": rest_id, "staff_id": sid,
+             "date": {"$gte": start_date, "$lte": end_date}},
+            {"_id": 0, "hours_worked": 1, "date": 1, "clock_in": 1, "clock_out": 1}
+        ).to_list(1000)
+
+        actual_hours = round(sum(float(a.get("hours_worked") or 0) for a in attendance), 2)
+        days_worked = sum(1 for a in attendance if a.get("clock_out"))
+
+        if pay_type == "monthly":
+            # Weekly share of monthly salary (4.33 weeks/month). For a custom
+            # window, prorate by the number of days in the export range.
+            try:
+                d0 = datetime.fromisoformat(start_date).date() if "T" in start_date else datetime.strptime(start_date, "%Y-%m-%d").date()
+                d1 = datetime.fromisoformat(end_date).date() if "T" in end_date else datetime.strptime(end_date, "%Y-%m-%d").date()
+                days_in_window = max(1, (d1 - d0).days + 1)
+            except Exception:
+                days_in_window = 7
+            gross_pay = round((monthly_salary / 30) * days_in_window, 2) if monthly_salary else 0
+        else:
+            gross_pay = round(actual_hours * rate, 2)
+
+        rows.append({
+            "staff_name": s.get("username", ""),
+            "email": s.get("email", ""),
+            "position": s.get("position", ""),
+            "pay_type": pay_type,
+            "rate": f"{rate:.2f}" if pay_type == "hourly" else f"{monthly_salary:.2f}",
+            "days_worked": days_worked,
+            "hours_worked": f"{actual_hours:.2f}",
+            "gross_pay": f"{gross_pay:.2f}",
+        })
+        grand_hours += actual_hours
+        grand_pay += gross_pay
+
+    # Sort by name for predictable output
+    rows.sort(key=lambda r: r["staff_name"].lower())
+
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow([f"Payroll export — {business_name}"])
+    writer.writerow([f"Period: {start_date} to {end_date}"])
+    writer.writerow([f"Generated: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}"])
+    writer.writerow([f"Currency: {currency}"])
+    writer.writerow([])
+    writer.writerow(["Staff Name", "Email", "Position", "Pay Type", f"Rate ({currency})", "Days Worked", "Hours Worked", f"Gross Pay ({currency})"])
+    for r in rows:
+        writer.writerow([
+            r["staff_name"], r["email"], r["position"], r["pay_type"],
+            r["rate"], r["days_worked"], r["hours_worked"], r["gross_pay"]
+        ])
+    writer.writerow([])
+    writer.writerow(["TOTAL", "", "", "", "", "", f"{grand_hours:.2f}", f"{grand_pay:.2f}"])
+
+    csv_bytes = buf.getvalue().encode("utf-8-sig")  # BOM so Excel opens UK chars correctly
+    filename = f"payroll_{start_date}_to_{end_date}.csv"
+    return Response(
+        content=csv_bytes,
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

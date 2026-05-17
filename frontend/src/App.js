@@ -8,6 +8,7 @@ import { AuthProvider, useAuth } from './context/AuthContext';
 import { OfflineProvider } from './context/OfflineContext';
 import OfflineIndicator from './components/OfflineIndicator';
 import FloatingClockButton from './components/FloatingClockButton';
+import PrinterOfflineBanner from './components/PrinterOfflineBanner';
 
 // Pages - Platform Owner
 import PlatformDashboard from './pages/PlatformDashboard';
@@ -213,6 +214,7 @@ function App() {
           <div className="App">
             <OfflineIndicator />
             <FloatingClockButton />
+            <PrinterOfflineBanner />
             <AppRoutes />
             <Toaster position="bottom-right" duration={2000} closeButton toastOptions={{ style: { fontSize: '13px' } }} />
           </div>

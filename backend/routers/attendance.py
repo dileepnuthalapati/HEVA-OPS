@@ -911,8 +911,13 @@ async def admin_force_close_attendance(
     record_id: str,
     current_user: User = Depends(require_admin),
 ):
-    """Admin force-closes a long-running open clock-in. The hours are capped
-    at MAX_SHIFT_HOURS and the record is flagged for the employee to fix."""
+    """Admin force-closes an open clock-in (any duration).
+
+    If the shift is under MAX_SHIFT_HOURS, uses the actual elapsed time as
+    hours_worked. If it has exceeded the limit (the original "ghost shift"
+    case), hours are capped at MAX_SHIFT_HOURS and the record is flagged
+    `needs_staff_correction` so the employee can fix it on next login.
+    """
     rec = await db.attendance.find_one(
         {"id": record_id, "restaurant_id": current_user.restaurant_id},
         {"_id": 0}
@@ -927,20 +932,34 @@ async def admin_force_close_attendance(
     except Exception:
         raise HTTPException(status_code=400, detail="Record has invalid clock_in timestamp")
 
-    capped_out = clock_in_dt + timedelta(hours=MAX_SHIFT_HOURS)
+    now = datetime.now(timezone.utc)
+    elapsed_hours = (now - clock_in_dt).total_seconds() / 3600.0
+
+    if elapsed_hours > MAX_SHIFT_HOURS:
+        clock_out_dt = clock_in_dt + timedelta(hours=MAX_SHIFT_HOURS)
+        hours_worked = MAX_SHIFT_HOURS
+        flag_reason = f"Admin force-closed (shift exceeded {MAX_SHIFT_HOURS}h). Employee must verify real clock-out time."
+        needs_correction = True
+    else:
+        clock_out_dt = now
+        hours_worked = round(elapsed_hours, 2)
+        flag_reason = f"Admin manually clocked out (after {hours_worked}h)."
+        needs_correction = False
+
     await db.attendance.update_one(
         {"id": record_id},
         {"$set": {
-            "clock_out": capped_out.isoformat(),
-            "hours_worked": MAX_SHIFT_HOURS,
-            "flagged": True,
-            "flag_reason": f"Admin force-closed (shift exceeded {MAX_SHIFT_HOURS}h). Employee must verify real clock-out time.",
-            "needs_staff_correction": True,
+            "clock_out": clock_out_dt.isoformat(),
+            "hours_worked": hours_worked,
+            "flagged": needs_correction,
+            "flag_reason": flag_reason,
+            "needs_staff_correction": needs_correction,
             "force_closed_by": current_user.id,
-            "force_closed_at": datetime.now(timezone.utc).isoformat(),
+            "force_closed_at": now.isoformat(),
         }}
     )
     return {
-        "message": "Shift force-closed. Employee will be prompted to fix their hours.",
-        "capped_hours": MAX_SHIFT_HOURS,
+        "message": "Shift closed by admin.",
+        "hours_worked": hours_worked,
+        "needs_staff_correction": needs_correction,
     }

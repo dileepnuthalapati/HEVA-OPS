@@ -162,9 +162,27 @@ const AdminDashboard = () => {
 
   useEffect(() => {
     loadAll();
-    // Auto-refresh every 60s for live data
-    const interval = setInterval(loadAll, 15000);
-    return () => clearInterval(interval);
+    // Auto-refresh — only when the tab is visible to avoid hammering the
+    // backend (8 parallel queries per tick). Increased from 15s → 45s to
+    // significantly reduce perceived latency without losing freshness.
+    let interval = null;
+    const startPolling = () => {
+      if (interval) return;
+      interval = setInterval(loadAll, 45000);
+    };
+    const stopPolling = () => {
+      if (interval) { clearInterval(interval); interval = null; }
+    };
+    const onVisChange = () => {
+      if (document.visibilityState === 'visible') { loadAll(); startPolling(); }
+      else stopPolling();
+    };
+    if (document.visibilityState === 'visible') startPolling();
+    document.addEventListener('visibilitychange', onVisChange);
+    return () => {
+      stopPolling();
+      document.removeEventListener('visibilitychange', onVisChange);
+    };
   }, [loadAll]);
 
   // Surface Stripe checkout return-status from query string

@@ -8,8 +8,9 @@ import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
-import { Receipt, Lock, Unlock, CheckCircle, DollarSign, TrendingUp, Camera, X, XCircle } from 'lucide-react';
+import { Receipt, Lock, Unlock, CheckCircle, DollarSign, TrendingUp, Camera, X, XCircle, Download } from 'lucide-react';
 import { Dialog, DialogContent } from '../components/ui/dialog';
+import { Popover, PopoverContent, PopoverTrigger } from '../components/ui/popover';
 import { toLocalDateStr } from '../utils/dateUtils';
 
 function getWeekRange(offset = 0, weekStartDay = 1) {
@@ -130,6 +131,57 @@ export default function TimesheetsPage() {
     }
   };
 
+  const [showExportRange, setShowExportRange] = useState(false);
+  const [exportStart, setExportStart] = useState('');
+  const [exportEnd, setExportEnd] = useState('');
+  const [exporting, setExporting] = useState(false);
+
+  const triggerDownload = async (fromDate, toDate, label) => {
+    setExporting(true);
+    try {
+      const res = await api.get(`/timesheets/export.csv?start_date=${fromDate}&end_date=${toDate}`, { responseType: 'blob' });
+      const blob = new Blob([res.data], { type: 'text/csv' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `payroll_${fromDate}_to_${toDate}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+      toast.success(`${label} payroll exported`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Export failed');
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const exportCurrentWeek = () => {
+    const { start: ws, end: we } = getWeekRange(0, weekStartDay);
+    triggerDownload(ws, we, 'Current week');
+  };
+
+  const exportCurrentMonth = () => {
+    const now = new Date();
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    triggerDownload(toLocalDateStr(first), toLocalDateStr(last), 'Current month');
+  };
+
+  const exportCustomRange = () => {
+    if (!exportStart || !exportEnd) {
+      toast.error('Pick both start and end dates');
+      return;
+    }
+    if (exportStart > exportEnd) {
+      toast.error('Start date must be on or before end date');
+      return;
+    }
+    setShowExportRange(false);
+    triggerDownload(exportStart, exportEnd, 'Custom range');
+  };
+
 
   const weekLabel = `${new Date(start).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} - ${new Date(end).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}`;
 
@@ -142,8 +194,42 @@ export default function TimesheetsPage() {
       <Sidebar />
       <div className="flex-1 min-w-0 p-4 md:p-6 pt-16 md:pt-6">
         <div className="max-w-6xl mx-auto">
-          <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-1" data-testid="timesheets-title">Timesheets & Payroll</h1>
-          <p className="text-sm text-muted-foreground mb-6">Review scheduled vs actual hours, approve and lock timesheets</p>
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-bold tracking-tight mb-1" data-testid="timesheets-title">Timesheets & Payroll</h1>
+              <p className="text-sm text-muted-foreground">Review scheduled vs actual hours, approve and lock timesheets</p>
+            </div>
+            {canApproveHours && (
+              <div className="flex flex-wrap items-center gap-2" data-testid="payroll-export-actions">
+                <Button variant="outline" size="sm" disabled={exporting} onClick={exportCurrentWeek} data-testid="export-week-btn">
+                  <Download className="w-4 h-4 mr-1.5" /> Current Week
+                </Button>
+                <Button variant="outline" size="sm" disabled={exporting} onClick={exportCurrentMonth} data-testid="export-month-btn">
+                  <Download className="w-4 h-4 mr-1.5" /> Current Month
+                </Button>
+                <Popover open={showExportRange} onOpenChange={setShowExportRange}>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" size="sm" disabled={exporting} data-testid="export-custom-btn">
+                      <Download className="w-4 h-4 mr-1.5" /> Custom Range
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-72 p-4 space-y-3">
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">Start date</label>
+                      <Input type="date" value={exportStart} onChange={(e) => setExportStart(e.target.value)} data-testid="export-start-input" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-muted-foreground">End date</label>
+                      <Input type="date" value={exportEnd} onChange={(e) => setExportEnd(e.target.value)} data-testid="export-end-input" />
+                    </div>
+                    <Button size="sm" className="w-full" onClick={exportCustomRange} disabled={exporting} data-testid="export-custom-go-btn">
+                      Download CSV
+                    </Button>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
+          </div>
 
           {/* Week Navigation */}
           <div className="flex items-center justify-between mb-5">

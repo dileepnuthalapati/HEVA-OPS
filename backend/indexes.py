@@ -46,10 +46,54 @@ async def ensure_indexes():
 
         # --- Restaurants ---
         await db.restaurants.create_index("id", unique=True)
+        await db.restaurants.create_index("stripe_customer_id")
 
         # --- Printers ---
         await db.printers.create_index("id", unique=True)
         await db.printers.create_index("restaurant_id")
+        await db.printers.create_index([("restaurant_id", 1), ("routes", 1)])
+        await db.printers.create_index([("restaurant_id", 1), ("is_default", 1)])
+
+        # --- Attendance (heavy on dashboard + payroll) ---
+        await db.attendance.create_index("id", unique=True)
+        await db.attendance.create_index("restaurant_id")
+        await db.attendance.create_index("staff_id")
+        await db.attendance.create_index([("restaurant_id", 1), ("clock_out", 1)])  # "live" query
+        await db.attendance.create_index([("restaurant_id", 1), ("date", 1)])
+        await db.attendance.create_index([("restaurant_id", 1), ("staff_id", 1), ("date", 1)])
+        await db.attendance.create_index([("restaurant_id", 1), ("flagged", 1)])
+
+        # --- Shifts ---
+        await db.shifts.create_index("id", unique=True)
+        await db.shifts.create_index([("restaurant_id", 1), ("date", 1)])
+        await db.shifts.create_index([("restaurant_id", 1), ("staff_id", 1), ("date", 1)])
+
+        # --- Timesheet locks ---
+        await db.timesheet_locks.create_index("id", unique=True)
+        await db.timesheet_locks.create_index([("restaurant_id", 1), ("staff_id", 1), ("start_date", 1)])
+
+        # --- Leave / availability ---
+        try:
+            await db.leave_requests.create_index("id", unique=True)
+            await db.leave_requests.create_index([("restaurant_id", 1), ("status", 1)])
+            await db.leave_requests.create_index([("restaurant_id", 1), ("staff_id", 1), ("start_date", 1)])
+        except Exception:
+            pass
+
+        # --- Swap / drop requests ---
+        try:
+            await db.swap_requests.create_index("id", unique=True)
+            await db.swap_requests.create_index([("restaurant_id", 1), ("status", 1)])
+            await db.drop_requests.create_index("id", unique=True)
+            await db.drop_requests.create_index([("restaurant_id", 1), ("status", 1)])
+        except Exception:
+            pass
+
+        # --- Platform config ---
+        try:
+            await db.platform_config.create_index("type")
+        except Exception:
+            pass
 
         # --- Reservations ---
         await db.reservations.create_index("id", unique=True)

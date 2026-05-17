@@ -17,7 +17,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Sheet, SheetContent, SheetTitle } from '../components/ui/sheet';
 import { toast } from 'sonner';
-import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, CreditCard, Users, Percent, Tag, MessageSquare, Banknote, Search, PackagePlus, ArrowLeft, Calendar, ShoppingBag, UtensilsCrossed, Clock } from 'lucide-react';
+import { ShoppingCart, Plus, Minus, Trash2, LogOut, Receipt, X, Printer, ChefHat, CreditCard, Users, Percent, Tag, MessageSquare, Banknote, Search, PackagePlus, ArrowLeft, Calendar, ShoppingBag, UtensilsCrossed, Clock } from 'lucide-react';
 import VoidReasonModal from '../components/VoidReasonModal';
 import POSEdgeNav from '../components/POSEdgeNav';
 
@@ -189,6 +189,31 @@ const POSScreen = () => {
       }
     } catch (err) {
       toast.error('Failed to print: ' + (err.message || ''), { id: toastId });
+    } finally {
+      setIsPrinting(false);
+    }
+  };
+
+  // Manually print the customer receipt — bypasses auto-print toggle
+  const printCustomerReceiptManual = async (order) => {
+    if (isPrinting) {
+      toast.warning('Already printing, please wait...');
+      return;
+    }
+    const toastId = toast.loading(`Printing receipt #${order.order_number}…`);
+    setIsPrinting(true);
+    try {
+      const res = await posPrintService.manualPrintCustomerReceipt({
+        order,
+        tables,
+        businessInfo: restaurantInfo?.business_info || {},
+        currency,
+        paperWidth: defaultPaperWidth,
+      });
+      if (res.ok) toast.success('Receipt sent to printer', { id: toastId });
+      else toast.error(`Print failed: ${res.error || 'unknown'}`, { id: toastId });
+    } catch (err) {
+      toast.error('Failed to print receipt: ' + (err.message || ''), { id: toastId });
     } finally {
       setIsPrinting(false);
     }
@@ -984,7 +1009,16 @@ const POSScreen = () => {
                             onClick={() => printOrderReceipt(order.id, order.order_number)}
                             disabled={isPrinting}
                             className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                            title="Print receipt"
+                            title="Print kitchen ticket"
+                          >
+                            <ChefHat className="w-4 h-4" />
+                          </button>
+                          <button
+                            data-testid={`print-customer-pending-${order.id}`}
+                            onClick={() => printCustomerReceiptManual(order)}
+                            disabled={isPrinting}
+                            className="p-1.5 rounded-md hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                            title="Print customer receipt"
                           >
                             <Printer className="w-4 h-4" />
                           </button>
@@ -1079,25 +1113,23 @@ const POSScreen = () => {
                             </div>
                           ))}
                         </div>
-                        <div className="mt-3">
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            data-testid={`print-kitchen-completed-${order.id}`}
+                            onClick={() => printOrderReceipt(order.id, order.order_number)}
+                            disabled={isPrinting}
+                            className="h-8"
+                          >
+                            <ChefHat className="w-3.5 h-3.5 mr-1" /> Print Kitchen
+                          </Button>
                           <Button
                             size="sm"
                             variant="outline"
                             data-testid={`print-completed-${order.id}`}
-                            onClick={async () => {
-                              try {
-                                const printResult = await printerAPI.printCustomerReceipt(order.id);
-                                if (printResult?.commands) {
-                                  const res = await posPrintService.sendToDefaultPrinter(printResult.commands, 'customer-manual');
-                                  if (res.ok) toast.success('Receipt sent to printer');
-                                  else toast.error(`Print failed: ${res.error || 'unknown'}`);
-                                } else {
-                                  toast.error('No print data generated');
-                                }
-                              } catch (err) {
-                                toast.error('Failed to print receipt: ' + (err.message || ''));
-                              }
-                            }}
+                            onClick={() => printCustomerReceiptManual(order)}
+                            disabled={isPrinting}
                             className="h-8"
                           >
                             <Printer className="w-3.5 h-3.5 mr-1" /> Print Receipt

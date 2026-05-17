@@ -168,6 +168,19 @@ const PrinterSettings = () => {
     } catch (error) { toast.error('Failed to set default printer'); }
   };
 
+  const handleToggleRoute = async (printer, route) => {
+    const current = Array.isArray(printer.routes) ? printer.routes : [];
+    const next = current.includes(route)
+      ? current.filter(r => r !== route)
+      : [...current, route];
+    try {
+      await printerAPI.update(printer.id, { routes: next });
+      loadPrinters();
+    } catch (error) {
+      toast.error('Failed to update printer routes');
+    }
+  };
+
   // WiFi Network Discovery
   // Native APK: auto-detects subnet from tablet's IP, scans directly via TCP
   // Browser: uses backend TCP port scanner
@@ -424,21 +437,23 @@ const PrinterSettings = () => {
           {/* Print Behavior Settings */}
           <Card className="mb-6" data-testid="print-behavior-card">
             <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold">Print Behavior</CardTitle>
-              <CardDescription className="text-xs">Control what prints automatically when orders are placed or completed</CardDescription>
+              <CardTitle className="text-base font-semibold">Auto-Print Behavior</CardTitle>
+              <CardDescription className="text-xs">
+                Controls what prints automatically. Manual "Print Kitchen" and "Print Receipt" buttons on each order always work regardless of these toggles.
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
                 <div>
-                  <p className="text-sm font-medium text-slate-800">Kitchen Slip</p>
-                  <p className="text-[11px] text-slate-500">Auto-print to kitchen when order is placed or updated</p>
+                  <p className="text-sm font-medium text-slate-800">Auto-Print Kitchen Slip</p>
+                  <p className="text-[11px] text-slate-500">Automatically send kitchen tickets when an order is placed or updated</p>
                 </div>
                 <Switch checked={printSettings.print_kitchen_slip} onCheckedChange={(v) => handlePrintSettingChange('print_kitchen_slip', v)} disabled={printSaving} data-testid="print-kitchen-toggle" />
               </div>
               <div className="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
                 <div>
-                  <p className="text-sm font-medium text-slate-800">Customer Receipt</p>
-                  <p className="text-[11px] text-slate-500">Auto-print receipt when order is paid/completed</p>
+                  <p className="text-sm font-medium text-slate-800">Auto-Print Customer Receipt</p>
+                  <p className="text-[11px] text-slate-500">Automatically print the customer receipt when payment completes</p>
                 </div>
                 <Switch checked={printSettings.print_customer_receipt} onCheckedChange={(v) => handlePrintSettingChange('print_customer_receipt', v)} disabled={printSaving} data-testid="print-customer-toggle" />
               </div>
@@ -456,7 +471,15 @@ const PrinterSettings = () => {
             </Card>
           ) : (
             <div className="space-y-4">
-              {printers.map((printer) => (
+              {printers.map((printer) => {
+                const routes = Array.isArray(printer.routes) ? printer.routes : [];
+                const ROUTE_DEFS = [
+                  { key: 'kitchen', label: 'Kitchen Tickets' },
+                  { key: 'receipt', label: 'Customer Receipts' },
+                  { key: 'void',    label: 'Void Slips' },
+                  { key: 'report',  label: 'Reports' },
+                ];
+                return (
                 <Card key={printer.id} data-testid={`printer-${printer.id}`}>
                   <CardContent className="p-4 md:p-6">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -489,9 +512,40 @@ const PrinterSettings = () => {
                         <Button size="sm" variant="outline" className="text-red-500 h-8" onClick={() => handleDelete(printer.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                       </div>
                     </div>
+
+                    {/* Route assignment chips */}
+                    <div className="mt-4 pt-4 border-t" data-testid={`printer-routes-${printer.id}`}>
+                      <p className="text-xs font-medium text-slate-600 mb-2">Print routes</p>
+                      <div className="flex flex-wrap gap-2">
+                        {ROUTE_DEFS.map(({ key, label }) => {
+                          const active = routes.includes(key);
+                          return (
+                            <button
+                              key={key}
+                              type="button"
+                              onClick={() => handleToggleRoute(printer, key)}
+                              data-testid={`route-toggle-${printer.id}-${key}`}
+                              className={`text-xs px-2.5 py-1 rounded-full border transition-colors ${
+                                active
+                                  ? 'bg-emerald-50 border-emerald-300 text-emerald-700 font-medium'
+                                  : 'bg-slate-50 border-slate-200 text-slate-500 hover:bg-slate-100'
+                              }`}
+                            >
+                              {active ? '\u2713 ' : ''}{label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                      {routes.length === 0 && (
+                        <p className="text-[11px] text-slate-400 mt-2">
+                          No routes selected — falls back to receiving all document types (legacy default).
+                        </p>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
-              ))}
+                );
+              })}
             </div>
           )}
 

@@ -76,10 +76,37 @@ async def create_printer(printer_data: PrinterCreate, current_user: User = Depen
         "restaurant_id": restaurant_id,
         "is_default": printer_data.is_default,
         "paper_width": printer_data.paper_width,
+        "routes": printer_data.routes or [],
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     await db.printers.insert_one(printer_dict)
     return Printer(**printer_dict)
+
+
+@router.get("/printers/by-route/{route}")
+async def get_printers_by_route(route: str, current_user: User = Depends(get_current_user)):
+    """Return all printers configured to receive a given document type.
+
+    Falls back to the default printer if no printers have explicit routes
+    (so existing single-printer restaurants keep working without migration).
+    """
+    valid_routes = {"kitchen", "receipt", "void", "report"}
+    if route not in valid_routes:
+        raise HTTPException(status_code=400, detail=f"Invalid route. Must be one of: {sorted(valid_routes)}")
+    query = {}
+    if current_user.role != 'platform_owner' and current_user.restaurant_id:
+        query["restaurant_id"] = current_user.restaurant_id
+
+    routed = await db.printers.find({**query, "routes": route}, {"_id": 0}).to_list(50)
+    if routed:
+        return [Printer(**p) for p in routed]
+
+    # Backward-compat: no printer has an explicit route configured → fall back
+    # to the default printer so single-printer setups keep working.
+    default_doc = await db.printers.find_one({**query, "is_default": True}, {"_id": 0})
+    if not default_doc:
+        default_doc = await db.printers.find_one(query, {"_id": 0})
+    return [Printer(**default_doc)] if default_doc else []
 
 
 @router.put("/printers/{printer_id}", response_model=Printer)

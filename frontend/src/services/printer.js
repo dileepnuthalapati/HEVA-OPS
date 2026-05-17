@@ -449,31 +449,94 @@ class ThermalPrinterService {
   }
 
   /**
-   * Scan the local WiFi network for printers.
+   * Scan the local WiFi network for printers — mDNS-first (fast, reliable),
+   * then fall back to TCP sweep if no advertised printers are found.
+   *
+   * mDNS uses Bonjour/Zeroconf service types that thermal/ESC-POS printers
+   * advertise: `_pdl-datastream._tcp.` (port 9100), `_printer._tcp.`,
+   * `_ipp._tcp.`. Modern POS systems (Square, Uber Eats) use this approach.
+   *
+   * Falls back to the prior wave-based TCP sweep when mDNS yields nothing.
    * Auto-detects subnet from the tablet's IP address.
-   * Priority scan: common printer IPs first, then remaining.
    */
   async scanWifiPrinters(onPrinterFound, onProgress) {
     if (!this.isNative) {
       throw new Error('Use Quick Connect to enter the printer IP directly.');
     }
 
+    const found = new Set();
+    const results = [];
+
+    // ─── Phase 1: mDNS discovery ────────────────────────────────────
+    try {
+      const { Zeroconf } = await import('capacitor-zeroconf');
+      if (onProgress) onProgress('Discovering printers via Bonjour…');
+
+      const SERVICE_TYPES = [
+        '_pdl-datastream._tcp.',  // HP/Epson raw 9100
+        '_printer._tcp.',          // generic LPR
+        '_ipp._tcp.',              // IPP printers
+      ];
+
+      const collectFromService = async (type) => {
+        const acc = [];
+        const handler = (info) => {
+          try {
+            const svc = info?.service;
+            if (!svc) return;
+            const ip = (svc.ipv4Addresses && svc.ipv4Addresses[0]) || svc.hostName;
+            if (!ip) return;
+            // For raw datastream printers the actual port is 9100 regardless
+            // of what's advertised; for IPP we keep the advertised port.
+            const port = type === '_pdl-datastream._tcp.' ? 9100 : (svc.port || 9100);
+            const key = `${ip}:${port}`;
+            if (found.has(key)) return;
+            found.add(key);
+            acc.push({ ip, port, name: svc.name || `Printer at ${ip}` });
+          } catch {}
+        };
+        try {
+          await Zeroconf.watch({ type, domain: 'local.' }, handler);
+          // Give devices a moment to respond
+          await new Promise(r => setTimeout(r, 1800));
+          await Zeroconf.unwatch({ type, domain: 'local.' });
+        } catch (e) {
+          console.warn(`[Printer] mDNS watch failed for ${type}:`, e?.message || e);
+        }
+        return acc;
+      };
+
+      for (const t of SERVICE_TYPES) {
+        const devices = await collectFromService(t);
+        for (const d of devices) {
+          results.push(d);
+          onPrinterFound(d);
+        }
+      }
+
+      if (results.length > 0) {
+        if (onProgress) onProgress('');
+        return results;
+      }
+    } catch (e) {
+      console.warn('[Printer] Zeroconf plugin unavailable, falling back to TCP sweep:', e?.message || e);
+    }
+
+    // ─── Phase 2: TCP sweep fallback ────────────────────────────────
     const subnet = await this.getDeviceSubnet();
     if (!subnet) {
       throw new Error('Could not detect your WiFi network.\nMake sure your tablet is connected to WiFi.');
     }
 
-    if (onProgress) onProgress(`Scanning ${subnet}.x ...`);
-    const results = [];
-    const found = new Set();
+    if (onProgress) onProgress(`Scanning ${subnet}.x …`);
 
     const scanBatch = async (ips, label) => {
       if (onProgress) onProgress(label);
       const promises = ips.map(i => {
         const ip = `${subnet}.${i}`;
         return this._probeWifiPrinter(ip, 9100).then(ok => {
-          if (ok && !found.has(ip)) {
-            found.add(ip);
+          if (ok && !found.has(`${ip}:9100`)) {
+            found.add(`${ip}:9100`);
             const device = { ip, port: 9100, name: `Printer at ${ip}` };
             results.push(device);
             onPrinterFound(device);
@@ -483,27 +546,27 @@ class ThermalPrinterService {
       await Promise.all(promises);
     };
 
-    // Wave 1: Most common printer IPs (50 IPs, ~1.5s)
+    // Wave 1: Most common printer IPs (~1.5s)
     const wave1 = [];
     for (let i = 100; i <= 120; i++) wave1.push(i);
     for (let i = 150; i <= 180; i++) wave1.push(i);
     [1, 2, 10, 50, 99, 200, 250, 254].forEach(i => { if (!wave1.includes(i)) wave1.push(i); });
-    await scanBatch(wave1, 'Checking common addresses...');
+    await scanBatch(wave1, 'Checking common addresses…');
     if (results.length > 0) { if (onProgress) onProgress(''); return results; }
 
-    // Wave 2: 200-254 (~1.5s)
+    // Wave 2: 200-254
     const wave2 = [];
     for (let i = 200; i <= 254; i++) { if (!wave1.includes(i)) wave2.push(i); }
-    await scanBatch(wave2, 'Scanning upper range...');
+    await scanBatch(wave2, 'Scanning upper range…');
     if (results.length > 0) { if (onProgress) onProgress(''); return results; }
 
-    // Wave 3: Everything else in batches of 50 (~3 batches, 4.5s)
+    // Wave 3: everything else in batches of 50
     const scanned = new Set([...wave1, ...wave2]);
     const remaining = [];
     for (let i = 1; i <= 254; i++) { if (!scanned.has(i)) remaining.push(i); }
     for (let i = 0; i < remaining.length; i += 50) {
       const batch = remaining.slice(i, i + 50);
-      await scanBatch(batch, `Scanning ${subnet}.${batch[0]}-${batch[batch.length - 1]}...`);
+      await scanBatch(batch, `Scanning ${subnet}.${batch[0]}-${batch[batch.length - 1]}…`);
       if (results.length > 0) break;
     }
 
