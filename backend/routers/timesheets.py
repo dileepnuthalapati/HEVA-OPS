@@ -233,15 +233,18 @@ async def export_timesheets_csv(
         days_worked = sum(1 for a in attendance if a.get("clock_out"))
 
         if pay_type == "monthly":
-            # Weekly share of monthly salary (4.33 weeks/month). For a custom
-            # window, prorate by the number of days in the export range.
+            # Match the /timesheets/summary endpoint exactly: weekly share
+            # = monthly_salary / 4.33. Prorate by the number of WEEKS in the
+            # export window (fractional). This keeps the CSV and the
+            # on-screen summary perfectly consistent.
             try:
                 d0 = datetime.fromisoformat(start_date).date() if "T" in start_date else datetime.strptime(start_date, "%Y-%m-%d").date()
                 d1 = datetime.fromisoformat(end_date).date() if "T" in end_date else datetime.strptime(end_date, "%Y-%m-%d").date()
                 days_in_window = max(1, (d1 - d0).days + 1)
             except Exception:
                 days_in_window = 7
-            gross_pay = round((monthly_salary / 30) * days_in_window, 2) if monthly_salary else 0
+            weeks_in_window = days_in_window / 7.0
+            gross_pay = round((monthly_salary / 4.33) * weeks_in_window, 2) if monthly_salary else 0
         else:
             gross_pay = round(actual_hours * rate, 2)
 
