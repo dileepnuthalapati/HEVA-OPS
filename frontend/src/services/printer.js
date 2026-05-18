@@ -523,51 +523,67 @@ class ThermalPrinterService {
     }
 
     // ─── Phase 2: TCP sweep fallback ────────────────────────────────
-    const subnet = await this.getDeviceSubnet();
-    if (!subnet) {
-      throw new Error('Could not detect your WiFi network.\nMake sure your tablet is connected to WiFi.');
+    // Build list of subnets to scan. Primary is the tablet's own subnet;
+    // if that comes up empty we also try the common home/restaurant ranges
+    // so wired printers on a different VLAN/guest-network still get found.
+    const COMMON_SUBNETS = ['192.168.0', '192.168.1', '192.168.2', '10.0.0', '10.0.1'];
+    const primarySubnet = await this.getDeviceSubnet();
+    const subnetsToTry = [];
+    if (primarySubnet) subnetsToTry.push(primarySubnet);
+    for (const s of COMMON_SUBNETS) {
+      if (!subnetsToTry.includes(s)) subnetsToTry.push(s);
+    }
+    if (subnetsToTry.length === 0) {
+      throw new Error('Could not detect any network. Make sure the tablet is connected to Wi-Fi.');
     }
 
-    if (onProgress) onProgress(`Scanning ${subnet}.x …`);
+    const scanSubnet = async (subnet) => {
+      if (onProgress) onProgress(`Scanning ${subnet}.x …`);
 
-    const scanBatch = async (ips, label) => {
-      if (onProgress) onProgress(label);
-      const promises = ips.map(i => {
-        const ip = `${subnet}.${i}`;
-        return this._probeWifiPrinter(ip, 9100).then(ok => {
-          if (ok && !found.has(`${ip}:9100`)) {
-            found.add(`${ip}:9100`);
-            const device = { ip, port: 9100, name: `Printer at ${ip}` };
-            results.push(device);
-            onPrinterFound(device);
-          }
+      const scanBatch = async (ips, label) => {
+        if (onProgress) onProgress(label);
+        const promises = ips.map(i => {
+          const ip = `${subnet}.${i}`;
+          return this._probeWifiPrinter(ip, 9100).then(ok => {
+            if (ok && !found.has(`${ip}:9100`)) {
+              found.add(`${ip}:9100`);
+              const device = { ip, port: 9100, name: `Printer at ${ip}` };
+              results.push(device);
+              onPrinterFound(device);
+            }
+          });
         });
-      });
-      await Promise.all(promises);
+        await Promise.all(promises);
+      };
+
+      // Wave 1: Most common printer IPs (~1.5s)
+      const wave1 = [];
+      for (let i = 100; i <= 120; i++) wave1.push(i);
+      for (let i = 150; i <= 180; i++) wave1.push(i);
+      [1, 2, 10, 50, 99, 200, 250, 254].forEach(i => { if (!wave1.includes(i)) wave1.push(i); });
+      await scanBatch(wave1, `Checking common addresses on ${subnet}.x …`);
+      if (results.length > 0) return;
+
+      // Wave 2: 200-254
+      const wave2 = [];
+      for (let i = 200; i <= 254; i++) { if (!wave1.includes(i)) wave2.push(i); }
+      await scanBatch(wave2, `Scanning ${subnet}.200–254 …`);
+      if (results.length > 0) return;
+
+      // Wave 3: everything else in batches of 50
+      const scanned = new Set([...wave1, ...wave2]);
+      const remaining = [];
+      for (let i = 1; i <= 254; i++) { if (!scanned.has(i)) remaining.push(i); }
+      for (let i = 0; i < remaining.length; i += 50) {
+        const batch = remaining.slice(i, i + 50);
+        await scanBatch(batch, `Scanning ${subnet}.${batch[0]}-${batch[batch.length - 1]} …`);
+        if (results.length > 0) break;
+      }
     };
 
-    // Wave 1: Most common printer IPs (~1.5s)
-    const wave1 = [];
-    for (let i = 100; i <= 120; i++) wave1.push(i);
-    for (let i = 150; i <= 180; i++) wave1.push(i);
-    [1, 2, 10, 50, 99, 200, 250, 254].forEach(i => { if (!wave1.includes(i)) wave1.push(i); });
-    await scanBatch(wave1, 'Checking common addresses…');
-    if (results.length > 0) { if (onProgress) onProgress(''); return results; }
-
-    // Wave 2: 200-254
-    const wave2 = [];
-    for (let i = 200; i <= 254; i++) { if (!wave1.includes(i)) wave2.push(i); }
-    await scanBatch(wave2, 'Scanning upper range…');
-    if (results.length > 0) { if (onProgress) onProgress(''); return results; }
-
-    // Wave 3: everything else in batches of 50
-    const scanned = new Set([...wave1, ...wave2]);
-    const remaining = [];
-    for (let i = 1; i <= 254; i++) { if (!scanned.has(i)) remaining.push(i); }
-    for (let i = 0; i < remaining.length; i += 50) {
-      const batch = remaining.slice(i, i + 50);
-      await scanBatch(batch, `Scanning ${subnet}.${batch[0]}-${batch[batch.length - 1]}…`);
-      if (results.length > 0) break;
+    for (const subnet of subnetsToTry) {
+      await scanSubnet(subnet);
+      if (results.length > 0) break;  // Found on this subnet — stop
     }
 
     if (onProgress) onProgress('');
