@@ -468,8 +468,15 @@ class ThermalPrinterService {
     const results = [];
 
     // ─── Phase 1: mDNS discovery ────────────────────────────────────
+    let mdnsAvailable = false;
     try {
-      const { Zeroconf } = await import('capacitor-zeroconf');
+      const mod = await import('capacitor-zeroconf');
+      const ZeroConf = mod.ZeroConf || mod.default?.ZeroConf || mod.default;
+      if (!ZeroConf || typeof ZeroConf.watch !== 'function') {
+        throw new Error('capacitor-zeroconf API not found');
+      }
+      mdnsAvailable = true;
+      console.log('[Printer] mDNS plugin loaded, scanning…');
       if (onProgress) onProgress('Discovering printers via Bonjour…');
 
       const SERVICE_TYPES = [
@@ -479,47 +486,51 @@ class ThermalPrinterService {
       ];
 
       const collectFromService = async (type) => {
-        const acc = [];
-        const handler = (info) => {
+        const handler = (event) => {
           try {
-            const svc = info?.service;
+            // Only react when the service has been fully resolved (IP known)
+            if (event?.action !== 'resolved') return;
+            const svc = event.service;
             if (!svc) return;
-            const ip = (svc.ipv4Addresses && svc.ipv4Addresses[0]) || svc.hostName;
+            const ip = (svc.ipv4Addresses && svc.ipv4Addresses[0]) || svc.hostname;
             if (!ip) return;
-            // For raw datastream printers the actual port is 9100 regardless
-            // of what's advertised; for IPP we keep the advertised port.
             const port = type === '_pdl-datastream._tcp.' ? 9100 : (svc.port || 9100);
             const key = `${ip}:${port}`;
             if (found.has(key)) return;
             found.add(key);
-            acc.push({ ip, port, name: svc.name || `Printer at ${ip}` });
-          } catch {}
+            const device = { ip, port, name: svc.name || `Printer at ${ip}` };
+            results.push(device);
+            onPrinterFound(device);
+            console.log(`[Printer] mDNS resolved: ${svc.name} → ${ip}:${port}`);
+          } catch (err) {
+            console.warn('[Printer] mDNS handler error:', err);
+          }
         };
         try {
-          await Zeroconf.watch({ type, domain: 'local.' }, handler);
-          // Give devices a moment to respond
-          await new Promise(r => setTimeout(r, 1800));
-          await Zeroconf.unwatch({ type, domain: 'local.' });
+          await ZeroConf.watch({ type, domain: 'local.' }, handler);
+          await new Promise(r => setTimeout(r, 2200));  // listen window
+          await ZeroConf.unwatch({ type, domain: 'local.' });
         } catch (e) {
           console.warn(`[Printer] mDNS watch failed for ${type}:`, e?.message || e);
         }
-        return acc;
       };
 
       for (const t of SERVICE_TYPES) {
-        const devices = await collectFromService(t);
-        for (const d of devices) {
-          results.push(d);
-          onPrinterFound(d);
-        }
+        await collectFromService(t);
       }
 
       if (results.length > 0) {
-        if (onProgress) onProgress('');
+        if (onProgress) onProgress(`Found ${results.length} printer(s) via Bonjour`);
         return results;
       }
+      console.log('[Printer] mDNS finished with no printers — falling through to TCP sweep');
     } catch (e) {
-      console.warn('[Printer] Zeroconf plugin unavailable, falling back to TCP sweep:', e?.message || e);
+      console.warn('[Printer] mDNS unavailable — using TCP sweep:', e?.message || e);
+      if (onProgress) onProgress('Bonjour not available — scanning network…');
+    }
+
+    if (!mdnsAvailable && onProgress) {
+      onProgress('Bonjour plugin not installed — using TCP scan. Rebuild APK to enable.');
     }
 
     // ─── Phase 2: TCP sweep fallback ────────────────────────────────
