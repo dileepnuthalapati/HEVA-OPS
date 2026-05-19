@@ -10,7 +10,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Switch } from '../components/ui/switch';
 import { toast } from 'sonner';
-import { Plus, Printer, Wifi, Bluetooth, Trash2, TestTube, Check, Star, Edit, Search, Loader2, Monitor } from 'lucide-react';
+import { Plus, Printer, Wifi, Bluetooth, Trash2, TestTube, Check, Star, Edit, Search, Loader2, Monitor, Stethoscope, AlertCircle, CheckCircle2, XCircle, Info, ChevronDown, ChevronUp } from 'lucide-react';
+import { runPrinterDiagnostics, DIAG_STATUSES } from '../services/printerDiagnostics';
 
 const PrinterSettings = () => {
   const [printers, setPrinters] = useState([]);
@@ -32,6 +33,26 @@ const PrinterSettings = () => {
   const [scanProgress, setScanProgress] = useState('');
   const [manualIp, setManualIp] = useState('');
   const isNativeApp = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
+
+  // Diagnostics panel
+  const [diagOpen, setDiagOpen] = useState(false);
+  const [diagRunning, setDiagRunning] = useState(false);
+  const [diagResults, setDiagResults] = useState([]);
+  const [diagTestIp, setDiagTestIp] = useState('');
+
+  const runDiagnostics = async () => {
+    setDiagOpen(true);
+    setDiagRunning(true);
+    setDiagResults([]);
+    try {
+      for await (const result of runPrinterDiagnostics({ testIp: diagTestIp.trim(), testPort: 9100 })) {
+        if (result.phase === 'starting') continue;
+        setDiagResults(prev => [...prev, result]);
+      }
+    } finally {
+      setDiagRunning(false);
+    }
+  };
 
   // Print behavior settings
   const [printSettings, setPrintSettings] = useState({ print_kitchen_slip: true, print_customer_receipt: true });
@@ -409,7 +430,17 @@ const PrinterSettings = () => {
               <h1 className="text-2xl md:text-4xl font-bold tracking-tight mb-1 md:mb-2" data-testid="printer-settings-heading">Printer Settings</h1>
               <p className="text-muted-foreground">Configure ESC/POS thermal printers for receipts</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                data-testid="run-diagnostics-btn"
+                onClick={runDiagnostics}
+                disabled={diagRunning}
+                className="border-amber-300 text-amber-700 hover:bg-amber-50"
+              >
+                <Stethoscope className="w-4 h-4 mr-2" />
+                {diagRunning ? 'Running…' : 'Diagnose'}
+              </Button>
               <Button variant="outline" data-testid="discover-printers-btn" onClick={() => setShowDiscovery(true)}>
                 <Search className="w-4 h-4 mr-2" /> Discover Printers
               </Button>
@@ -467,6 +498,89 @@ const PrinterSettings = () => {
               </Dialog>
             </div>
           </div>
+
+          {/* Diagnostics Panel (collapsible) */}
+          {diagOpen && (
+            <Card className="mb-6 border-amber-200" data-testid="printer-diagnostics-card">
+              <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+                <div className="flex items-center gap-2">
+                  <Stethoscope className="w-4 h-4 text-amber-600" />
+                  <CardTitle className="text-base font-semibold">Printer Diagnostics</CardTitle>
+                </div>
+                <button
+                  onClick={() => setDiagOpen(false)}
+                  className="text-slate-400 hover:text-slate-600"
+                  data-testid="close-diagnostics-btn"
+                  aria-label="Close diagnostics"
+                >
+                  <ChevronUp className="w-4 h-4" />
+                </button>
+              </CardHeader>
+              <CardContent>
+                <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-end mb-4">
+                  <div className="flex-1">
+                    <Label htmlFor="diag-test-ip" className="text-xs">Optional: Printer IP to test (e.g. 192.168.1.100)</Label>
+                    <Input
+                      id="diag-test-ip"
+                      placeholder="Leave blank to skip TCP probe"
+                      value={diagTestIp}
+                      onChange={(e) => setDiagTestIp(e.target.value)}
+                      data-testid="diag-test-ip-input"
+                      disabled={diagRunning}
+                    />
+                  </div>
+                  <Button
+                    onClick={runDiagnostics}
+                    disabled={diagRunning}
+                    data-testid="diag-run-btn"
+                    className="bg-amber-600 hover:bg-amber-700 text-white"
+                  >
+                    {diagRunning ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Running</> : 'Run again'}
+                  </Button>
+                </div>
+
+                <div className="space-y-2" data-testid="diag-results">
+                  {diagResults.map((r, i) => {
+                    const icon = r.status === DIAG_STATUSES.PASS
+                      ? <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                      : r.status === DIAG_STATUSES.FAIL
+                      ? <XCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                      : r.status === DIAG_STATUSES.WARN
+                      ? <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                      : <Info className="w-4 h-4 text-slate-400 shrink-0 mt-0.5" />;
+                    const bg = r.status === DIAG_STATUSES.PASS
+                      ? 'bg-emerald-50 border-emerald-100'
+                      : r.status === DIAG_STATUSES.FAIL
+                      ? 'bg-red-50 border-red-100'
+                      : r.status === DIAG_STATUSES.WARN
+                      ? 'bg-amber-50 border-amber-100'
+                      : 'bg-slate-50 border-slate-100';
+                    return (
+                      <div key={i} className={`flex gap-2 p-2.5 rounded-lg border ${bg}`} data-testid={`diag-row-${r.id}`}>
+                        {icon}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-slate-800">{r.label}</p>
+                          <p className="text-xs text-slate-600 mt-0.5 break-words">{r.detail}</p>
+                          {r.suggestion && (
+                            <p className="text-xs text-slate-500 italic mt-1 break-words">→ {r.suggestion}</p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {diagRunning && (
+                    <div className="flex items-center gap-2 text-xs text-slate-500 py-2">
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Running next check…</span>
+                    </div>
+                  )}
+                  {diagResults.length === 0 && !diagRunning && (
+                    <p className="text-xs text-slate-400 italic">Click "Run again" to start.</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Print Behavior Settings */}
           <Card className="mb-6" data-testid="print-behavior-card">

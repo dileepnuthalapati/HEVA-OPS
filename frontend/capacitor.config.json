@@ -5,6 +5,7 @@
   "bundledWebRuntime": false,
   "server": {
     "androidScheme": "http",
+    "iosScheme": "https",
     "cleartext": true
   },
   "plugins": {
@@ -14,6 +15,7 @@
       "androidSplashResourceName": "splash",
       "androidScaleType": "CENTER_CROP",
       "androidSpinnerStyle": "small",
+      "iosSpinnerStyle": "small",
       "spinnerColor": "#10b981",
       "splashFullScreen": true,
       "splashImmersive": true,
@@ -32,5 +34,11 @@
     "allowMixedContent": true,
     "captureInput": true,
     "webContentsDebuggingEnabled": true
+  },
+  "ios": {
+    "contentInset": "automatic",
+    "preferredContentMode": "mobile",
+    "scrollEnabled": true,
+    "limitsNavigationsToAppBoundDomains": false
   }
 }
