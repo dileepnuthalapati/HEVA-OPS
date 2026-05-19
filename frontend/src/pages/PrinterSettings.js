@@ -58,29 +58,63 @@ const PrinterSettings = () => {
 
   const handleQuickConnect = async () => {
     if (!manualIp) return;
-    const ip = manualIp.trim();
+    const raw = manualIp.trim();
+    // Allow user to type "192.168.1.100" or "192.168.1.100:9100"
+    let ip, explicitPort = null;
+    if (raw.includes(':')) {
+      const parts = raw.split(':');
+      ip = parts[0];
+      explicitPort = parseInt(parts[1], 10);
+    } else {
+      ip = raw;
+    }
+    // Sanity-check format
+    const ipRe = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (!ipRe.test(ip)) {
+      setScanError(`"${ip}" is not a valid IPv4 address. Example: 192.168.1.100`);
+      return;
+    }
     setScanError('');
     setScanning(true);
-    setScanProgress(`Testing ${ip} on ports 9100, 515, 631...`);
+
+    const portsToTry = explicitPort ? [explicitPort] : [9100, 515, 631];
+    const isNative = typeof window !== 'undefined' && window.Capacitor?.isNativePlatform?.();
+    setScanProgress(`Testing ${ip} on ports ${portsToTry.join(', ')}...`);
+
     try {
-      const ports = [9100, 515, 631];
       let foundPort = null;
-      for (const port of ports) {
+      for (const port of portsToTry) {
+        // On the APK we open the TCP socket from the tablet itself — only
+        // the tablet is on the same LAN as the printer (the cloud backend
+        // can never reach a private 192.168.x.x address). On web/PWA fall
+        // back to the backend probe (which works for public IPs / VPN).
         try {
-          const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/printers/probe`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAuthToken()}` },
-            body: JSON.stringify({ ip, port }),
-          });
-          if (res.ok) { foundPort = port; break; }
+          if (isNative) {
+            const reachable = await printerService.checkPrinterReachable(ip, port);
+            if (reachable) { foundPort = port; break; }
+          } else {
+            const res = await fetch(`${process.env.REACT_APP_BACKEND_URL}/api/printers/probe`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${getAuthToken()}` },
+              body: JSON.stringify({ ip, port }),
+            });
+            if (res.ok) {
+              const data = await res.json().catch(() => ({}));
+              if (data?.reachable !== false) { foundPort = port; break; }
+            }
+          }
         } catch {}
       }
       if (foundPort) {
         const device = { ip, port: foundPort, name: `Printer at ${ip}:${foundPort}` };
-        setDiscoveredDevices(prev => [...prev, device]);
+        setDiscoveredDevices(prev => [...prev.filter(d => !(d.ip === ip && d.port === foundPort)), device]);
         toast.success(`Printer found at ${ip}:${foundPort}!`);
       } else {
-        setScanError(`No printer responded at ${ip}. Check the IP and make sure the printer is on.`);
+        setScanError(
+          `Could not reach ${ip}${explicitPort ? `:${explicitPort}` : ''}. ` +
+          `Make sure the printer is powered on, plugged into the same router, ` +
+          `and that the tablet's Wi-Fi is not on a "Guest" SSID.`
+        );
       }
     } catch (e) {
       setScanError(`Connection failed: ${e.message}`);
