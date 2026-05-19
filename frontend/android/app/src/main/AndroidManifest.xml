@@ -42,6 +42,18 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+    <!-- Required for mDNS / Bonjour service discovery (capacitor-zeroconf
+         uses multicast packets which Android blocks without this). -->
+    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+
+    <!-- Android 13+ — required to discover Wi-Fi devices (printers) on the
+         local LAN. Pre-13 falls back to ACCESS_FINE_LOCATION which is
+         already declared below. -->
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation" />
 
     <!-- Push notifications: required on Android 13+ (API 33+). Without
          this declaration, PushNotifications.register() hard-crashes the
