@@ -1,52 +1,88 @@
-# iOS Setup Guide — Heva ONE
+# iOS Setup Guide — HevaONE
 
-This guide tells you exactly what to do on your Mac to get Heva ONE running on iPad/iPhone, and what to copy-paste into `Info.plist` so local-network printer discovery works on iOS.
-
-**Important:** I (the AI agent) cannot run iOS commands from the cloud — Apple requires Xcode + a Mac. You'll run the commands below; I've prepared the code so it all works first try.
+This guide is your **start-to-finish checklist** for getting HevaONE on the App Store. Every value below is pre-filled with your specific details — no decisions left to make.
 
 ---
 
-## Prerequisites on your Mac
+## Your account values (pre-filled)
 
-| What | Why | How |
-|---|---|---|
-| **macOS 13+** | Xcode 15 requires it | — |
-| **Xcode 15+** | Required to build for iOS 14+ | Mac App Store |
-| **CocoaPods** | Capacitor iOS uses Pods | `sudo gem install cocoapods` |
-| **Node 24** | Same as Android build | `nvm install 24 && nvm use 24` |
-| **Apple Developer Team ID** | Signs the build | https://developer.apple.com/account → Membership |
+| Setting | Value |
+|---|---|
+| **Apple Team ID** | `4U8Q869544` |
+| **Bundle ID** | `com.hetupathways.app` |
+| **App Name** | HevaONE |
+| **Subtitle** (App Store, 30 chars max) | `Workforce + POS for business` |
+| **Primary Category** | Business |
+| **Devices** | Universal — iPhone + iPad |
+| **Minimum iOS** | 14.0 |
+
+> Same Bundle ID `com.hetupathways.app` is used by your Android app — that's normal, Apple and Google handle these independently.
 
 ---
 
-## Step 1 — Scaffold iOS project (one-time)
+## Step 0 — One-time Mac setup (~15 min)
 
-From `/your-mac-path/frontend`:
+Open Terminal on your Mac and run these in order:
 
 ```bash
-yarn install                  # makes sure capacitor-zeroconf etc are installed
-npx cap add ios               # creates ./ios/App/ with Xcode project
-npx cap sync ios              # copies plugins into the Xcode project
+# 1. Install Homebrew if you don't have it (paste in Terminal, then follow prompts)
+/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
+# 2. Install Node 24 via nvm (matches your Android build)
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+# Close + reopen Terminal so nvm is on PATH
+nvm install 24
+nvm use 24
+nvm alias default 24
+node -v   # should print v24.x.x
+
+# 3. Install CocoaPods (Capacitor iOS uses it for native deps)
+sudo gem install cocoapods
+pod --version   # should print 1.15+ or similar
 ```
 
-This creates `/frontend/ios/App/App/Info.plist`.
+Make sure **Xcode 15+** is already installed from the Mac App Store (~7GB; takes ~30 min the first time).
 
 ---
 
-## Step 2 — Add required Info.plist entries
+## Step 1 — Pull the latest code
 
-Open `frontend/ios/App/App/Info.plist` in Xcode (right-click → Open As → Source Code).
+```bash
+cd ~/your-projects-folder
+git clone <your-repo>            # or: git pull
+cd hevaone/frontend               # or wherever your frontend lives
+yarn install                      # installs all deps including capacitor-zeroconf
+```
 
-Find the closing `</dict></plist>` at the bottom of the file. **Just above** the final `</dict>`, paste in everything between the markers below:
+---
+
+## Step 2 — Scaffold the iOS project (one-time only)
+
+```bash
+npx cap add ios                   # creates frontend/ios/ with Xcode project
+yarn build                        # builds the React app into frontend/build/
+npx cap sync ios                  # copies plugins + JS into the iOS project
+```
+
+This creates `frontend/ios/App/App/Info.plist` — you'll edit it next.
+
+---
+
+## Step 3 — Edit Info.plist (CRITICAL)
+
+Open `frontend/ios/App/App/Info.plist` in Xcode (right-click → Open As → Source Code, **not** Property List).
+
+Find the closing `</dict>` at the very bottom of the file (the second-to-last line, just before `</plist>`). **Just above** that closing `</dict>`, paste in this block:
 
 ```xml
-<!-- ──────────────── HEVA ONE — START ──────────────── -->
+<!-- ──────────────── HEVAONE — START ──────────────── -->
 
-<!-- LOCAL NETWORK ACCESS (iOS 14+). Without this, every TCP connection
-     to 192.168.x.x is silently blocked by iOS and times out. -->
+<!-- iOS 14+ REQUIRES this for any TCP connection to a 192.168.x.x address.
+     Without it, every printer connection times out silently. -->
 <key>NSLocalNetworkUsageDescription</key>
-<string>Heva ONE uses your local network to discover thermal receipt printers connected to the same Wi-Fi.</string>
+<string>HevaONE uses your local network to discover thermal receipt printers connected to the same Wi-Fi.</string>
 
-<!-- BONJOUR / mDNS SERVICE TYPES. iOS will only let us discover service
+<!-- mDNS / Bonjour service types. iOS will only let us discover service
      types explicitly declared here. These cover 99% of ESC/POS thermal
      printers (Epson, Star, HP, Bixolon, etc.). -->
 <key>NSBonjourServices</key>
@@ -58,30 +94,25 @@ Find the closing `</dict></plist>` at the bottom of the file. **Just above** the
   <string>_http._tcp</string>
 </array>
 
-<!-- BLUETOOTH PRINTER ACCESS. NSBluetoothAlwaysUsageDescription is required
-     for iOS 13+; NSBluetoothPeripheralUsageDescription kept for legacy. -->
+<!-- Bluetooth printer access -->
 <key>NSBluetoothAlwaysUsageDescription</key>
-<string>Heva ONE connects to thermal receipt printers over Bluetooth.</string>
+<string>HevaONE connects to thermal receipt printers over Bluetooth.</string>
 <key>NSBluetoothPeripheralUsageDescription</key>
-<string>Heva ONE connects to thermal receipt printers over Bluetooth.</string>
+<string>HevaONE connects to thermal receipt printers over Bluetooth.</string>
 
-<!-- CAMERA (for receipt photo / QR code scanning) -->
+<!-- Camera (receipt photo + QR scanning) -->
 <key>NSCameraUsageDescription</key>
-<string>Heva ONE uses the camera to scan receipts and QR codes.</string>
+<string>HevaONE uses the camera to scan receipts and QR codes.</string>
 
-<!-- PHOTO LIBRARY (for adding menu item images) -->
+<!-- Photo Library (menu item images) -->
 <key>NSPhotoLibraryUsageDescription</key>
-<string>Heva ONE saves menu item photos to your library.</string>
+<string>HevaONE adds menu item photos from your library.</string>
 
-<!-- LOCATION (used by attendance geo-fence for clock-in) -->
+<!-- Location (attendance geofence) -->
 <key>NSLocationWhenInUseUsageDescription</key>
-<string>Heva ONE uses your location to verify you are at the restaurant when clocking in.</string>
+<string>HevaONE verifies you are at the restaurant when clocking in.</string>
 
-<!-- MICROPHONE (kept off by default; comment in only if you add voice notes) -->
-<!-- <key>NSMicrophoneUsageDescription</key>
-<string>Heva ONE uses the microphone for voice notes on orders.</string> -->
-
-<!-- iPad Universal support -->
+<!-- Universal iPad orientation support -->
 <key>UISupportedInterfaceOrientations~ipad</key>
 <array>
   <string>UIInterfaceOrientationPortrait</string>
@@ -90,127 +121,154 @@ Find the closing `</dict></plist>` at the bottom of the file. **Just above** the
   <string>UIInterfaceOrientationLandscapeRight</string>
 </array>
 
-<!-- App Transport Security: allow connections to printers on LAN. The TCP
-     plugin uses raw sockets, but if any plugin starts using NSURLSession
-     against a local IP it'll need this. Already covered for raw TCP. -->
+<!-- App Transport Security: allow connections to printers on LAN -->
 <key>NSAppTransportSecurity</key>
 <dict>
   <key>NSAllowsLocalNetworking</key>
   <true/>
 </dict>
 
-<!-- ──────────────── HEVA ONE — END ──────────────── -->
+<!-- ──────────────── HEVAONE — END ──────────────── -->
 ```
 
-Save the file.
+Save (Cmd+S).
 
 ---
 
-## Step 3 — Configure signing in Xcode
+## Step 4 — Configure signing in Xcode
 
 ```bash
-npx cap open ios   # opens Xcode
+npx cap open ios   # opens the project in Xcode
 ```
 
 In Xcode:
 
-1. Click the **App** project in the left sidebar (top item, blue icon)
-2. Select the **App** target → **Signing & Capabilities** tab
+1. Click the blue **App** project icon at the top of the left sidebar
+2. Select **App** target → **Signing & Capabilities** tab
 3. Tick **Automatically manage signing**
-4. **Team:** pick your Apple Developer team from the dropdown
-5. **Bundle Identifier:**
-   - Current: `com.hevapos.app`
-   - **Recommended for App Store:** change to `com.hetupathways.hevaone` (matches your domain — easier App Store approval)
-6. **Display Name:** "Heva ONE"
+4. **Team** dropdown → choose your team (Team ID `4U8Q869544`)
+5. Confirm **Bundle Identifier** reads `com.hetupathways.app` (already pre-set from capacitor.config.json)
+6. **Display Name** field → set to `HevaONE`
 
-Xcode auto-creates a provisioning profile after a few seconds.
+Xcode will auto-create a provisioning profile. Wait for the spinner to finish.
 
 ---
 
-## Step 4 — Set deployment target & device family
+## Step 5 — General settings
 
 Same screen → **General** tab:
 
-1. **Minimum Deployments — iOS:** `14.0` (covers ~99% of devices in 2026)
-2. **Supported Destinations:** keep iPhone + iPad checked (Universal app)
+| Setting | Value |
+|---|---|
+| **Minimum Deployments → iOS** | `14.0` |
+| **Supported Destinations** | iPhone + iPad (both checked = Universal) |
+| **Version** | `1.0.0` |
+| **Build** | `1` |
+| **Display Name** | `HevaONE` |
 
 ---
 
-## Step 5 — Add the app icon
+## Step 6 — App icon
 
-1. In Xcode, open `App/Assets.xcassets/AppIcon.appiconset/`
-2. Drag the 1024×1024 icon onto the largest slot (it auto-generates other sizes if you tick "Single Size" in the Attributes Inspector)
-3. **Use the same icon you used for Android** so the brand is consistent — `/frontend/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp` (export as PNG 1024×1024)
+1. In Xcode left sidebar: `App/Assets.xcassets/AppIcon.appiconset/`
+2. Open `/your-mac-path/frontend/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.webp`
+3. Convert to PNG 1024×1024 (Preview app: File → Export → PNG, 1024×1024)
+4. Drag the PNG onto the largest empty slot in AppIcon.appiconset
+5. In the Attributes Inspector on the right, set **Appearances: Any, Dark** if you want a dark-mode icon variant (optional)
 
 ---
 
-## Step 6 — Run on iPad Simulator (sanity check)
+## Step 7 — Run on iPad Simulator
+
+In Xcode top toolbar:
+1. Device dropdown → **iPad Pro 11" (M4)** (or any iPad)
+2. Click **▶ Run** (Cmd+R)
+3. Simulator launches → login with `SKAdmin / saswata@123`
+
+> Note: Bluetooth + LAN printer discovery won't work in the simulator (no real hardware). That's expected — test those on a physical iPad next.
+
+---
+
+## Step 8 — Run on physical iPad
+
+1. Connect iPad to Mac via USB-C
+2. On iPad: Settings → General → VPN & Device Management → trust your developer cert
+3. Xcode device dropdown → select your iPad
+4. ▶ Run
+5. **First Wi-Fi printer scan triggers an iOS prompt:** *"HevaONE would like to find devices on your local network"* → tap **Allow**
+6. Go to **Printer Settings → Diagnose** button → all 6 checks should show green ✓:
+   - ✓ Runtime: iOS app (native)
+   - ✓ Tablet Wi-Fi (subnet detected)
+   - ✓ TCP socket plugin loaded
+   - ✓ Bonjour / mDNS plugin loaded
+   - ✓ mDNS live test (discovered N printers)
+   - ✓ TCP probe (if you entered an IP)
+
+---
+
+## Step 9 — Upload to App Store Connect (TestFlight)
 
 In Xcode:
-1. Top-bar device dropdown → pick **iPad Pro 11"** (or your target iPad)
-2. Press **▶ Run** (Cmd+R)
-3. The simulator launches → app loads → log in with `SKAdmin / saswata@123`
-
-> Note: Bluetooth + LAN printer discovery **won't work in the simulator** (no real hardware). Test those on a physical iPad in Step 7.
-
----
-
-## Step 7 — Run on a physical iPad
-
-1. Plug the iPad into your Mac via USB-C
-2. On the iPad: Settings → General → VPN & Device Management → trust your developer certificate
-3. In Xcode, device dropdown → pick your iPad
-4. ▶ Run
-5. **First Wi-Fi printer scan will trigger an iOS prompt:** *"Heva ONE would like to find devices on your local network"* → tap **Allow**. (If you tap Don't Allow, you must re-enable it in iOS Settings → Heva ONE → Local Network)
-
-In the app:
-- Go to **Printer Settings → Diagnose** button. The diagnostics should show all green:
-  - ✓ Runtime: iOS app (native)
-  - ✓ TCP socket plugin loaded
-  - ✓ Bonjour / mDNS plugin loaded
-  - ✓ mDNS live test: discovered N printers
+1. Device dropdown → **Any iOS Device (arm64)** (this is required for archiving)
+2. **Product → Archive** (Cmd+B then Product > Archive)
+3. Wait 1–3 min for archive to build
+4. Organizer window opens → click **Distribute App** → **App Store Connect** → **Upload**
+5. Sign in with your Apple Developer ID → upload completes in 5–15 min
+6. Go to https://appstoreconnect.apple.com → **My Apps**
+7. If app doesn't exist yet: **+ New App** → fill in:
+   - Platform: iOS
+   - Name: **HevaONE**
+   - Primary language: English (UK or US)
+   - Bundle ID: `com.hetupathways.app` (should appear in dropdown after upload)
+   - SKU: `hevaone-001` (any unique string)
+8. Open HevaONE → **TestFlight** tab
+9. Add yourself + a customer as internal testers
+10. Install **TestFlight** from App Store on the iPad
+11. Open TestFlight → install HevaONE → use it for 1–2 weeks
 
 ---
 
-## Step 8 — Archive & TestFlight
+## Step 10 — Submit for App Store Review
 
-1. In Xcode device dropdown → select **Any iOS Device (arm64)**
-2. **Product → Archive** (takes 1-3 min)
-3. Window pops open with Organizer
-4. Click **Distribute App → App Store Connect → Upload**
-5. Sign in with your Apple Developer account → upload completes in 5-15 min
-6. Go to https://appstoreconnect.apple.com → My Apps → Heva ONE → **TestFlight** tab
-7. Add internal testers (your email) → install via the **TestFlight app** on iPad
-8. Test with 1-2 real restaurants for 1-2 weeks before submitting to App Review
+App Store Connect → My Apps → HevaONE → **App Store** tab → **Prepare for Submission**:
+
+| Field | Value |
+|---|---|
+| **App Name** | HevaONE |
+| **Subtitle** | Workforce + POS for business |
+| **Primary Category** | Business |
+| **Secondary Category** | Food & Drink |
+| **Description** | (write 1500-char description — I can draft this if you want) |
+| **Keywords** | POS, restaurant, rota, workforce, scheduling, payroll, time tracking |
+| **Support URL** | https://hetupathways.com/support (must exist) |
+| **Marketing URL** | https://hetupathways.com (optional) |
+| **Privacy Policy URL** | https://hetupathways.com/privacy (required — must exist) |
+
+**Screenshots** (mandatory — capture from physical iPad/iPhone):
+- 6.7" iPhone (1290 × 2796) — at least 3 screenshots
+- 12.9" iPad Pro (2048 × 2732) — at least 3 screenshots
+- The simplest workflow: open the app on a device, take screenshots, transfer to Mac, upload
+
+**App Privacy** (required questionnaire):
+- Data Collected: Email, Name, Phone, Payment info (Stripe), Purchase history
+- Tracking: NO (you don't track users for ads)
+
+Submit → review takes 1–3 days typically.
 
 ---
 
-## Step 9 — Submit for App Store Review
+## ⚠️ Apple Subscription Rules — Important
 
-1. App Store Connect → My Apps → Heva ONE → **App Store** tab
-2. Fill in:
-   - **Subtitle** (30 chars max)
-   - **Category:** Business (primary), Food & Drink (secondary)
-   - **Description**
-   - **Screenshots** — iPad Pro 12.9", iPhone 6.7" (mandatory sizes)
-   - **App Privacy** — declare data collection (you collect: email, name, payment info for Stripe, restaurant data)
-   - **Privacy Policy URL** — required, you can host on `hetupathways.com/privacy`
-3. Submit. Review typically takes 1-3 days.
+Apple takes **30% commission** on any subscription sold *inside* an iOS app via In-App Purchase. Your platform SaaS fee is **B2B** and qualifies for Apple's **Reader App / Business App exception** — but you must follow these rules:
 
----
+✅ **Allowed:** Restaurant admins subscribe via Stripe Checkout in an **external browser**
+✅ **Allowed:** Show a "Manage on web" link that opens Safari
+❌ **Not allowed:** Embedding a card form inside the iOS app
+❌ **Not allowed:** Using Apple's IAP for the platform subscription (you'd lose 30%)
 
-## ⚠️ Apple's Subscription Rules — Important
+The current code already opens Stripe Checkout via `window.location.href` (external browser path) — that's the safe approach. When you're ready to ship to TestFlight, tell me and I'll add a Capacitor platform check to **hide the "Subscribe Now" banner on iOS** so reviewers don't flag it. We'll let restaurants subscribe via email link from the dashboard instead.
 
-Apple takes 30% of any subscription sold *inside an iOS app* using In-App Purchase. Your platform SaaS fee (£X/mo) is **B2B** and qualifies for the **Reader App / Business App exception** — but you must follow these rules:
-
-✅ **Allowed:** Restaurant admins subscribe via Stripe Checkout in an **external browser** (Safari opens, payment happens off-app)
-✅ **Allowed:** Don't show "Subscribe Now" UI inside the iOS app — email subscribers a Stripe Checkout link from your dashboard
-❌ **Not allowed:** Embedding a payment form inside the iOS app
-❌ **Not allowed:** Using Apple's IAP for the platform subscription (you'd lose 30% needlessly)
-
-**The diner-facing payments (QR ordering via Stripe Connect) are physical goods/services — Apple has no claim on those.** No restrictions there.
-
-The current code already opens Stripe Checkout in an external browser via `window.location.href`, which is the safe path. On the iOS build, I recommend additionally hiding the "Subscribe Now" banner — let me know when you're ready and I'll add a Capacitor platform check to gate it.
+**Diner-facing payments (Stripe Connect QR ordering) are fully fine** — physical goods/services have no Apple commission.
 
 ---
 
@@ -218,12 +276,11 @@ The current code already opens Stripe Checkout in an external browser via `windo
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| Printer scan shows "Bonjour plugin not installed" | `capacitor-zeroconf` not synced into Xcode project | Re-run `npx cap sync ios` then rebuild |
-| TCP connection times out on every printer | iOS Local Network permission was denied | Settings → Heva ONE → Local Network → ON |
-| App crashes on first launch | Missing Bluetooth/Camera permission string | Re-check Step 2 |
-| "Apple ID is locked" during upload | 2FA expired | Re-sign-in to Apple ID in Xcode preferences |
-| Build fails: `pod install` errors | CocoaPods outdated | `sudo gem install cocoapods --pre` then re-sync |
+| "Bonjour plugin not installed" in Diagnostics | `capacitor-zeroconf` not synced | `npx cap sync ios` then rebuild |
+| Every printer TCP times out | Local Network permission denied | iPad Settings → HevaONE → Local Network → ON |
+| App crashes on first launch | Missing permission string in Info.plist | Re-check Step 3 |
+| "Apple ID is locked" during upload | 2FA expired | Re-sign-in in Xcode → Preferences → Accounts |
+| `pod install` fails during sync | CocoaPods cache stale | `pod repo update` then re-sync |
+| Xcode says "Provisioning profile required" | Auto-signing didn't complete | Step 4 → uncheck and re-check "Automatically manage signing" |
 
----
-
-If anything fails, paste me the exact error from Xcode and I'll debug — that's faster than guessing.
+If anything fails, paste me the **exact** Xcode error and I'll debug — faster than guessing.

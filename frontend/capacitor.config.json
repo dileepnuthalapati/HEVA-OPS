@@ -1,6 +1,6 @@
 {
-  "appId": "com.hevapos.app",
-  "appName": "Heva ONE",
+  "appId": "com.hetupathways.app",
+  "appName": "HevaONE",
   "webDir": "build",
   "bundledWebRuntime": false,
   "server": {
@@ -39,6 +39,7 @@
     "contentInset": "automatic",
     "preferredContentMode": "mobile",
     "scrollEnabled": true,
-    "limitsNavigationsToAppBoundDomains": false
+    "limitsNavigationsToAppBoundDomains": false,
+    "scheme": "HevaONE"
   }
 }
