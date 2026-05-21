@@ -1,0 +1,10 @@
+{
+	"appId": "com.hetupathways.app",
+	"appName": "HevaPOS",
+	"webDir": "build",
+	"android": {
+		"ignorePlugins": [
+			"BluetoothLe"
+		]
+	}
+}
