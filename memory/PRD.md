@@ -154,8 +154,8 @@ Six issues reported after 2 weeks of live customer use. Four shipped in this bat
 6. **Cash drawer access for staff** ✅ — Backend already allowed any auth user (no role bug). Real friction: cashiers couldn't find it from the POS workspace. Added a prominent "Cash" button to the POS header alongside Pending/Logout. Staff using HevaOps bottom-nav can switch to POS via existing "POS" button if they have `pos.access` capability.
 
 ### Parked for next batch (waiting on user)
-3. Responsive layout for 1366×768 / 15" laptops — awaiting screenshot from user
-4. Floor-view of tables inside POSScreen (click table → load/edit that table's order) — next feature batch
+3. Responsive layout for 1366×768 / 15" laptops ✅ **SHIPPED Feb 13** — Cart sidebar width tightened (`w-[280px]` at <1024px, `w-[340px]` at 1024–1280px, `w-[380px]` at 1280–1536px, `w-[400px]` ≥1536px) so the products grid + cart both fit on 1366×768 without horizontal overflow. Payment Dialog added `max-h-[88vh] overflow-y-auto` so "Complete Payment" never gets pushed below the viewport bottom edge on small laptops. Verified visually at 1366×768.
+4. Floor-view of tables inside POSScreen ✅ **SHIPPED Feb 13** — New "Tables" button in POS header opens a colored grid: green=free (click to start new order), blue=one pending order (click to edit), amber=multiple pending orders. Each tile shows table number, capacity, order count + total. Clicking tile loads the existing order into the cart for editing or selects the table for a fresh order. `data-testid="tables-view-button"` + `data-testid="table-tile-{id}"`.
 
 ## Stripe SaaS Billing Hardening (Feb 12, 2026)
 - Customer Order Board ("Digital Display" on TV via /display/{venue_id} — real-time order status via Socket.io)

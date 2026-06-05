@@ -40,6 +40,7 @@ const POSScreen = () => {
   const [loading, setLoading] = useState(true);
   const [pendingOrders, setPendingOrders] = useState([]);
   const [showPendingOrders, setShowPendingOrders] = useState(false);
+  const [showTablesView, setShowTablesView] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [selectedOrderToComplete, setSelectedOrderToComplete] = useState(null);
   const [tipPercentage, setTipPercentage] = useState(0);
@@ -941,7 +942,7 @@ const POSScreen = () => {
               onClick={() => {
                 const newVal = !showPendingOrders;
                 setShowPendingOrders(newVal);
-                if (newVal) loadCompletedOrders();
+                if (newVal) { setShowTablesView(false); loadCompletedOrders(); }
               }}
               className={`h-9 md:h-10 px-3 md:px-4 rounded-xl text-xs md:text-sm font-semibold btn-haptic flex items-center gap-1.5 transition-all border ${
                 showPendingOrders 
@@ -952,6 +953,23 @@ const POSScreen = () => {
               <Receipt className="w-4 h-4" />
               <span className="hidden sm:inline">Pending</span>
               <span className="font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md text-[11px]">{pendingOrders.length}</span>
+            </button>
+            <button
+              data-testid="tables-view-button"
+              onClick={() => {
+                const newVal = !showTablesView;
+                setShowTablesView(newVal);
+                if (newVal) setShowPendingOrders(false);
+              }}
+              className={`h-9 md:h-10 px-3 rounded-xl text-xs md:text-sm font-semibold btn-haptic flex items-center gap-1.5 transition-all border ${
+                showTablesView
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+              title="Open the table floor view"
+            >
+              <UtensilsCrossed className="w-4 h-4" />
+              <span className="hidden sm:inline">Tables</span>
             </button>
             <button
               data-testid="pos-cash-drawer-button"
@@ -1036,9 +1054,94 @@ const POSScreen = () => {
           </div>
         </div>
 
-        {/* Products Grid or Pending Orders */}
+        {/* Products Grid, Pending Orders, or Tables Floor View */}
         <div className="flex-1 overflow-y-auto p-3 md:p-6 min-h-0">
-          {showPendingOrders ? (
+          {showTablesView ? (
+            <div className="space-y-4" data-testid="tables-floor-view">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h2 className="text-xl md:text-2xl font-bold">Tables</h2>
+                <div className="flex items-center gap-3 text-xs flex-wrap">
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-emerald-200 border border-emerald-300"></span>Free</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-blue-200 border border-blue-300"></span>Occupied</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-amber-200 border border-amber-300"></span>Multiple orders</span>
+                </div>
+              </div>
+              {tables.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground" data-testid="no-tables-msg">
+                  <UtensilsCrossed className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+                  <p>No tables configured.</p>
+                  <p className="text-xs mt-1">Add tables in Settings → Tables.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                  {[...tables].sort((a, b) => (a.number || 0) - (b.number || 0)).map((table) => {
+                    const tableOrders = pendingOrders.filter(o => o.table_id === table.id);
+                    const occupied = tableOrders.length > 0;
+                    const total = tableOrders.reduce((s, o) => s + (o.total_amount || 0), 0);
+                    const bg = !occupied
+                      ? 'bg-emerald-50 border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300'
+                      : tableOrders.length > 1
+                      ? 'bg-amber-50 border-amber-200 hover:bg-amber-100 hover:border-amber-300'
+                      : 'bg-blue-50 border-blue-200 hover:bg-blue-100 hover:border-blue-300';
+                    const onClickTable = () => {
+                      if (occupied) {
+                        // Load the existing pending order for this table into the cart
+                        const order = tableOrders[0];
+                        editPendingOrder(order);
+                        setShowTablesView(false);
+                        toast.success(`Table ${table.number} — editing order #${String(order.order_number).padStart(3, '0')}`);
+                      } else {
+                        // Start a fresh order on this table
+                        setSelectedTable(table.id);
+                        setCart([]);
+                        setEditingOrder(null);
+                        setShowTablesView(false);
+                        toast.success(`Table ${table.number} selected — add items and place order`);
+                      }
+                    };
+                    return (
+                      <button
+                        key={table.id}
+                        type="button"
+                        onClick={onClickTable}
+                        data-testid={`table-tile-${table.id}`}
+                        className={`text-left rounded-2xl border-2 p-4 transition-all ${bg} ${occupied ? 'shadow-sm' : ''}`}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <p className="text-2xl font-bold text-slate-900">{table.number}</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              {table.capacity ? `${table.capacity} seats` : 'Table'}
+                            </p>
+                          </div>
+                          {occupied && (
+                            <span className="text-[10px] font-mono bg-white/70 text-slate-700 px-1.5 py-0.5 rounded">
+                              {tableOrders.length} {tableOrders.length === 1 ? 'order' : 'orders'}
+                            </span>
+                          )}
+                        </div>
+                        {occupied ? (
+                          <div>
+                            <p className="text-xs text-slate-600 truncate">
+                              #{String(tableOrders[0].order_number).padStart(3, '0')}
+                              {tableOrders.length > 1 && ` +${tableOrders.length - 1}`}
+                            </p>
+                            <p className="text-base font-bold font-mono text-blue-700 mt-1">
+                              {getCurrencySymbol(currency)}{total.toFixed(2)}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-xs font-semibold text-emerald-700 mt-3">
+                            + Start order
+                          </p>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : showPendingOrders ? (
             <div className="space-y-4">
               <h2 className="text-2xl font-bold mb-4">Pending Orders</h2>
               {pendingOrders.length === 0 ? (
@@ -1452,7 +1555,7 @@ const POSScreen = () => {
         return (
           <>
             {/* Desktop Order Sidebar */}
-            <div className="hidden md:flex w-[340px] lg:w-[380px] xl:w-[400px] bg-white border-l border-slate-200/60 flex-col cart-sidebar">
+            <div className="hidden md:flex w-[280px] lg:w-[340px] xl:w-[380px] 2xl:w-[400px] bg-white border-l border-slate-200/60 flex-col cart-sidebar">
               {cartContent}
             </div>
 
@@ -1488,7 +1591,7 @@ const POSScreen = () => {
 
       {/* Payment Method Dialog */}
       <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[88vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               Complete Payment
