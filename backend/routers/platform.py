@@ -200,6 +200,69 @@ async def update_platform_settings(payload: dict, current_user: User = Depends(r
     return {"message": "Platform settings saved", "settings": _public_view(merged)}
 
 
+# ─── One-off Orphan Cleanup (Tenant Bleed Fix) ────────────────────────
+
+@router.get("/platform/orphans")
+async def list_orphans(current_user: User = Depends(require_platform_owner)):
+    """Count rows where restaurant_id is null/missing across critical
+    multi-tenant collections. Used to verify the live DB after the
+    multi-tenancy bug fix."""
+    orphan_filter = {"$or": [{"restaurant_id": None}, {"restaurant_id": {"$exists": False}}]}
+    cols = ["tables", "reservations", "orders", "menu_items", "categories",
+            "products", "staff", "shifts", "attendance", "leave_requests"]
+    out = {}
+    for col in cols:
+        try:
+            out[col] = await db[col].count_documents(orphan_filter)
+        except Exception as e:
+            out[col] = f"err: {e}"
+    return {"orphans": out}
+
+
+@router.delete("/platform/orphans")
+async def delete_orphans(
+    collection: str,
+    confirm: bool = False,
+    current_user: User = Depends(require_platform_owner),
+):
+    """Delete orphan rows in a specific collection. Requires confirm=true
+    so this can never be hit accidentally. Logs the action to the audit
+    collection. Allowed collections are restricted to known-safe lists.
+
+    Usage (from frontend or curl):
+        DELETE /platform/orphans?collection=tables&confirm=true
+    """
+    if not confirm:
+        raise HTTPException(status_code=400, detail="Set confirm=true to actually delete")
+
+    ALLOWED = {"tables", "reservations", "orders", "menu_items",
+               "categories", "products", "staff", "shifts", "attendance"}
+    if collection not in ALLOWED:
+        raise HTTPException(status_code=400, detail=f"Collection must be one of {sorted(ALLOWED)}")
+
+    orphan_filter = {"$or": [{"restaurant_id": None}, {"restaurant_id": {"$exists": False}}]}
+    result = await db[collection].delete_many(orphan_filter)
+
+    # Audit log so we have a record on the live system
+    try:
+        await db.audit_log.insert_one({
+            "id": f"audit_orphan_cleanup_{datetime.now(timezone.utc).timestamp()}",
+            "action": "orphan_cleanup",
+            "performed_by": current_user.username,
+            "restaurant_id": None,
+            "details": {"collection": collection, "deleted_count": result.deleted_count},
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+    except Exception:
+        pass
+
+    return {
+        "message": f"Deleted {result.deleted_count} orphan rows from {collection}",
+        "collection": collection,
+        "deleted_count": result.deleted_count,
+    }
+
+
 # ─── Module Pricing ──────────────────────────────────────
 
 DEFAULT_MODULE_PRICES = {

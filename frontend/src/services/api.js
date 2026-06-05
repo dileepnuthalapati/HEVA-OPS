@@ -221,14 +221,22 @@ export const orderAPI = {
       throw error;
     }
   },
-  complete: async (orderId, paymentMethod, tipPercentage = 0, tipAmount = 0, splitCount = 1, paymentDetails = null) => {
-    const response = await api.put(`/orders/${orderId}/complete`, { 
+  complete: async (orderId, paymentMethod, tipPercentage = 0, tipAmount = 0, splitCount = 1, paymentDetails = null, discount = null) => {
+    const body = {
       payment_method: paymentMethod,
       tip_percentage: tipPercentage,
       tip_amount: tipAmount,
       split_count: splitCount,
-      payment_details: paymentDetails
-    });
+      payment_details: paymentDetails,
+    };
+    if (discount && (discount.discount_type || discount.discount_amount)) {
+      body.discount_type = discount.discount_type || null;
+      body.discount_value = discount.discount_value || 0;
+      body.discount_amount = discount.discount_amount || 0;
+      body.discount_reason = discount.discount_reason || null;
+      if (discount.total_amount != null) body.total_amount = discount.total_amount;
+    }
+    const response = await api.put(`/orders/${orderId}/complete`, body);
     await saveToIndexedDB('orders', response.data);
     return response.data;
   },

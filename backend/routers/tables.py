@@ -11,13 +11,17 @@ router = APIRouter(dependencies=[Depends(require_any_feature("pos", "qr_ordering
 
 @router.get("/tables", response_model=List[Table])
 async def get_tables(current_user: User = Depends(get_current_user)):
-    query = {}
-    if current_user.role != 'platform_owner' and current_user.restaurant_id:
-        query["$or"] = [
-            {"restaurant_id": current_user.restaurant_id},
-            {"restaurant_id": None},
-            {"restaurant_id": {"$exists": False}}
-        ]
+    # STRICT tenant isolation — never include orphans (restaurant_id null
+    # or missing). Orphans from earlier multi-tenancy bugs MUST be cleaned
+    # via /platform/cleanup-orphans by the platform owner. Returning them
+    # here would leak data into every tenant.
+    if current_user.role == 'platform_owner':
+        # Platform owner sees everything for audit/support purposes
+        query = {}
+    else:
+        if not current_user.restaurant_id:
+            return []
+        query = {"restaurant_id": current_user.restaurant_id}
     tables = await db.tables.find(query, {"_id": 0}).sort("number", 1).to_list(200)
     return [Table(**t) for t in tables]
 

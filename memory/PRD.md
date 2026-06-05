@@ -141,6 +141,23 @@ Six critical issues reported by SKAdmin after live operation; all six resolved (
    - New `GET /api/timesheets/export.csv?start_date=&end_date=` — returns BOM-prefixed UTF-8 CSV with TOTAL row. Monthly-salary staff use weekly share (`/4.33 × weeks_in_window`) consistent with the on-screen summary. Three frontend buttons: Current Week, Current Month, Custom Range (popover with date inputs).
 
 ## Upcoming
+### Field Bug Sprint (Feb 12, 2026) — Customer Murari report
+
+Six issues reported after 2 weeks of live customer use. Four shipped in this batch with end-to-end curl verification. Two parked for next batch.
+
+1. **Kitchen ticket reprints whole order** ✅ — Fixed both layers. Backend `PUT /orders/{id}` now preserves `printed_to_kitchen=True` for existing items by matching on `(product_id, product_name, unit_price)` against the previous state. Frontend `editPendingOrder` now copies the flag into the cart so the backend can correlate. Verified: order with 1 printed item + 1 new item → only the new item has `printed_to_kitchen=False`, delta-print picks it up. Existing items keep printed=True.
+
+2. **Discount moved from order-entry to payment** ✅ — Backend `OrderComplete` model now accepts `discount_type / discount_value / discount_amount / discount_reason / total_amount`. Order model gained `discount_reason` field. POSScreen cart removed the old Discount button entirely; Payment dialog now has a Percent/Fixed/None toggle with value + reason inputs. `calculateGrandTotal` subtracts both legacy cart-discount AND new payment-discount so the displayed total is always correct. Verified end-to-end via `/orders/{id}/complete`.
+
+5. **CRITICAL — Multi-tenant data bleed in tables/reservations** ✅ — Root cause was a deliberate `$or` clause that returned rows where `restaurant_id` was null/missing alongside the user's own rows (a pre-existing "legacy fallback" from earlier multi-tenancy work). Removed from both `tables.py` and `reservations.py`. Audited every other endpoint — no others affected. Platform owner sees all (for support); everyone else strictly filters by `current_user.restaurant_id`. Added `GET /platform/orphans` (count) and `DELETE /platform/orphans?collection=tables&confirm=true` so the platform owner can clean orphans on the live Railway DB. Audit-logged.
+
+6. **Cash drawer access for staff** ✅ — Backend already allowed any auth user (no role bug). Real friction: cashiers couldn't find it from the POS workspace. Added a prominent "Cash" button to the POS header alongside Pending/Logout. Staff using HevaOps bottom-nav can switch to POS via existing "POS" button if they have `pos.access` capability.
+
+### Parked for next batch (waiting on user)
+3. Responsive layout for 1366×768 / 15" laptops ✅ **SHIPPED Feb 13** — Cart sidebar width tightened (`w-[280px]` at <1024px, `w-[340px]` at 1024–1280px, `w-[380px]` at 1280–1536px, `w-[400px]` ≥1536px) so the products grid + cart both fit on 1366×768 without horizontal overflow. Payment Dialog added `max-h-[88vh] overflow-y-auto` so "Complete Payment" never gets pushed below the viewport bottom edge on small laptops. Verified visually at 1366×768.
+4. Floor-view of tables inside POSScreen ✅ **SHIPPED Feb 13** — New "Tables" button in POS header opens a colored grid: green=free (click to start new order), blue=one pending order (click to edit), amber=multiple pending orders. Each tile shows table number, capacity, order count + total. Clicking tile loads the existing order into the cart for editing or selects the table for a fresh order. `data-testid="tables-view-button"` + `data-testid="table-tile-{id}"`.
+
+## Stripe SaaS Billing Hardening (Feb 12, 2026)
 - Customer Order Board ("Digital Display" on TV via /display/{venue_id} — real-time order status via Socket.io)
 - Annual leave balance tracking & year-end report logic
 - iOS App Build Prep (Capacitor config for iOS deployment)

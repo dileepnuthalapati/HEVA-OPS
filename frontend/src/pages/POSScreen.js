@@ -40,6 +40,7 @@ const POSScreen = () => {
   const [loading, setLoading] = useState(true);
   const [pendingOrders, setPendingOrders] = useState([]);
   const [showPendingOrders, setShowPendingOrders] = useState(false);
+  const [showTablesView, setShowTablesView] = useState(false);
   const [showPaymentDialog, setShowPaymentDialog] = useState(false);
   const [selectedOrderToComplete, setSelectedOrderToComplete] = useState(null);
   const [tipPercentage, setTipPercentage] = useState(0);
@@ -67,6 +68,13 @@ const POSScreen = () => {
   const [cashAmount, setCashAmount] = useState('');
   const [cardAmount, setCardAmount] = useState('');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
+
+  // Payment-time discount (applied in the Payment dialog at the till, not
+  // when the order is first taken). This is independent of the legacy
+  // cart-side discount state above which we keep for backward-compat.
+  const [payDiscountType, setPayDiscountType] = useState('');  // '', 'percentage', 'fixed'
+  const [payDiscountValue, setPayDiscountValue] = useState('');
+  const [payDiscountReason, setPayDiscountReason] = useState('');
   
   // Product search
   const [searchQuery, setSearchQuery] = useState('');
@@ -427,13 +435,17 @@ const POSScreen = () => {
 
   // Edit a pending order - load items into cart
   const editPendingOrder = (order) => {
-    // Load order items into cart
+    // Load order items into cart, preserving the per-item flags so the
+    // backend can correctly identify which items have already been sent
+    // to the kitchen (prevents reprinting the entire order).
     setCart(order.items.map(item => ({
       product_id: item.product_id,
       product_name: item.product_name,
       quantity: item.quantity,
       unit_price: item.unit_price,
       total: item.total,
+      notes: item.notes || '',
+      printed_to_kitchen: item.printed_to_kitchen === true,
     })));
     
     // Set order details
@@ -492,6 +504,8 @@ const POSScreen = () => {
           settings: printSettings,
         });
         if (res.ok) {
+          // Server-side: mark all items as printed so the next edit only
+          // delta-prints anything newly added after this point.
           orderAPI.markPrinted(editingOrder.id).catch(() => {});
         }
       } catch (e) {
@@ -661,25 +675,39 @@ const POSScreen = () => {
     setShowPaymentDialog(true);
   };
 
+  // Payment-time discount calculation (works alongside any legacy
+  // cart-side discount that may be stored on the order itself)
+  const calculatePayDiscountAmount = () => {
+    if (!selectedOrderToComplete) return 0;
+    const subtotal = selectedOrderToComplete.subtotal || 0;
+    if (!payDiscountType || !payDiscountValue) return 0;
+    const v = parseFloat(payDiscountValue) || 0;
+    if (payDiscountType === 'percentage') return +(subtotal * v / 100).toFixed(2);
+    if (payDiscountType === 'fixed') return +Math.min(v, subtotal).toFixed(2);
+    return 0;
+  };
+
   const calculateTipAmount = () => {
     if (!selectedOrderToComplete) return 0;
-    
+
     if (customTip) {
       return parseFloat(customTip) || 0;
     }
-    
+
     if (tipPercentage > 0) {
-      const baseAmount = (selectedOrderToComplete.subtotal || 0) - (selectedOrderToComplete.discount_amount || 0);
+      const legacyDiscount = selectedOrderToComplete.discount_amount || 0;
+      const baseAmount = (selectedOrderToComplete.subtotal || 0) - legacyDiscount - calculatePayDiscountAmount();
       return (baseAmount * tipPercentage) / 100;
     }
-    
+
     return 0;
   };
 
   const calculateGrandTotal = () => {
     if (!selectedOrderToComplete) return 0;
-    const baseAmount = (selectedOrderToComplete.subtotal || 0) - (selectedOrderToComplete.discount_amount || 0);
-    return baseAmount + calculateTipAmount();
+    const legacyDiscount = selectedOrderToComplete.discount_amount || 0;
+    const baseAmount = (selectedOrderToComplete.subtotal || 0) - legacyDiscount - calculatePayDiscountAmount();
+    return Math.max(0, baseAmount + calculateTipAmount());
   };
 
   const calculatePerPersonAmount = () => {
@@ -717,15 +745,27 @@ const POSScreen = () => {
     }
 
     try {
+      const payDiscountAmount = calculatePayDiscountAmount();
+      const discountPayload = (payDiscountType && payDiscountValue)
+        ? {
+            discount_type: payDiscountType,
+            discount_value: parseFloat(payDiscountValue) || 0,
+            discount_amount: payDiscountAmount,
+            discount_reason: payDiscountReason || null,
+            total_amount: grandTotal,
+          }
+        : null;
+
       const completedOrder = await orderAPI.complete(
-        selectedOrderToComplete.id, 
+        selectedOrderToComplete.id,
         paymentMethod,
         tipPercentage,
         tipAmount,
         splitCount,
-        paymentDetails
+        paymentDetails,
+        discountPayload,
       );
-      
+
       // Try to print customer receipt LOCALLY (no backend needed — works offline)
       try {
         const receiptOrder = {
@@ -733,6 +773,10 @@ const POSScreen = () => {
           payment_method: paymentMethod,
           tip_amount: tipAmount,
           total_amount: grandTotal,
+          discount_type: payDiscountType || selectedOrderToComplete.discount_type,
+          discount_value: payDiscountValue ? parseFloat(payDiscountValue) : selectedOrderToComplete.discount_value,
+          discount_amount: payDiscountAmount || selectedOrderToComplete.discount_amount || 0,
+          discount_reason: payDiscountReason || selectedOrderToComplete.discount_reason,
         };
         await posPrintService.printCustomerReceipt({
           order: receiptOrder,
@@ -766,6 +810,9 @@ const POSScreen = () => {
       setSplitPaymentMode(false);
       setCashAmount('');
       setCardAmount('');
+      setPayDiscountType('');
+      setPayDiscountValue('');
+      setPayDiscountReason('');
       loadPendingOrders();
       loadCompletedOrders();
       
@@ -895,7 +942,7 @@ const POSScreen = () => {
               onClick={() => {
                 const newVal = !showPendingOrders;
                 setShowPendingOrders(newVal);
-                if (newVal) loadCompletedOrders();
+                if (newVal) { setShowTablesView(false); loadCompletedOrders(); }
               }}
               className={`h-9 md:h-10 px-3 md:px-4 rounded-xl text-xs md:text-sm font-semibold btn-haptic flex items-center gap-1.5 transition-all border ${
                 showPendingOrders 
@@ -906,6 +953,32 @@ const POSScreen = () => {
               <Receipt className="w-4 h-4" />
               <span className="hidden sm:inline">Pending</span>
               <span className="font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md text-[11px]">{pendingOrders.length}</span>
+            </button>
+            <button
+              data-testid="tables-view-button"
+              onClick={() => {
+                const newVal = !showTablesView;
+                setShowTablesView(newVal);
+                if (newVal) setShowPendingOrders(false);
+              }}
+              className={`h-9 md:h-10 px-3 rounded-xl text-xs md:text-sm font-semibold btn-haptic flex items-center gap-1.5 transition-all border ${
+                showTablesView
+                  ? 'bg-emerald-50 border-emerald-200 text-emerald-700'
+                  : 'bg-white border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+              title="Open the table floor view"
+            >
+              <UtensilsCrossed className="w-4 h-4" />
+              <span className="hidden sm:inline">Tables</span>
+            </button>
+            <button
+              data-testid="pos-cash-drawer-button"
+              onClick={() => navigate('/cash-drawer')}
+              className="h-9 md:h-10 px-3 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 text-xs md:text-sm font-medium btn-haptic flex items-center gap-1.5 transition-colors"
+              title="Open or close the cash drawer"
+            >
+              <Banknote className="w-4 h-4" />
+              <span className="hidden sm:inline">Cash</span>
             </button>
             <button
               data-testid="pos-logout-button"
@@ -981,9 +1054,94 @@ const POSScreen = () => {
           </div>
         </div>
 
-        {/* Products Grid or Pending Orders */}
+        {/* Products Grid, Pending Orders, or Tables Floor View */}
         <div className="flex-1 overflow-y-auto p-3 md:p-6 min-h-0">
-          {showPendingOrders ? (
+          {showTablesView ? (
+            <div className="space-y-4" data-testid="tables-floor-view">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <h2 className="text-xl md:text-2xl font-bold">Tables</h2>
+                <div className="flex items-center gap-3 text-xs flex-wrap">
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-emerald-200 border border-emerald-300"></span>Free</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-blue-200 border border-blue-300"></span>Occupied</span>
+                  <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded-sm bg-amber-200 border border-amber-300"></span>Multiple orders</span>
+                </div>
+              </div>
+              {tables.length === 0 ? (
+                <div className="text-center py-12 text-muted-foreground" data-testid="no-tables-msg">
+                  <UtensilsCrossed className="w-12 h-12 mx-auto mb-3 text-slate-300" />
+                  <p>No tables configured.</p>
+                  <p className="text-xs mt-1">Add tables in Settings → Tables.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                  {[...tables].sort((a, b) => (a.number || 0) - (b.number || 0)).map((table) => {
+                    const tableOrders = pendingOrders.filter(o => o.table_id === table.id);
+                    const occupied = tableOrders.length > 0;
+                    const total = tableOrders.reduce((s, o) => s + (o.total_amount || 0), 0);
+                    const bg = !occupied
+                      ? 'bg-emerald-50 border-emerald-200 hover:bg-emerald-100 hover:border-emerald-300'
+                      : tableOrders.length > 1
+                      ? 'bg-amber-50 border-amber-200 hover:bg-amber-100 hover:border-amber-300'
+                      : 'bg-blue-50 border-blue-200 hover:bg-blue-100 hover:border-blue-300';
+                    const onClickTable = () => {
+                      if (occupied) {
+                        // Load the existing pending order for this table into the cart
+                        const order = tableOrders[0];
+                        editPendingOrder(order);
+                        setShowTablesView(false);
+                        toast.success(`Table ${table.number} — editing order #${String(order.order_number).padStart(3, '0')}`);
+                      } else {
+                        // Start a fresh order on this table
+                        setSelectedTable(table.id);
+                        setCart([]);
+                        setEditingOrder(null);
+                        setShowTablesView(false);
+                        toast.success(`Table ${table.number} selected — add items and place order`);
+                      }
+                    };
+                    return (
+                      <button
+                        key={table.id}
+                        type="button"
+                        onClick={onClickTable}
+                        data-testid={`table-tile-${table.id}`}
+                        className={`text-left rounded-2xl border-2 p-4 transition-all ${bg} ${occupied ? 'shadow-sm' : ''}`}
+                      >
+                        <div className="flex items-start justify-between mb-2">
+                          <div>
+                            <p className="text-2xl font-bold text-slate-900">{table.number}</p>
+                            <p className="text-[11px] text-slate-500 mt-0.5">
+                              {table.capacity ? `${table.capacity} seats` : 'Table'}
+                            </p>
+                          </div>
+                          {occupied && (
+                            <span className="text-[10px] font-mono bg-white/70 text-slate-700 px-1.5 py-0.5 rounded">
+                              {tableOrders.length} {tableOrders.length === 1 ? 'order' : 'orders'}
+                            </span>
+                          )}
+                        </div>
+                        {occupied ? (
+                          <div>
+                            <p className="text-xs text-slate-600 truncate">
+                              #{String(tableOrders[0].order_number).padStart(3, '0')}
+                              {tableOrders.length > 1 && ` +${tableOrders.length - 1}`}
+                            </p>
+                            <p className="text-base font-bold font-mono text-blue-700 mt-1">
+                              {getCurrencySymbol(currency)}{total.toFixed(2)}
+                            </p>
+                          </div>
+                        ) : (
+                          <p className="text-xs font-semibold text-emerald-700 mt-3">
+                            + Start order
+                          </p>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          ) : showPendingOrders ? (
             <div className="space-y-4">
               <h2 className="text-2xl font-bold mb-4">Pending Orders</h2>
               {pendingOrders.length === 0 ? (
@@ -1321,49 +1479,18 @@ const POSScreen = () => {
             <div className="p-4 border-t space-y-3">
               <div className="flex gap-2">
                 <Button
-                  variant={showDiscountPanel ? "secondary" : "outline"}
-                  className="flex-1 h-10 text-sm"
-                  onClick={() => { setShowDiscountPanel(!showDiscountPanel); setShowNotesPanel(false); }}
-                  data-testid="toggle-discount-btn"
-                >
-                  <Percent className="w-4 h-4 mr-1" />
-                  Discount
-                  {discountValue && <span className="ml-1 text-emerald-600 text-xs">ON</span>}
-                </Button>
-                <Button
                   variant={showNotesPanel ? "secondary" : "outline"}
                   className="flex-1 h-10 text-sm"
-                  onClick={() => { setShowNotesPanel(!showNotesPanel); setShowDiscountPanel(false); }}
+                  onClick={() => setShowNotesPanel(!showNotesPanel)}
                   data-testid="toggle-notes-btn"
                 >
                   <MessageSquare className="w-4 h-4 mr-1" />
-                  Notes
+                  Order Notes
                   {orderNotes && <span className="ml-1 text-emerald-600 text-xs">ON</span>}
                 </Button>
               </div>
 
-              {showDiscountPanel && (
-                <div className="p-3 bg-slate-50 rounded-lg space-y-2">
-                  <div className="flex gap-2">
-                    <Button variant={discountType === 'percentage' ? 'default' : 'outline'} onClick={() => setDiscountType('percentage')} className="flex-1 h-9 text-sm">
-                      <Percent className="w-3 h-3 mr-1" /> %
-                    </Button>
-                    <Button variant={discountType === 'fixed' ? 'default' : 'outline'} onClick={() => setDiscountType('fixed')} className="flex-1 h-9 text-sm">
-                      <Tag className="w-3 h-3 mr-1" /> Fixed
-                    </Button>
-                  </div>
-                  {discountType && (
-                    <>
-                      <Input type="number" placeholder={discountType === 'percentage' ? 'Enter %' : `Enter ${getCurrencySymbol(currency)}`} value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} data-testid="discount-value-input" className="h-9" />
-                      <Input placeholder="Reason (optional)" value={discountReason} onChange={(e) => setDiscountReason(e.target.value)} data-testid="discount-reason-input" className="h-9" />
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => { setDiscountType(''); setDiscountValue(''); setDiscountReason(''); }} className="flex-1">Clear</Button>
-                        <Button size="sm" onClick={() => setShowDiscountPanel(false)} className="flex-1">Apply</Button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
+              {/* Discount UI moved to the Payment dialog (charged at till time, not order entry) */}
 
               {showNotesPanel && (
                 <div className="p-3 bg-slate-50 rounded-lg space-y-2">
@@ -1428,7 +1555,7 @@ const POSScreen = () => {
         return (
           <>
             {/* Desktop Order Sidebar */}
-            <div className="hidden md:flex w-[340px] lg:w-[380px] xl:w-[400px] bg-white border-l border-slate-200/60 flex-col cart-sidebar">
+            <div className="hidden md:flex w-[280px] lg:w-[340px] xl:w-[380px] 2xl:w-[400px] bg-white border-l border-slate-200/60 flex-col cart-sidebar">
               {cartContent}
             </div>
 
@@ -1464,7 +1591,7 @@ const POSScreen = () => {
 
       {/* Payment Method Dialog */}
       <Dialog open={showPaymentDialog} onOpenChange={setShowPaymentDialog}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-md max-h-[88vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               Complete Payment
@@ -1489,7 +1616,65 @@ const POSScreen = () => {
                 <span>Subtotal:</span>
                 <span className="font-mono">{getCurrencySymbol(currency)}{selectedOrderToComplete?.subtotal?.toFixed(2)}</span>
               </div>
-              
+
+              {/* Discount Section (applied at PAYMENT TIME — customer requested) */}
+              <Separator className="my-3" />
+              <div className="space-y-3" data-testid="payment-discount-section">
+                <Label className="text-sm font-semibold flex items-center gap-2">
+                  <Percent className="w-4 h-4" /> Apply Discount
+                </Label>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    size="sm"
+                    variant={!payDiscountType ? 'default' : 'outline'}
+                    onClick={() => { setPayDiscountType(''); setPayDiscountValue(''); setPayDiscountReason(''); }}
+                    data-testid="pay-discount-none"
+                  >None</Button>
+                  <Button
+                    size="sm"
+                    variant={payDiscountType === 'percentage' ? 'default' : 'outline'}
+                    onClick={() => setPayDiscountType('percentage')}
+                    data-testid="pay-discount-percentage"
+                  >% off</Button>
+                  <Button
+                    size="sm"
+                    variant={payDiscountType === 'fixed' ? 'default' : 'outline'}
+                    onClick={() => setPayDiscountType('fixed')}
+                    data-testid="pay-discount-fixed"
+                  >{getCurrencySymbol(currency)} off</Button>
+                </div>
+                {payDiscountType && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder={payDiscountType === 'percentage' ? 'e.g. 10 for 10%' : `e.g. 5 for ${getCurrencySymbol(currency)}5`}
+                      value={payDiscountValue}
+                      onChange={(e) => setPayDiscountValue(e.target.value)}
+                      data-testid="pay-discount-value-input"
+                      className="h-10"
+                    />
+                    <Input
+                      type="text"
+                      placeholder="Reason (optional)"
+                      value={payDiscountReason}
+                      onChange={(e) => setPayDiscountReason(e.target.value)}
+                      data-testid="pay-discount-reason-input"
+                      className="h-10"
+                    />
+                  </div>
+                )}
+                {calculatePayDiscountAmount() > 0 && (
+                  <div className="flex justify-between text-sm" data-testid="pay-discount-amount-row">
+                    <span>Discount{payDiscountReason ? ` (${payDiscountReason})` : ''}:</span>
+                    <span className="font-mono text-red-600">
+                      -{getCurrencySymbol(currency)}{calculatePayDiscountAmount().toFixed(2)}
+                    </span>
+                  </div>
+                )}
+              </div>
+
               {/* Tip Section */}
               <Separator className="my-3" />
               <div className="space-y-3">
