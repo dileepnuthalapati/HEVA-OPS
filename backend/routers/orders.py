@@ -106,6 +106,18 @@ async def update_order(order_id: str, order_data: OrderCreate, current_user: Use
     new_items = [item.model_dump() for item in order_data.items]
     old_total = existing.get("total_amount", 0)
 
+    # Preserve the printed_to_kitchen flag for items that already exist on
+    # this order. Match by product_id + product_name + unit_price so that
+    # quantity changes are correctly treated as a printed item (since the
+    # kitchen already received the line). Items added net-new keep the
+    # default printed_to_kitchen=False so the delta-print logic picks them up.
+    def _printed_key(it):
+        return (it.get("product_id"), it.get("product_name"), it.get("unit_price"))
+    printed_keys = {_printed_key(i) for i in old_items if i.get("printed_to_kitchen")}
+    for ni in new_items:
+        if _printed_key(ni) in printed_keys:
+            ni["printed_to_kitchen"] = True
+
     update_dict = {
         "items": new_items,
         "subtotal": order_data.subtotal,
@@ -180,6 +192,16 @@ async def complete_order(order_id: str, complete_data: OrderComplete, current_us
         "status": "completed",
         "completed_at": datetime.now(timezone.utc).isoformat()
     }
+
+    # Apply discount at payment time (preferred path). If the client
+    # sends discount fields here, persist them onto the order so the
+    # receipt / reports reflect what was actually paid.
+    if complete_data.discount_type or complete_data.discount_amount:
+        update_dict["discount_type"] = complete_data.discount_type
+        update_dict["discount_value"] = complete_data.discount_value or 0
+        update_dict["discount_amount"] = complete_data.discount_amount or 0
+        if complete_data.discount_reason:
+            update_dict["discount_reason"] = complete_data.discount_reason
 
     await db.orders.update_one({"id": order_id}, {"$set": update_dict})
 

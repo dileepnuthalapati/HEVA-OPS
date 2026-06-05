@@ -96,6 +96,7 @@ class Order(BaseModel):
     discount_amount: Optional[float] = 0.0
     discount_type: Optional[str] = None
     discount_value: Optional[float] = None
+    discount_reason: Optional[str] = None
     tip_amount: Optional[float] = 0.0
     tip_percentage: Optional[float] = 0.0
     total_amount: float = 0.0
@@ -132,6 +133,13 @@ class OrderComplete(BaseModel):
     tip_percentage: Optional[float] = 0.0
     total_amount: Optional[float] = None
     payment_details: Optional[dict] = None
+    # Discount applied at PAYMENT TIME (preferred path). If not provided
+    # we fall back to whatever was stored on the order during creation
+    # (backward-compat with older clients).
+    discount_type: Optional[str] = None
+    discount_value: Optional[float] = 0.0
+    discount_amount: Optional[float] = 0.0
+    discount_reason: Optional[str] = None
 
 
 class CancelOrderRequest(BaseModel):

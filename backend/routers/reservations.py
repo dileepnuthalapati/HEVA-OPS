@@ -14,13 +14,13 @@ async def get_reservations(
     status: str = None,
     current_user: User = Depends(get_current_user)
 ):
-    query = {}
-    if current_user.role != 'platform_owner' and current_user.restaurant_id:
-        query["$or"] = [
-            {"restaurant_id": current_user.restaurant_id},
-            {"restaurant_id": None},
-            {"restaurant_id": {"$exists": False}}
-        ]
+    # STRICT tenant isolation — never include orphans
+    if current_user.role == 'platform_owner':
+        query = {}
+    else:
+        if not current_user.restaurant_id:
+            return []
+        query = {"restaurant_id": current_user.restaurant_id}
     if date:
         query["date"] = date
     if status:

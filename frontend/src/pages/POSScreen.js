@@ -67,6 +67,13 @@ const POSScreen = () => {
   const [cashAmount, setCashAmount] = useState('');
   const [cardAmount, setCardAmount] = useState('');
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('cash');
+
+  // Payment-time discount (applied in the Payment dialog at the till, not
+  // when the order is first taken). This is independent of the legacy
+  // cart-side discount state above which we keep for backward-compat.
+  const [payDiscountType, setPayDiscountType] = useState('');  // '', 'percentage', 'fixed'
+  const [payDiscountValue, setPayDiscountValue] = useState('');
+  const [payDiscountReason, setPayDiscountReason] = useState('');
   
   // Product search
   const [searchQuery, setSearchQuery] = useState('');
@@ -427,13 +434,17 @@ const POSScreen = () => {
 
   // Edit a pending order - load items into cart
   const editPendingOrder = (order) => {
-    // Load order items into cart
+    // Load order items into cart, preserving the per-item flags so the
+    // backend can correctly identify which items have already been sent
+    // to the kitchen (prevents reprinting the entire order).
     setCart(order.items.map(item => ({
       product_id: item.product_id,
       product_name: item.product_name,
       quantity: item.quantity,
       unit_price: item.unit_price,
       total: item.total,
+      notes: item.notes || '',
+      printed_to_kitchen: item.printed_to_kitchen === true,
     })));
     
     // Set order details
@@ -492,6 +503,8 @@ const POSScreen = () => {
           settings: printSettings,
         });
         if (res.ok) {
+          // Server-side: mark all items as printed so the next edit only
+          // delta-prints anything newly added after this point.
           orderAPI.markPrinted(editingOrder.id).catch(() => {});
         }
       } catch (e) {
@@ -661,25 +674,39 @@ const POSScreen = () => {
     setShowPaymentDialog(true);
   };
 
+  // Payment-time discount calculation (works alongside any legacy
+  // cart-side discount that may be stored on the order itself)
+  const calculatePayDiscountAmount = () => {
+    if (!selectedOrderToComplete) return 0;
+    const subtotal = selectedOrderToComplete.subtotal || 0;
+    if (!payDiscountType || !payDiscountValue) return 0;
+    const v = parseFloat(payDiscountValue) || 0;
+    if (payDiscountType === 'percentage') return +(subtotal * v / 100).toFixed(2);
+    if (payDiscountType === 'fixed') return +Math.min(v, subtotal).toFixed(2);
+    return 0;
+  };
+
   const calculateTipAmount = () => {
     if (!selectedOrderToComplete) return 0;
-    
+
     if (customTip) {
       return parseFloat(customTip) || 0;
     }
-    
+
     if (tipPercentage > 0) {
-      const baseAmount = (selectedOrderToComplete.subtotal || 0) - (selectedOrderToComplete.discount_amount || 0);
+      const legacyDiscount = selectedOrderToComplete.discount_amount || 0;
+      const baseAmount = (selectedOrderToComplete.subtotal || 0) - legacyDiscount - calculatePayDiscountAmount();
       return (baseAmount * tipPercentage) / 100;
     }
-    
+
     return 0;
   };
 
   const calculateGrandTotal = () => {
     if (!selectedOrderToComplete) return 0;
-    const baseAmount = (selectedOrderToComplete.subtotal || 0) - (selectedOrderToComplete.discount_amount || 0);
-    return baseAmount + calculateTipAmount();
+    const legacyDiscount = selectedOrderToComplete.discount_amount || 0;
+    const baseAmount = (selectedOrderToComplete.subtotal || 0) - legacyDiscount - calculatePayDiscountAmount();
+    return Math.max(0, baseAmount + calculateTipAmount());
   };
 
   const calculatePerPersonAmount = () => {
@@ -717,15 +744,27 @@ const POSScreen = () => {
     }
 
     try {
+      const payDiscountAmount = calculatePayDiscountAmount();
+      const discountPayload = (payDiscountType && payDiscountValue)
+        ? {
+            discount_type: payDiscountType,
+            discount_value: parseFloat(payDiscountValue) || 0,
+            discount_amount: payDiscountAmount,
+            discount_reason: payDiscountReason || null,
+            total_amount: grandTotal,
+          }
+        : null;
+
       const completedOrder = await orderAPI.complete(
-        selectedOrderToComplete.id, 
+        selectedOrderToComplete.id,
         paymentMethod,
         tipPercentage,
         tipAmount,
         splitCount,
-        paymentDetails
+        paymentDetails,
+        discountPayload,
       );
-      
+
       // Try to print customer receipt LOCALLY (no backend needed — works offline)
       try {
         const receiptOrder = {
@@ -733,6 +772,10 @@ const POSScreen = () => {
           payment_method: paymentMethod,
           tip_amount: tipAmount,
           total_amount: grandTotal,
+          discount_type: payDiscountType || selectedOrderToComplete.discount_type,
+          discount_value: payDiscountValue ? parseFloat(payDiscountValue) : selectedOrderToComplete.discount_value,
+          discount_amount: payDiscountAmount || selectedOrderToComplete.discount_amount || 0,
+          discount_reason: payDiscountReason || selectedOrderToComplete.discount_reason,
         };
         await posPrintService.printCustomerReceipt({
           order: receiptOrder,
@@ -766,6 +809,9 @@ const POSScreen = () => {
       setSplitPaymentMode(false);
       setCashAmount('');
       setCardAmount('');
+      setPayDiscountType('');
+      setPayDiscountValue('');
+      setPayDiscountReason('');
       loadPendingOrders();
       loadCompletedOrders();
       
@@ -906,6 +952,15 @@ const POSScreen = () => {
               <Receipt className="w-4 h-4" />
               <span className="hidden sm:inline">Pending</span>
               <span className="font-mono bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded-md text-[11px]">{pendingOrders.length}</span>
+            </button>
+            <button
+              data-testid="pos-cash-drawer-button"
+              onClick={() => navigate('/cash-drawer')}
+              className="h-9 md:h-10 px-3 rounded-xl bg-white border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-700 text-xs md:text-sm font-medium btn-haptic flex items-center gap-1.5 transition-colors"
+              title="Open or close the cash drawer"
+            >
+              <Banknote className="w-4 h-4" />
+              <span className="hidden sm:inline">Cash</span>
             </button>
             <button
               data-testid="pos-logout-button"
@@ -1321,49 +1376,18 @@ const POSScreen = () => {
             <div className="p-4 border-t space-y-3">
               <div className="flex gap-2">
                 <Button
-                  variant={showDiscountPanel ? "secondary" : "outline"}
-                  className="flex-1 h-10 text-sm"
-                  onClick={() => { setShowDiscountPanel(!showDiscountPanel); setShowNotesPanel(false); }}
-                  data-testid="toggle-discount-btn"
-                >
-                  <Percent className="w-4 h-4 mr-1" />
-                  Discount
-                  {discountValue && <span className="ml-1 text-emerald-600 text-xs">ON</span>}
-                </Button>
-                <Button
                   variant={showNotesPanel ? "secondary" : "outline"}
                   className="flex-1 h-10 text-sm"
-                  onClick={() => { setShowNotesPanel(!showNotesPanel); setShowDiscountPanel(false); }}
+                  onClick={() => setShowNotesPanel(!showNotesPanel)}
                   data-testid="toggle-notes-btn"
                 >
                   <MessageSquare className="w-4 h-4 mr-1" />
-                  Notes
+                  Order Notes
                   {orderNotes && <span className="ml-1 text-emerald-600 text-xs">ON</span>}
                 </Button>
               </div>
 
-              {showDiscountPanel && (
-                <div className="p-3 bg-slate-50 rounded-lg space-y-2">
-                  <div className="flex gap-2">
-                    <Button variant={discountType === 'percentage' ? 'default' : 'outline'} onClick={() => setDiscountType('percentage')} className="flex-1 h-9 text-sm">
-                      <Percent className="w-3 h-3 mr-1" /> %
-                    </Button>
-                    <Button variant={discountType === 'fixed' ? 'default' : 'outline'} onClick={() => setDiscountType('fixed')} className="flex-1 h-9 text-sm">
-                      <Tag className="w-3 h-3 mr-1" /> Fixed
-                    </Button>
-                  </div>
-                  {discountType && (
-                    <>
-                      <Input type="number" placeholder={discountType === 'percentage' ? 'Enter %' : `Enter ${getCurrencySymbol(currency)}`} value={discountValue} onChange={(e) => setDiscountValue(e.target.value)} data-testid="discount-value-input" className="h-9" />
-                      <Input placeholder="Reason (optional)" value={discountReason} onChange={(e) => setDiscountReason(e.target.value)} data-testid="discount-reason-input" className="h-9" />
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="outline" onClick={() => { setDiscountType(''); setDiscountValue(''); setDiscountReason(''); }} className="flex-1">Clear</Button>
-                        <Button size="sm" onClick={() => setShowDiscountPanel(false)} className="flex-1">Apply</Button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
+              {/* Discount UI moved to the Payment dialog (charged at till time, not order entry) */}
 
               {showNotesPanel && (
                 <div className="p-3 bg-slate-50 rounded-lg space-y-2">
@@ -1489,7 +1513,65 @@ const POSScreen = () => {
                 <span>Subtotal:</span>
                 <span className="font-mono">{getCurrencySymbol(currency)}{selectedOrderToComplete?.subtotal?.toFixed(2)}</span>
               </div>
-              
+
+              {/* Discount Section (applied at PAYMENT TIME — customer requested) */}
+              <Separator className="my-3" />
+              <div className="space-y-3" data-testid="payment-discount-section">
+                <Label className="text-sm font-semibold flex items-center gap-2">
+                  <Percent className="w-4 h-4" /> Apply Discount
+                </Label>
+                <div className="grid grid-cols-3 gap-2">
+                  <Button
+                    size="sm"
+                    variant={!payDiscountType ? 'default' : 'outline'}
+                    onClick={() => { setPayDiscountType(''); setPayDiscountValue(''); setPayDiscountReason(''); }}
+                    data-testid="pay-discount-none"
+                  >None</Button>
+                  <Button
+                    size="sm"
+                    variant={payDiscountType === 'percentage' ? 'default' : 'outline'}
+                    onClick={() => setPayDiscountType('percentage')}
+                    data-testid="pay-discount-percentage"
+                  >% off</Button>
+                  <Button
+                    size="sm"
+                    variant={payDiscountType === 'fixed' ? 'default' : 'outline'}
+                    onClick={() => setPayDiscountType('fixed')}
+                    data-testid="pay-discount-fixed"
+                  >{getCurrencySymbol(currency)} off</Button>
+                </div>
+                {payDiscountType && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      placeholder={payDiscountType === 'percentage' ? 'e.g. 10 for 10%' : `e.g. 5 for ${getCurrencySymbol(currency)}5`}
+                      value={payDiscountValue}
+                      onChange={(e) => setPayDiscountValue(e.target.value)}
+                      data-testid="pay-discount-value-input"
+                      className="h-10"
+                    />
+                    <Input
+                      type="text"
+                      placeholder="Reason (optional)"
+                      value={payDiscountReason}
+                      onChange={(e) => setPayDiscountReason(e.target.value)}
+                      data-testid="pay-discount-reason-input"
+                      className="h-10"
+                    />
+                  </div>
+                )}
+                {calculatePayDiscountAmount() > 0 && (
+                  <div className="flex justify-between text-sm" data-testid="pay-discount-amount-row">
+                    <span>Discount{payDiscountReason ? ` (${payDiscountReason})` : ''}:</span>
+                    <span className="font-mono text-red-600">
+                      -{getCurrencySymbol(currency)}{calculatePayDiscountAmount().toFixed(2)}
+                    </span>
+                  </div>
+                )}
+              </div>
+
               {/* Tip Section */}
               <Separator className="my-3" />
               <div className="space-y-3">
