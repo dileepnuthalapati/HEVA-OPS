@@ -140,6 +140,30 @@ Six critical issues reported by SKAdmin after live operation; all six resolved (
    - AttendancePage: "Force out" button now shows on every active staff row regardless of shift duration. Backend caps hours only when > MAX_SHIFT_HOURS (14h); under that, uses actual elapsed time and skips the `needs_staff_correction` flag.
    - New `GET /api/timesheets/export.csv?start_date=&end_date=` — returns BOM-prefixed UTF-8 CSV with TOTAL row. Monthly-salary staff use weekly share (`/4.33 × weeks_in_window`) consistent with the on-screen summary. Three frontend buttons: Current Week, Current Month, Custom Range (popover with date inputs).
 
+## Field Bug Sprint Part 2 (Feb 13, 2026) — Customer Follow-up
+
+After the first batch of 6 fixes, customer reported 3 more issues. All fixed and curl-verified.
+
+1. **Tables count still wrong on Dashboard (Issue 1)** ✅
+   - Root cause: `/api/reports/today` had `db.tables.count_documents({})` and `db.tables.count_documents({"status":"occupied"})` — **system-wide** counts, no tenant filter.
+   - Fix: Both queries now scoped to `restaurant_id == current_user.restaurant_id`.
+   - The first sprint fixed `/tables` and `/reservations` GETs; this one closes the third leak point (the dashboard counter).
+   - Verified: `/tables` (4) and `/reports/today.total_tables` (4) now agree.
+
+2. **Shift scheduler missing "Day off" option (Issue 2)** ✅
+   - Cells previously had only a `+` button to add a shift. To mark a single day off, manager had to use the week-off action which marks the whole week.
+   - New backend endpoints: `POST /api/shifts/mark-day-off` (creates an auto-approved 1-day leave + removes any shift on that date) and `POST /api/shifts/clear-day-off` (undo).
+   - Frontend: Empty cells now show `[ + ] [ OFF ]` side-by-side. Click `OFF` → confirm → cell becomes a hard-block day off.
+   - Note: route registration order matters in FastAPI — `clear-day-off` registered as POST (not DELETE) to avoid being captured by `DELETE /shifts/{shift_id}` which would interpret `clear-day-off` as a shift ID.
+
+3. **`+` button still showing after shift published (Issue 3)** ✅
+   - Cells with an existing shift no longer render the dashed `+ / OFF` row, removing the clutter the customer screenshot called out.
+   - The shift card itself remains clickable for editing — managers click the shift to modify times. To add a second shift on the same person/day, they delete the existing shift first (cleaner UX than allowing multiple shifts per cell, which is rare for restaurants).
+
+### Customer action items for live Railway:
+- Redeploy Railway (preview already has fixes)
+- As platform_owner: `GET /api/platform/orphans` → `DELETE /api/platform/orphans?collection=tables&confirm=true` to drop legacy orphan tables. Murari's 19 → 10 in real-time.
+
 ## Upcoming
 ### Field Bug Sprint (Feb 12, 2026) — Customer Murari report
 

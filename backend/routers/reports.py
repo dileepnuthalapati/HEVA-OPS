@@ -348,9 +348,12 @@ async def get_today_stats(sort_top_by: str = "revenue", current_user: User = Dep
     qr_orders = len([o for o in orders if o.get("source") == "qr"])
     pos_orders = total_orders - qr_orders
 
-    # Open tables count
-    open_tables = await db.tables.count_documents({"status": "occupied"})
-    total_tables = await db.tables.count_documents({})
+    # Open tables count — must be tenant-scoped (was leaking other restaurants' tables)
+    table_filter = {}
+    if current_user.restaurant_id:
+        table_filter["restaurant_id"] = current_user.restaurant_id
+    open_tables = await db.tables.count_documents({**table_filter, "status": "occupied"})
+    total_tables = await db.tables.count_documents(table_filter)
 
     return {
         "total_sales": round(total_sales, 2),

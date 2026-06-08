@@ -603,6 +603,19 @@ export const shiftAPI = {
     const response = await api.delete(`/shifts/clear-week-off?staff_id=${staffId}&week_start_date=${weekStartDate}`);
     return response.data;
   },
+  markDayOff: async (staffId, date, reason, note) => {
+    const response = await api.post('/shifts/mark-day-off', {
+      staff_id: staffId,
+      date,
+      reason: reason || 'personal',
+      note: note || null,
+    });
+    return response.data;
+  },
+  clearDayOff: async (staffId, date) => {
+    const response = await api.post(`/shifts/clear-day-off?staff_id=${staffId}&date=${date}`);
+    return response.data;
+  },
 };
 
 export const attendanceAPI = {

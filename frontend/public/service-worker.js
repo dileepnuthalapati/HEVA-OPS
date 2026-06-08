@@ -16,7 +16,7 @@
  *   • Bump CACHE_NAME on every deploy to evict stale entries.
  */
 
-const CACHE_NAME = 'heva-one-v14-2026-02-13-responsive-tables';
+const CACHE_NAME = 'heva-one-v15-2026-02-13-day-off-table-fix';
 const HASHED_STATIC = /^\/static\/(?:js|css|media)\//;
 const OTHER_ASSET_EXT = /\.(?:woff2?|ttf|eot|otf|png|jpg|jpeg|gif|svg|ico|webp)$/i;
 

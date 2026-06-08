@@ -253,3 +253,95 @@ async def mark_week_off(data: MarkWeekOffRequest, current_user: User = Depends(r
         "shifts_removed": shift_result.deleted_count,
         "leave_id": leave_doc["id"],
     }
+
+
+class MarkDayOffRequest(BaseModel):
+    staff_id: str
+    date: str  # YYYY-MM-DD
+    reason: Optional[str] = "personal"
+    note: Optional[str] = None
+
+
+@router.post("/shifts/mark-day-off")
+async def mark_day_off(data: MarkDayOffRequest, current_user: User = Depends(require_rota_manager)):
+    """Manager marks a staff as off for a single day.
+    - Deletes any existing shift for that staff on that date.
+    - Creates an auto-approved single-day leave entry so the scheduler shows
+      a hard block (same visual as a week off, but only 1 day).
+    """
+    staff = await db.users.find_one(
+        {"id": data.staff_id, "restaurant_id": current_user.restaurant_id},
+        {"_id": 0, "id": 1, "username": 1}
+    )
+    if not staff:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+
+    try:
+        datetime.strptime(data.date, "%Y-%m-%d")
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+
+    # Remove any existing shift for this staff on this date
+    shift_result = await db.shifts.delete_many({
+        "restaurant_id": current_user.restaurant_id,
+        "staff_id": data.staff_id,
+        "date": data.date,
+    })
+
+    # Remove any conflicting existing leave for this staff on this date
+    await db.leave_requests.delete_many({
+        "restaurant_id": current_user.restaurant_id,
+        "staff_id": data.staff_id,
+        "status": {"$in": ["pending", "approved"]},
+        "start_date": {"$lte": data.date},
+        "end_date": {"$gte": data.date},
+    })
+
+    now = datetime.now(timezone.utc)
+    leave_doc = {
+        "id": f"leave_{now.timestamp()}_{data.staff_id}",
+        "restaurant_id": current_user.restaurant_id,
+        "staff_id": data.staff_id,
+        "staff_name": staff.get("username", ""),
+        "start_date": data.date,
+        "end_date": data.date,
+        "days": 1,
+        "leave_type": data.reason or "personal",
+        "note": data.note or f"Day off marked by {current_user.username}",
+        "status": "approved",
+        "approved_by": current_user.username,
+        "approved_at": now.isoformat(),
+        "created_at": now.isoformat(),
+    }
+    await db.leave_requests.insert_one(leave_doc)
+
+    # Notify the staff
+    await db.notifications.insert_one({
+        "id": f"notif_{now.timestamp()}_{data.staff_id}",
+        "restaurant_id": current_user.restaurant_id,
+        "staff_id": data.staff_id,
+        "type": "day_off_assigned",
+        "ref_id": leave_doc["id"],
+        "title": "Day Off",
+        "message": f"You have been marked off on {data.date}.",
+        "read": False,
+        "created_at": now.isoformat(),
+    })
+
+    return {
+        "message": f"{staff['username']} marked off on {data.date}. Removed {shift_result.deleted_count} shift(s).",
+        "leave_id": leave_doc["id"],
+    }
+
+
+@router.post("/shifts/clear-day-off")
+async def clear_day_off(staff_id: str, date: str, current_user: User = Depends(require_rota_manager)):
+    """Manager undoes a single-day off (deletes the auto-approved leave)."""
+    result = await db.leave_requests.delete_many({
+        "restaurant_id": current_user.restaurant_id,
+        "staff_id": staff_id,
+        "start_date": date,
+        "end_date": date,
+        "status": "approved",
+    })
+    return {"message": f"Cleared {result.deleted_count} day-off entry(ies) for {date}", "deleted": result.deleted_count}
