@@ -378,20 +378,41 @@ export default function ShiftScheduler() {
                                   )}
                                 </div>
                               ))}
-                              {(user?.role === 'admin' || user?.capabilities?.includes('workforce.manage_rota')) && !isHardBlock && !isPast && (
-                                <button
-                                  className="w-full h-7 rounded-lg border border-dashed border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-slate-400 hover:text-indigo-500 transition-all flex items-center justify-center"
-                                  onClick={() => {
-                                    if (isPendingLeave || isSoftBlock) {
-                                      if (!window.confirm(`${staff?.username || 'This person'} has a ${block?.reason || 'conflict'} on this day. Schedule anyway?`)) return;
-                                    }
-                                    openAdd(date, sid);
-                                  }}
-                                  data-testid={`add-shift-${date}`}
-                                >
-                                  <Plus className="w-3.5 h-3.5" />
-                                  {(isPendingLeave || isSoftBlock) && <span className="ml-0.5 text-amber-500 text-[9px]">!</span>}
-                                </button>
+                              {(user?.role === 'admin' || user?.capabilities?.includes('workforce.manage_rota')) && !isHardBlock && !isPast && dayShifts.length === 0 && (
+                                <div className="flex gap-1" data-testid={`actions-${sid}-${date}`}>
+                                  <button
+                                    className="flex-1 h-7 rounded-lg border border-dashed border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-slate-400 hover:text-indigo-500 transition-all flex items-center justify-center"
+                                    onClick={() => {
+                                      if (isPendingLeave || isSoftBlock) {
+                                        if (!window.confirm(`${staff?.username || 'This person'} has a ${block?.reason || 'conflict'} on this day. Schedule anyway?`)) return;
+                                      }
+                                      openAdd(date, sid);
+                                    }}
+                                    data-testid={`add-shift-${date}`}
+                                    title="Add a shift"
+                                  >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    {(isPendingLeave || isSoftBlock) && <span className="ml-0.5 text-amber-500 text-[9px]">!</span>}
+                                  </button>
+                                  <button
+                                    className="h-7 w-7 rounded-lg border border-dashed border-slate-200 hover:border-slate-400 hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all flex items-center justify-center"
+                                    onClick={async (e) => {
+                                      e.stopPropagation();
+                                      if (!window.confirm(`Mark ${staff?.username || 'this person'} as off on ${date}?`)) return;
+                                      try {
+                                        const res = await shiftAPI.markDayOff(sid, date, 'personal', null);
+                                        toast.success(res.message);
+                                        loadData();
+                                      } catch (err) {
+                                        toast.error(err.response?.data?.detail || 'Failed to mark day off');
+                                      }
+                                    }}
+                                    data-testid={`day-off-${sid}-${date}`}
+                                    title="Mark this day off"
+                                  >
+                                    <span className="text-[10px] font-bold leading-none">OFF</span>
+                                  </button>
+                                </div>
                               )}
                             </td>
                           );
