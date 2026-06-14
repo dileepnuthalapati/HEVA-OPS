@@ -228,6 +228,17 @@ export default function ShiftScheduler() {
     setDraftOffs(prev => [...prev.filter(d => !(d.staffId === sid && d.date === date)), { staffId: sid, date, type: 'day_off' }]);
   };
 
+  // Admin clicks an already-committed Day Off / Leave block → stage a removal
+  // (committed on Publish). Clicking again undoes the staged removal.
+  const toggleRemoveCommittedBlock = (sid, date) => {
+    const already = draftRemovals.some(r => r.staffId === sid && !r.bulk && r.date === date);
+    if (already) {
+      setDraftRemovals(prev => prev.filter(r => !(r.staffId === sid && !r.bulk && r.date === date)));
+    } else {
+      setDraftRemovals(prev => [...prev, { staffId: sid, date }]);
+    }
+  };
+
   const removeDraftDayOff = (sid, date) => {
     setDraftOffs(prev => prev.filter(d => !(d.staffId === sid && d.date === date)));
     setDraftRemovals(prev => prev.filter(r => !(r.staffId === sid && r.date === date)));
@@ -418,7 +429,10 @@ export default function ShiftScheduler() {
                           const queuedRemove = draftRemovals.some(r =>
                             r.staffId === sid && (r.bulk || r.date === date)
                           );
-                          const isHardBlock = block?.block_type === 'hard' && !queuedRemove;
+                          const queuedSingleRemove = draftRemovals.some(r =>
+                            r.staffId === sid && !r.bulk && r.date === date
+                          );
+                          const isHardBlock = block?.block_type === 'hard';
                           const isPendingLeave = block?.block_type === 'pending_leave';
                           const isSoftBlock = block?.block_type === 'soft';
                           const isDraftDayOff = draftOffs.some(d =>
@@ -431,11 +445,17 @@ export default function ShiftScheduler() {
                           // mark-day-off / mark-week-off.
                           const isAdminOff = isHardBlock && (block?.set_by_admin || block?.bulk_week_off);
                           const isEmployeeLeave = isHardBlock && !isAdminOff;
-                          const showRedOff = isHardBlock || isDraftDayOff;
+                          // Cell is "in off state" — shifts get hidden, action
+                          // buttons get hidden. When a removal is queued the
+                          // cell visually shows the block as fading/struck.
+                          const canManage = user?.role === 'admin' || user?.capabilities?.includes('workforce.manage_rota');
+                          const showRedOff = (isHardBlock && !queuedRemove) || isDraftDayOff;
+                          const isQueuedRemove = isHardBlock && queuedRemove;
                           return (
                             <td key={date} className={`p-1.5 align-top relative ${
                               isPast ? 'bg-slate-50/80 opacity-60' :
                               showRedOff ? 'bg-red-50' :
+                              isQueuedRemove ? 'bg-amber-50/60' :
                               isToday ? 'bg-indigo-50/50' :
                               isPendingLeave ? 'bg-red-50/60' :
                               isSoftBlock ? 'bg-orange-50/40' : ''
@@ -453,17 +473,59 @@ export default function ShiftScheduler() {
                                   <span className="block text-[8px] font-medium opacity-80">Draft · click to undo</span>
                                 </button>
                               )}
-                              {/* Committed admin off — Week Off / Day Off */}
-                              {isAdminOff && (
-                                <div className="text-center py-1 rounded-md bg-red-500 text-white text-[10px] font-bold uppercase tracking-wider" data-testid={`block-${sid}-${date}`}>
-                                  {block.bulk_week_off ? 'Week Off' : 'Day Off'}
-                                </div>
+                              {/* Committed admin off — Week Off / Day Off (clickable for admins) */}
+                              {isHardBlock && isAdminOff && !queuedRemove && (
+                                canManage ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => block.bulk_week_off
+                                      ? handleClearWeekOff(sid, staff?.username || 'staff')
+                                      : toggleRemoveCommittedBlock(sid, date)
+                                    }
+                                    className="w-full text-center py-1 rounded-md bg-red-500 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-red-600 transition-colors"
+                                    title={block.bulk_week_off ? 'Click to undo week off' : 'Click to remove this day off'}
+                                    data-testid={`block-${sid}-${date}`}
+                                  >
+                                    {block.bulk_week_off ? 'Week Off' : 'Day Off'}
+                                    <span className="block text-[8px] font-medium opacity-80">Click to remove</span>
+                                  </button>
+                                ) : (
+                                  <div className="text-center py-1 rounded-md bg-red-500 text-white text-[10px] font-bold uppercase tracking-wider" data-testid={`block-${sid}-${date}`}>
+                                    {block.bulk_week_off ? 'Week Off' : 'Day Off'}
+                                  </div>
+                                )
                               )}
-                              {/* Committed employee leave */}
-                              {isEmployeeLeave && (
-                                <div className="text-center py-1 rounded-md bg-red-100 text-red-700 border border-red-300 text-[10px] font-bold uppercase tracking-wider" data-testid={`leave-${sid}-${date}`}>
-                                  Leave
-                                </div>
+                              {/* Committed employee leave (admin can clear) */}
+                              {isHardBlock && isEmployeeLeave && !queuedRemove && (
+                                canManage ? (
+                                  <button
+                                    type="button"
+                                    onClick={() => toggleRemoveCommittedBlock(sid, date)}
+                                    className="w-full text-center py-1 rounded-md bg-red-100 text-red-700 border border-red-300 text-[10px] font-bold uppercase tracking-wider hover:bg-red-200 transition-colors"
+                                    title="Click to clear this approved leave"
+                                    data-testid={`leave-${sid}-${date}`}
+                                  >
+                                    Leave
+                                    <span className="block text-[8px] font-medium opacity-80">Click to clear</span>
+                                  </button>
+                                ) : (
+                                  <div className="text-center py-1 rounded-md bg-red-100 text-red-700 border border-red-300 text-[10px] font-bold uppercase tracking-wider" data-testid={`leave-${sid}-${date}`}>
+                                    Leave
+                                  </div>
+                                )
+                              )}
+                              {/* Queued removal — admin clicked an existing block and Publish hasn't run yet */}
+                              {isQueuedRemove && (
+                                <button
+                                  type="button"
+                                  onClick={() => toggleRemoveCommittedBlock(sid, date)}
+                                  className="w-full text-center py-1 rounded-md bg-amber-50 text-amber-700 border border-dashed border-amber-300 text-[10px] font-bold uppercase tracking-wider hover:bg-amber-100 transition-colors line-through decoration-2"
+                                  title="Removal pending. Click to keep the block."
+                                  data-testid={`queued-remove-${sid}-${date}`}
+                                >
+                                  {block.bulk_week_off ? 'Week Off' : isAdminOff ? 'Day Off' : 'Leave'}
+                                  <span className="block text-[8px] font-semibold no-underline opacity-90">Will be removed on Publish · undo?</span>
+                                </button>
                               )}
                               {/* Pending employee leave */}
                               {isPendingLeave && (
@@ -476,6 +538,12 @@ export default function ShiftScheduler() {
                                   {block.from && block.to
                                     ? `Unavail: ${block.from} - ${block.to}`
                                     : block.reason || 'Unavailable (All Day)'}
+                                </div>
+                              )}
+                              {/* Conflict warning — shifts exist on an off day */}
+                              {showRedOff && dayShifts.length > 0 && (
+                                <div className="mt-1 mb-1 text-[9px] text-amber-700 bg-amber-50 border border-amber-300 rounded px-1.5 py-0.5 text-center font-semibold" data-testid={`shift-conflict-${sid}-${date}`}>
+                                  ! Shift conflicts with Off — delete or clear Off
                                 </div>
                               )}
                               {dayShifts.map(sh => (
@@ -501,7 +569,7 @@ export default function ShiftScheduler() {
                                   )}
                                 </div>
                               ))}
-                              {(user?.role === 'admin' || user?.capabilities?.includes('workforce.manage_rota')) && !showRedOff && !isPast && dayShifts.length === 0 && (
+                              {canManage && !showRedOff && !isPast && dayShifts.length === 0 && (
                                 <div className="flex gap-1" data-testid={`actions-${sid}-${date}`}>
                                   <button
                                     className="flex-1 h-7 rounded-lg border border-dashed border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-slate-400 hover:text-indigo-500 transition-all flex items-center justify-center"
