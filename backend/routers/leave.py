@@ -284,6 +284,7 @@ async def get_scheduler_blocks(start_date: str, end_date: str, current_user: Use
                     "reason": leave["leave_type"],
                     "leave_id": leave["id"],
                     "bulk_week_off": bool(leave.get("bulk_week_off")),
+                    "set_by_admin": bool(leave.get("set_by_admin")),
                 }
             d += timedelta(days=1)
 

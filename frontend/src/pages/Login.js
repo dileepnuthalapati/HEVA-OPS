@@ -43,19 +43,33 @@ const Login = () => {
       const response = await login(emailOrUsername, password);
       const role = response.user.role;
       const capabilities = response.user.capabilities || [];
-      const hasManageRota = capabilities.includes('workforce.manage_rota');
+      const features = response.user.features || {};
+      const has = (c) => capabilities.includes(c);
+
       if (role === 'platform_owner') {
         navigate('/platform/dashboard');
       } else if (role === 'admin') {
         navigate('/dashboard');
-      } else if (hasManageRota) {
-        // Team lead persona — primary job is preparing the rota. Drop them
-        // into the admin Shift Scheduler instead of their personal Heva Ops
-        // screen (which uses a dedicated layout without the admin sidebar).
+      } else if (has('workforce.manage_rota')) {
+        // Team lead persona — primary job is preparing the rota.
         navigate('/workforce/shifts');
-      } else {
-        // Personal mode staff → always Heva Ops
+      } else if (has('pos.access') && features.pos) {
+        // POS-enabled staff (servers/cashiers) → POS.
+        navigate('/pos');
+      } else if (features.workforce && (has('workforce.clock_in') || has('workforce.view_own_shifts'))) {
+        // Restricted clock-in only persona → Clock In tab directly,
+        // not POS. POS-disabled staff must never land on /pos.
+        if (has('workforce.view_own_shifts')) {
+          navigate('/heva-ops/shifts');
+        } else {
+          navigate('/heva-ops/clock');
+        }
+      } else if (features.workforce) {
         navigate('/heva-ops/shifts');
+      } else if (features.pos) {
+        navigate('/pos');
+      } else {
+        toast.error('Your account has no enabled modules. Please contact your admin.');
       }
     } catch (error) {
       if (!navigator.onLine || error.message === 'Network Error' || !error.response) {

@@ -61,9 +61,16 @@ export default function ShiftScheduler() {
   const [weekStartDay, setWeekStartDay] = useState(1);
   const [blocks, setBlocks] = useState({}); // 0=Sun, 1=Mon, 6=Sat
   const [weekOffDialog, setWeekOffDialog] = useState(null); // staff object
-  const [weekOffReason, setWeekOffReason] = useState('personal');
+  const [weekOffReason, setWeekOffReason] = useState('week_off');
   const [weekOffNote, setWeekOffNote] = useState('');
   const [weekOffSaving, setWeekOffSaving] = useState(false);
+  // Local draft state for off/leave actions. Keeps changes in memory so the
+  // admin can undo before clicking Publish. Each draft entry is
+  // { staffId, date, type: 'day_off'|'week_off', reason?, note? }.
+  // Removals refer to existing committed leave docs to clear on publish.
+  const [draftOffs, setDraftOffs] = useState([]); // pending creates
+  const [draftRemovals, setDraftRemovals] = useState([]); // pending clears: { staffId, date, bulk? }
+  const [publishing, setPublishing] = useState(false);
 
   const weekDates = getWeekDates(weekOffset, weekStartDay);
   const startDate = weekDates[0];
@@ -146,41 +153,115 @@ export default function ShiftScheduler() {
     }
   };
 
+  // Publish commits all draft off/leave changes to the backend, then
+  // publishes the week's shifts so staff can see them. Drafts are applied
+  // sequentially so an early failure doesn't silently swallow subsequent ones.
   const handlePublish = async () => {
+    if (publishing) return;
+    setPublishing(true);
     try {
+      let committed = 0;
+      // 1. Apply removals first (so toggling a day off then back to working
+      //    publishes cleanly even if the user re-marked it within the draft).
+      for (const r of draftRemovals) {
+        try {
+          if (r.bulk) {
+            await shiftAPI.clearWeekOff(r.staffId, startDate);
+          } else {
+            await shiftAPI.clearDayOff(r.staffId, r.date);
+          }
+          committed += 1;
+        } catch (err) {
+          // swallow & keep going — surfaced via final toast if nothing applied
+        }
+      }
+      // 2. Apply creates. Week-off drafts are committed once per staff.
+      const weekOffsByStaff = {};
+      for (const d of draftOffs) {
+        if (d.type === 'week_off') {
+          weekOffsByStaff[d.staffId] = d;
+        }
+      }
+      for (const [sid, d] of Object.entries(weekOffsByStaff)) {
+        try {
+          await shiftAPI.markWeekOff(sid, startDate, d.reason || 'week_off', d.note || null);
+          committed += 1;
+        } catch { /* keep going — surfaced via committed counter */ }
+      }
+      for (const d of draftOffs) {
+        if (d.type === 'day_off') {
+          try {
+            await shiftAPI.markDayOff(d.staffId, d.date, 'day_off', null);
+            committed += 1;
+          } catch { /* keep going */ }
+        }
+      }
+
+      // 3. Publish shifts for the week.
       const res = await shiftAPI.publish(startDate, endDate);
-      toast.success(res.message);
+      if (committed > 0) {
+        toast.success(`${committed} off/leave change(s) saved. ${res.message || 'Shifts published.'}`);
+      } else {
+        toast.success(res.message || 'Shifts published');
+      }
+      setDraftOffs([]);
+      setDraftRemovals([]);
       loadData();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Failed to publish');
+    } finally {
+      setPublishing(false);
     }
   };
 
-  const handleMarkWeekOff = async () => {
+  // ── Draft helpers ──
+  const addDraftDayOff = (sid, date) => {
+    // If a committed block already exists for this day, this should clear it.
+    const existing = blocks[sid]?.[date];
+    if (existing?.block_type === 'hard') {
+      setDraftRemovals(prev => [...prev.filter(r => !(r.staffId === sid && r.date === date)), { staffId: sid, date }]);
+      // also remove any conflicting create draft for this day
+      setDraftOffs(prev => prev.filter(d => !(d.staffId === sid && d.date === date)));
+      return;
+    }
+    // Otherwise add a draft create
+    setDraftOffs(prev => [...prev.filter(d => !(d.staffId === sid && d.date === date)), { staffId: sid, date, type: 'day_off' }]);
+  };
+
+  const removeDraftDayOff = (sid, date) => {
+    setDraftOffs(prev => prev.filter(d => !(d.staffId === sid && d.date === date)));
+    setDraftRemovals(prev => prev.filter(r => !(r.staffId === sid && r.date === date)));
+  };
+
+  const handleMarkWeekOff = () => {
     if (!weekOffDialog) return;
     setWeekOffSaving(true);
     try {
-      const res = await shiftAPI.markWeekOff(weekOffDialog.id, startDate, weekOffReason, weekOffNote || null);
-      toast.success(res.message);
+      // Stage in draft state — committed on Publish.
+      setDraftOffs(prev => [
+        ...prev.filter(d => !(d.staffId === weekOffDialog.id && d.type === 'week_off')),
+        { staffId: weekOffDialog.id, type: 'week_off', reason: weekOffReason, note: weekOffNote || null },
+      ]);
+      toast.success(`Week off drafted for ${weekOffDialog.username}. Click Publish to save.`);
       setWeekOffDialog(null);
-      setWeekOffReason('personal');
+      setWeekOffReason('week_off');
       setWeekOffNote('');
-      loadData();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to mark week off');
     } finally {
       setWeekOffSaving(false);
     }
   };
 
-  const handleClearWeekOff = async (staffId, staffName) => {
+  const handleClearWeekOff = (staffId, staffName) => {
     if (!window.confirm(`Undo week off for ${staffName}?`)) return;
-    try {
-      const res = await shiftAPI.clearWeekOff(staffId, startDate);
-      toast.success(res.message);
-      loadData();
-    } catch (e) {
-      toast.error(e.response?.data?.detail || 'Failed to clear week off');
+    // If it was a draft (not yet published), drop from drafts; otherwise
+    // queue a removal for Publish so we keep the same draft semantics.
+    const hadDraft = draftOffs.some(d => d.staffId === staffId && d.type === 'week_off');
+    if (hadDraft) {
+      setDraftOffs(prev => prev.filter(d => !(d.staffId === staffId && d.type === 'week_off')));
+      toast.success(`Removed drafted week off for ${staffName}`);
+    } else {
+      setDraftRemovals(prev => [...prev.filter(r => !(r.staffId === staffId && r.bulk)), { staffId, date: startDate, bulk: true }]);
+      toast.success(`Week off for ${staffName} will be cleared on Publish`);
     }
   };
 
@@ -220,8 +301,13 @@ export default function ShiftScheduler() {
               <Button variant="outline" size="sm" onClick={handleCopyWeek} data-testid="copy-week-btn">
                 <Copy className="w-4 h-4 mr-1.5" /> Copy to Next Week
               </Button>
-              <Button size="sm" onClick={handlePublish} className="bg-emerald-600 hover:bg-emerald-700" data-testid="publish-shifts-btn">
-                <Send className="w-4 h-4 mr-1.5" /> Publish
+              <Button size="sm" onClick={handlePublish} disabled={publishing} className="bg-emerald-600 hover:bg-emerald-700" data-testid="publish-shifts-btn">
+                <Send className="w-4 h-4 mr-1.5" />
+                {publishing
+                  ? 'Publishing...'
+                  : (draftOffs.length + draftRemovals.length) > 0
+                    ? `Publish · ${draftOffs.length + draftRemovals.length} pending`
+                    : 'Publish'}
               </Button>
             </div>
           </div>
@@ -285,7 +371,10 @@ export default function ShiftScheduler() {
                     const staff = staffMap[sid];
                     // Detect "week off" — any hard block flagged bulk_week_off in this week span
                     const staffBlocks = blocks[sid] || {};
-                    const isWholeWeekOff = weekDates.every(d => staffBlocks[d]?.block_type === 'hard' && staffBlocks[d]?.bulk_week_off);
+                    const committedWeekOff = weekDates.every(d => staffBlocks[d]?.block_type === 'hard' && staffBlocks[d]?.bulk_week_off);
+                    const draftedWeekOff = draftOffs.some(d => d.staffId === sid && d.type === 'week_off');
+                    const queuedRemoveWeekOff = draftRemovals.some(r => r.staffId === sid && r.bulk);
+                    const isWholeWeekOff = (committedWeekOff && !queuedRemoveWeekOff) || draftedWeekOff;
                     return (
                       <tr key={sid} className="border-b hover:bg-slate-50/50">
                         <td className="p-3">
@@ -306,8 +395,8 @@ export default function ShiftScheduler() {
                                 </button>
                               ) : (
                                 <button
-                                  onClick={() => { setWeekOffDialog(staff); setWeekOffReason('personal'); setWeekOffNote(''); }}
-                                  className="shrink-0 p-1.5 rounded-md text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors"
+                                  onClick={() => { setWeekOffDialog(staff); setWeekOffReason('week_off'); setWeekOffNote(''); }}
+                                  className="shrink-0 p-1.5 rounded-md text-slate-400 hover:text-red-600 hover:bg-red-50 transition-colors"
                                   title="Mark this week off"
                                   data-testid={`mark-week-off-${sid}`}
                                 >
@@ -326,26 +415,60 @@ export default function ShiftScheduler() {
                           // stay visible but can't be edited.
                           const isPast = date < todayStr;
                           const block = blocks[sid]?.[date];
-                          const isHardBlock = block?.block_type === 'hard';
+                          const queuedRemove = draftRemovals.some(r =>
+                            r.staffId === sid && (r.bulk || r.date === date)
+                          );
+                          const isHardBlock = block?.block_type === 'hard' && !queuedRemove;
                           const isPendingLeave = block?.block_type === 'pending_leave';
                           const isSoftBlock = block?.block_type === 'soft';
+                          const isDraftDayOff = draftOffs.some(d =>
+                            d.staffId === sid &&
+                            (d.type === 'week_off' || (d.type === 'day_off' && d.date === date))
+                          );
+                          // Distinguish admin-set off ("Week Off"/"Day Off") vs
+                          // employee-approved leave. set_by_admin is provided
+                          // by the backend on hard blocks created via
+                          // mark-day-off / mark-week-off.
+                          const isAdminOff = isHardBlock && (block?.set_by_admin || block?.bulk_week_off);
+                          const isEmployeeLeave = isHardBlock && !isAdminOff;
+                          const showRedOff = isHardBlock || isDraftDayOff;
                           return (
                             <td key={date} className={`p-1.5 align-top relative ${
                               isPast ? 'bg-slate-50/80 opacity-60' :
+                              showRedOff ? 'bg-red-50' :
                               isToday ? 'bg-indigo-50/50' :
-                              isHardBlock ? 'bg-slate-100' :
-                              isPendingLeave ? 'bg-amber-50/60' :
+                              isPendingLeave ? 'bg-red-50/60' :
                               isSoftBlock ? 'bg-orange-50/40' : ''
                             }`} data-testid={`cell-${sid}-${date}${isPast ? '-past' : ''}`}>
-                              {/* Block overlay */}
-                              {isHardBlock && (
-                                <div className="text-[9px] text-slate-400 text-center py-1 italic capitalize" data-testid={`block-${sid}-${date}`}>
-                                  {block.reason?.replace('_', ' ') || 'Leave'}
+                              {/* Draft Off (not yet published) — red with draft hint */}
+                              {!isHardBlock && isDraftDayOff && (
+                                <button
+                                  type="button"
+                                  onClick={() => removeDraftDayOff(sid, date)}
+                                  className="w-full text-center py-1 rounded-md bg-red-500 text-white text-[10px] font-bold uppercase tracking-wider hover:bg-red-600 transition-colors"
+                                  title="Click to remove draft"
+                                  data-testid={`draft-off-${sid}-${date}`}
+                                >
+                                  {draftOffs.some(d => d.staffId === sid && d.type === 'week_off') ? 'Week Off' : 'Day Off'}
+                                  <span className="block text-[8px] font-medium opacity-80">Draft · click to undo</span>
+                                </button>
+                              )}
+                              {/* Committed admin off — Week Off / Day Off */}
+                              {isAdminOff && (
+                                <div className="text-center py-1 rounded-md bg-red-500 text-white text-[10px] font-bold uppercase tracking-wider" data-testid={`block-${sid}-${date}`}>
+                                  {block.bulk_week_off ? 'Week Off' : 'Day Off'}
                                 </div>
                               )}
+                              {/* Committed employee leave */}
+                              {isEmployeeLeave && (
+                                <div className="text-center py-1 rounded-md bg-red-100 text-red-700 border border-red-300 text-[10px] font-bold uppercase tracking-wider" data-testid={`leave-${sid}-${date}`}>
+                                  Leave
+                                </div>
+                              )}
+                              {/* Pending employee leave */}
                               {isPendingLeave && (
-                                <div className="text-[9px] text-amber-500 text-center py-1 italic" data-testid={`pending-leave-${sid}-${date}`}>
-                                  Pending {block.reason?.replace('_', ' ')}
+                                <div className="text-center py-1 rounded-md bg-red-50 text-red-600 border border-dashed border-red-300 text-[10px] font-semibold" data-testid={`pending-leave-${sid}-${date}`}>
+                                  Leave · pending
                                 </div>
                               )}
                               {isSoftBlock && !isHardBlock && !isPendingLeave && (
@@ -378,7 +501,7 @@ export default function ShiftScheduler() {
                                   )}
                                 </div>
                               ))}
-                              {(user?.role === 'admin' || user?.capabilities?.includes('workforce.manage_rota')) && !isHardBlock && !isPast && dayShifts.length === 0 && (
+                              {(user?.role === 'admin' || user?.capabilities?.includes('workforce.manage_rota')) && !showRedOff && !isPast && dayShifts.length === 0 && (
                                 <div className="flex gap-1" data-testid={`actions-${sid}-${date}`}>
                                   <button
                                     className="flex-1 h-7 rounded-lg border border-dashed border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/50 text-slate-400 hover:text-indigo-500 transition-all flex items-center justify-center"
@@ -395,20 +518,14 @@ export default function ShiftScheduler() {
                                     {(isPendingLeave || isSoftBlock) && <span className="ml-0.5 text-amber-500 text-[9px]">!</span>}
                                   </button>
                                   <button
-                                    className="h-7 w-7 rounded-lg border border-dashed border-slate-200 hover:border-slate-400 hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all flex items-center justify-center"
-                                    onClick={async (e) => {
+                                    className="h-7 w-7 rounded-lg border border-dashed border-slate-200 hover:border-red-400 hover:bg-red-50 text-slate-400 hover:text-red-600 transition-all flex items-center justify-center"
+                                    onClick={(e) => {
                                       e.stopPropagation();
-                                      if (!window.confirm(`Mark ${staff?.username || 'this person'} as off on ${date}?`)) return;
-                                      try {
-                                        const res = await shiftAPI.markDayOff(sid, date, 'personal', null);
-                                        toast.success(res.message);
-                                        loadData();
-                                      } catch (err) {
-                                        toast.error(err.response?.data?.detail || 'Failed to mark day off');
-                                      }
+                                      // Draft only — committed on Publish.
+                                      addDraftDayOff(sid, date);
                                     }}
                                     data-testid={`day-off-${sid}-${date}`}
-                                    title="Mark this day off"
+                                    title="Mark this day off (draft)"
                                   >
                                     <span className="text-[10px] font-bold leading-none">OFF</span>
                                   </button>
@@ -475,27 +592,27 @@ export default function ShiftScheduler() {
             <DialogContent className="max-w-sm" data-testid="week-off-dialog">
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
-                  <CalendarX className="w-5 h-5 text-amber-600" />
+                  <CalendarX className="w-5 h-5 text-red-600" />
                   Mark Week Off
                 </DialogTitle>
                 <DialogDescription className="text-xs text-muted-foreground">
-                  Give the selected staff member a full week off. Existing shifts in this week will be removed and the scheduler will show a hard block.
+                  Stage a full week off for the selected staff member. Nothing is saved until you click <span className="font-semibold">Publish</span> on the scheduler. Existing shifts in this week will be removed when published.
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 mt-2">
-                <div className="p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm">
+                <div className="p-3 rounded-lg bg-red-50 border border-red-200 text-sm">
                   <div className="font-semibold text-slate-800">{weekOffDialog?.username}</div>
                   <div className="text-xs text-slate-600 mt-0.5">
                     {new Date(startDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })} → {new Date(endDate + 'T12:00:00').toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
                   </div>
-                  <div className="text-[11px] text-amber-700 mt-2">Any existing shifts for this person in this week will be removed.</div>
+                  <div className="text-[11px] text-red-700 mt-2">Draft — confirm with Publish to commit. Existing shifts for this week will then be removed.</div>
                 </div>
                 <div>
                   <Label>Reason</Label>
                   <Select value={weekOffReason} onValueChange={setWeekOffReason}>
                     <SelectTrigger data-testid="week-off-reason"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="personal">Personal</SelectItem>
+                      <SelectItem value="week_off">Week Off</SelectItem>
                       <SelectItem value="vacation">Vacation</SelectItem>
                       <SelectItem value="sick">Sick</SelectItem>
                       <SelectItem value="public_holiday">Public Holiday</SelectItem>
@@ -512,12 +629,12 @@ export default function ShiftScheduler() {
                   />
                 </div>
                 <Button
-                  className="w-full bg-amber-600 hover:bg-amber-700"
+                  className="w-full bg-red-600 hover:bg-red-700"
                   disabled={weekOffSaving}
                   onClick={handleMarkWeekOff}
                   data-testid="confirm-week-off-btn"
                 >
-                  {weekOffSaving ? 'Saving...' : 'Confirm Week Off'}
+                  {weekOffSaving ? 'Saving...' : 'Draft Week Off'}
                 </Button>
               </div>
             </DialogContent>

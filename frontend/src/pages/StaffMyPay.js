@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { toast } from 'sonner';
-import { Loader2, Clock, Banknote, CalendarDays, TrendingUp, CheckCircle, XCircle, AlertTriangle, Edit2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Loader2, Clock, Banknote, CalendarDays, TrendingUp, CheckCircle, XCircle, AlertTriangle, Edit2, ChevronLeft, ChevronRight, ShieldOff } from 'lucide-react';
 
 const CURRENCY_SYMBOLS = { GBP: '£', USD: '$', EUR: '€', INR: '₹' };
 
@@ -52,6 +52,28 @@ export default function StaffMyPay() {
 
   if (!data) {
     return <p className="text-center text-muted-foreground py-10">Unable to load your summary.</p>;
+  }
+
+  // Privacy toggle — admin has chosen to hide pay/hours from this employee.
+  if (data.hidden_by_admin) {
+    return (
+      <div className="space-y-4 pb-20 px-4" data-testid="my-pay-hidden">
+        <div className="mb-2">
+          <h2 className="text-lg font-bold text-slate-900">{data.staff_name}</h2>
+          <p className="text-xs text-muted-foreground">{data.position || 'Team Member'}</p>
+        </div>
+        <Card className="border-slate-200 bg-slate-50">
+          <CardContent className="p-8 text-center">
+            <ShieldOff className="w-10 h-10 text-slate-300 mx-auto mb-3" />
+            <h3 className="text-sm font-bold text-slate-700 mb-1">Pay & Hours Hidden</h3>
+            <p className="text-xs text-slate-500 leading-relaxed max-w-xs mx-auto">
+              Your manager has chosen not to display hours and pay data on the staff app.
+              Please contact them directly for payslip information.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    );
   }
 
   const sym = CURRENCY_SYMBOLS[data.currency] || data.currency + ' ';
