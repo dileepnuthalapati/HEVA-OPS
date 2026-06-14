@@ -11,6 +11,7 @@ export default function HevaOpsLayout() {
   const navigate = useNavigate();
   const [notifications, setNotifications] = useState([]);
   const [showNotifs, setShowNotifs] = useState(false);
+  const [hidePay, setHidePay] = useState(false);
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
@@ -27,6 +28,25 @@ export default function HevaOpsLayout() {
     return () => clearInterval(interval);
   }, []);
 
+  // Load privacy flag — admins still see Pay tab, only staff respect the toggle.
+  useEffect(() => {
+    if (user?.role === 'admin' || user?.role === 'platform_owner') {
+      setHidePay(false);
+      return;
+    }
+    const isManager = (user?.capabilities || []).includes('workforce.manage_rota');
+    if (isManager) {
+      setHidePay(false);
+      return;
+    }
+    api.get('/restaurants/my')
+      .then(res => {
+        const flag = res.data?.business_info?.hide_pay_and_hours_from_employees;
+        setHidePay(!!flag);
+      })
+      .catch(() => {});
+  }, [user]);
+
   const dismissNotification = async (id) => {
     try {
       await api.put(`/notifications/${id}/dismiss`);
@@ -41,13 +61,13 @@ export default function HevaOpsLayout() {
     { path: '/heva-ops/clock', icon: Clock, label: 'Clock In' },
     { path: '/heva-ops/time-off', icon: CalendarDays, label: 'Time Off' },
     { path: '/heva-ops/swaps', icon: ArrowRightLeft, label: 'Swaps' },
-    { path: '/heva-ops/pay', icon: Wallet, label: 'Pay' },
+    ...(hidePay ? [] : [{ path: '/heva-ops/pay', icon: Wallet, label: 'Pay' }]),
   ];
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col" data-testid="heva-ops-layout">
+    <div className="min-h-screen bg-slate-50 flex flex-col safe-area-x" data-testid="heva-ops-layout">
       {/* Top Bar */}
-      <header className="bg-gradient-to-r from-slate-900 to-slate-800 px-4 py-3 flex items-center justify-between" data-testid="heva-ops-header">
+      <header className="bg-gradient-to-r from-slate-900 to-slate-800 px-4 py-3 flex items-center justify-between safe-area-top" data-testid="heva-ops-header">
         <div>
           <h1 className="text-base font-bold text-white tracking-tight">Heva Ops</h1>
           <p className="text-[10px] text-slate-400 uppercase tracking-wider">Staff Portal</p>
@@ -135,12 +155,12 @@ export default function HevaOpsLayout() {
       <PushPromptBanner />
 
       {/* Content */}
-      <main className="flex-1 overflow-y-auto pb-20">
+      <main className="flex-1 overflow-y-auto heva-ops-content-pad">
         <Outlet />
       </main>
 
       {/* Bottom Tab Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex" data-testid="heva-ops-tabs">
+      <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-slate-200 flex safe-area-bottom" data-testid="heva-ops-tabs">
         {navItems.map(item => {
           const Icon = item.icon;
           return (

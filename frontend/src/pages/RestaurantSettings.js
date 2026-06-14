@@ -567,6 +567,26 @@ const RestaurantSettings = () => {
                       </div>
                     </div>
                     )}
+                    {hasFeature('workforce') && (
+                    <div className="flex items-start justify-between gap-4 p-4 border border-slate-200 rounded-lg bg-slate-50/50">
+                      <div className="min-w-0">
+                        <Label htmlFor="hide_pay_toggle" className="text-sm font-semibold flex items-center gap-2">
+                          <ShieldOff className="w-4 h-4 text-slate-500" />
+                          Hide Pay & Hours from Employees
+                        </Label>
+                        <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                          When ON, the staff app will not show weekly/monthly hours, pay rate, or earnings.
+                          Managers (with Manage Rota permission) still see their own pay.
+                        </p>
+                      </div>
+                      <Switch
+                        id="hide_pay_toggle"
+                        data-testid="hide-pay-toggle"
+                        checked={!!formData.hide_pay_and_hours_from_employees}
+                        onCheckedChange={(v) => handleChange('hide_pay_and_hours_from_employees', v)}
+                      />
+                    </div>
+                    )}
                     <div className="pt-4">
                       <Button type="submit" data-testid="save-settings-button" disabled={saving} className="w-full md:w-auto h-12 px-8">
                         <Save className="w-4 h-4 mr-2" /> {saving ? 'Saving...' : 'Save Settings'}

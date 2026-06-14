@@ -120,6 +120,25 @@ body {
   min-height: 0;
 }
 
+/* ===== SAFE AREA (iOS notch / Android status bar) ===== */
+/* Heva Ops mobile layout: top header gets safe-area-top padding,
+   bottom nav gets safe-area-bottom padding. Login page gets both. */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.safe-area-x {
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+}
+/* Add safe-area inset to the bottom of the Heva Ops content so the
+   fixed bottom tab bar doesn't clip the last list item on iPhone. */
+.heva-ops-content-pad {
+  padding-bottom: calc(5rem + env(safe-area-inset-bottom, 0px));
+}
+
 /* ===== GLASSMORPHISM ===== */
 .glass {
   background: rgba(255, 255, 255, 0.7);

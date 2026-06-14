@@ -328,6 +328,7 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
   const location = useLocation();
   const navigate = useNavigate();
   const [upgradeModule, setUpgradeModule] = useState(null);
+  const [hidePayLink, setHidePayLink] = useState(false);
 
   const isPlatform = user?.role === 'platform_owner';
   const isAdmin = user?.role === 'admin';
@@ -335,6 +336,19 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
   // purposes (see also App.js ProtectedRoute capability= override). Their
   // workspace items include the admin rota/attendance/timesheet screens.
   const canManageRota = !isAdmin && hasCapability('workforce.manage_rota');
+
+  // Pull the privacy toggle for staff so the "My Pay" link disappears from
+  // their sidebar when the admin has opted in. Managers (canManageRota) and
+  // restaurant admins always see Pay.
+  useEffect(() => {
+    if (isAdmin || isPlatform || canManageRota) { setHidePayLink(false); return; }
+    if (!user) return;
+    import('../services/api').then(({ default: api }) => {
+      api.get('/restaurants/my')
+        .then(res => setHidePayLink(!!res.data?.business_info?.hide_pay_and_hours_from_employees))
+        .catch(() => {});
+    });
+  }, [user, isAdmin, isPlatform, canManageRota]);
 
   // Build workspace definitions on the fly for the manage-rota persona:
   // start from Staff workspaces but REPLACE the Workforce block with a
@@ -455,8 +469,9 @@ function SidebarContent({ user, onLogout, onOpenSearch }) {
 
   const activeWorkspace = enabled.find(w => w.key === activeKey);
   // Filter items based on feature flags (items can have their own `requires`)
+  // and respect the admin "Hide pay & hours" privacy toggle for staff.
   const visibleItems = (activeWorkspace?.items || []).filter(
-    it => !it.requires || hasFeature(it.requires)
+    it => (!it.requires || hasFeature(it.requires)) && !(hidePayLink && it.path === '/heva-ops/pay')
   );
 
   return (

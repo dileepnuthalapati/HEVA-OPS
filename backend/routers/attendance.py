@@ -562,8 +562,41 @@ async def get_my_hours_summary(week_offset: int = 0, current_user: User = Depend
         week_pay = week_hours * hourly_rate
         month_pay = month_hours * hourly_rate
 
-    restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0, "currency": 1})
+    restaurant = await db.restaurants.find_one({"id": current_user.restaurant_id}, {"_id": 0, "currency": 1, "business_info": 1})
     currency = restaurant.get("currency", "GBP") if restaurant else "GBP"
+
+    # Privacy toggle — Admin can hide pay & hours data from non-manager staff.
+    # Managers (workforce.manage_rota) still see their own pay.
+    hide_pay = False
+    if restaurant:
+        biz = restaurant.get("business_info") or {}
+        hide_pay = bool(biz.get("hide_pay_and_hours_from_employees"))
+    is_manager = current_user.role == "admin" or "workforce.manage_rota" in (current_user.capabilities or [])
+    if hide_pay and not is_manager:
+        # Zero out hours/pay fields. Keep day-by-day breakdown structure so the
+        # UI can still render a "Hidden by admin" placeholder card.
+        return {
+            "staff_name": staff.get("username", ""),
+            "position": staff.get("position", ""),
+            "pay_type": pay_type,
+            "hourly_rate": 0,
+            "monthly_salary": 0,
+            "currency": currency,
+            "week_start": week_start,
+            "week_end": week_end,
+            "week_offset": week_offset,
+            "week_hours": 0,
+            "month_hours": 0,
+            "week_pay": 0,
+            "month_pay": 0,
+            "week_sessions": 0,
+            "month_sessions": 0,
+            "week_approved": False,
+            "week_rejected": False,
+            "weekly_breakdown": [],
+            "recent_records": [],
+            "hidden_by_admin": True,
+        }
 
     return {
         "staff_name": staff.get("username", ""),

@@ -189,6 +189,28 @@ Six issues reported after 2 weeks of live customer use. Four shipped in this bat
 - Add "Send Daily Summary" button in Admin Dashboard UI
 - Background scheduler for automated daily email dispatch (Railway cron)
 
+## Iteration 64 (Feb 14, 2026) — Privacy, Drafts & Capability Routing (P0 batch)
+1. **Capability-based Login Routing** — `Login.js` now evaluates `user.capabilities`+`features` and routes:
+   - `platform_owner` → `/platform/dashboard`
+   - `admin` → `/dashboard`
+   - staff with `workforce.manage_rota` → `/workforce/shifts`
+   - staff with `pos.access` + `features.pos` → `/pos`
+   - workforce-only restricted (e.g. `workforce.clock_in` only) → `/heva-ops/clock` (never `/pos`)
+2. **PWA Safe Area** — `viewport-fit=cover` already in `index.html`. Added `.safe-area-top`, `.safe-area-bottom`, `.safe-area-x`, `.heva-ops-content-pad` utility classes in `index.css`. HevaOpsLayout header + bottom-nav now respect iOS notches.
+3. **Privacy Toggle `hide_pay_and_hours_from_employees`** — Stored under `restaurants.business_info`. Admin Settings → Business Info tab now has a `data-testid="hide-pay-toggle"` switch. When ON:
+   - Backend `/api/attendance/my-summary` returns `hidden_by_admin: true` with all numerics 0 and empty arrays — *only* for non-admin, non-manager staff. Managers (`workforce.manage_rota`) keep seeing their pay.
+   - Frontend `HevaOpsLayout` removes the Pay tab from bottom nav; `Sidebar` filters out the `/heva-ops/pay` link; `StaffMyPay` shows a "Pay & Hours Hidden" card.
+4. **Shift Scheduler `Off/Leave` refactor** —
+   - Local draft state: clicking the per-cell **OFF** button or the **Week Off** dialog stages a draft (red badge with "Draft · click to undo") instead of calling the API. Clicking again undoes it. Publish button label dynamically shows `Publish · N pending`.
+   - On Publish, drafts are committed (`/shifts/mark-day-off`, `/shifts/mark-week-off`, plus removals via `/shifts/clear-*`) then `/shifts/publish` is called.
+   - Role-dependent labels: admin-set blocks display **Week Off** / **Day Off** (solid red), employee-approved leaves display **Leave** (light red bordered), pending leaves display **Leave · pending** (dashed).
+   - Backend `shifts.py` now persists `set_by_admin: true` + sensible `leave_type` defaults (`day_off`/`week_off`); `leave.py` `/scheduler/blocks` exposes `set_by_admin` on hard blocks.
+   - Removed "Personal" from the Week-Off reason dropdown.
+5. **Tests** — `/app/backend/tests/test_iteration64_privacy_and_setbyadmin.py`. 5/5 backend + 6/6 frontend flows passing (iter64).
+
+## Iteration 63 (Feb 13, 2026) — Layout & UX Polish
+- 1366×768 responsiveness, Floor view in POS, Cash Drawer, Discount in Payment, iOS scaffold prep.
+
 ## Stripe SaaS Billing Hardening (Feb 12, 2026)
 Production-ready subscription flow for restaurant admins (P0 from previous session — DONE):
 - **Self-serve checkout** — `POST /api/stripe/create-checkout` switched from `require_platform_owner` to `require_admin`. Embeds `metadata.restaurant_id` + subscription_data metadata so the webhook can correlate. Re-uses existing `stripe_customer_id` (or `customer_email`) so customers don't get duplicate Stripe customers on re-attempt. Platform owner rejected with 400 (and 403 by `require_admin`).
